@@ -7,6 +7,8 @@ export interface AuthSession {
   role: UserRole;
   provider: "local-demo" | "supabase";
   lastSignedInAt: string;
+  active: boolean;
+  mustChangePassword: boolean;
 }
 
 export interface PermissionSet {
@@ -17,6 +19,8 @@ export interface PermissionSet {
   canPrintLabels: boolean;
   canExportReports: boolean;
   canViewActivity: boolean;
+  canViewUsers: boolean;
+  canManageUsers: boolean;
 }
 
 export const roleOptions: Array<{
@@ -57,6 +61,17 @@ export function getRoleDescription(role: UserRole) {
 export function getPermissions(role: UserRole): PermissionSet {
   switch (role) {
     case "admin":
+      return {
+        canManageParts: true,
+        canManageModels: true,
+        canManageLocations: true,
+        canAdjustStock: true,
+        canPrintLabels: true,
+        canExportReports: true,
+        canViewActivity: true,
+        canViewUsers: true,
+        canManageUsers: true,
+      };
     case "manager":
       return {
         canManageParts: true,
@@ -66,6 +81,8 @@ export function getPermissions(role: UserRole): PermissionSet {
         canPrintLabels: true,
         canExportReports: true,
         canViewActivity: true,
+        canViewUsers: true,
+        canManageUsers: false,
       };
     case "technician":
       return {
@@ -76,6 +93,8 @@ export function getPermissions(role: UserRole): PermissionSet {
         canPrintLabels: true,
         canExportReports: false,
         canViewActivity: true,
+        canViewUsers: false,
+        canManageUsers: false,
       };
     case "viewer":
     default:
@@ -87,6 +106,8 @@ export function getPermissions(role: UserRole): PermissionSet {
         canPrintLabels: false,
         canExportReports: false,
         canViewActivity: false,
+        canViewUsers: false,
+        canManageUsers: false,
       };
   }
 }
@@ -119,18 +140,30 @@ export function canViewActivity(role: UserRole) {
   return getPermissions(role).canViewActivity;
 }
 
+export function canViewUsers(role: UserRole) {
+  return getPermissions(role).canViewUsers;
+}
+
+export function canManageUsers(role: UserRole) {
+  return getPermissions(role).canManageUsers;
+}
+
 export function isElevatedRole(role: UserRole) {
   return role === "admin" || role === "manager";
 }
 
-export function createSession(profile: Omit<AuthSession, "id" | "lastSignedInAt" | "provider"> & {
-  provider?: AuthSession["provider"];
-}) {
+export function createSession(
+  profile: Omit<AuthSession, "id" | "lastSignedInAt"> & {
+    id?: string;
+    provider?: AuthSession["provider"];
+  },
+) {
+  const { id, provider: sessionProvider = "local-demo", ...sessionProfile } = profile;
+
   return {
-    id: crypto.randomUUID(),
+    id: id ?? crypto.randomUUID(),
     lastSignedInAt: new Date().toISOString(),
-    provider: profile.provider ?? "local-demo",
-    ...profile,
+    provider: sessionProvider,
+    ...sessionProfile,
   } satisfies AuthSession;
 }
-

@@ -1,31 +1,36 @@
 # Green NVentory
 
-Internal green and reusable printer/copier parts inventory for Novatech.
+Green printer and copier parts.
 
-This rebuild uses:
+Green NVentory is Novatech’s internal inventory web app for reusable and green printer/copier parts. It is built for desktop, tablet, and Android Chrome, with PWA basics so staff can install it on phones when helpful.
+
+The current application is a hybrid Phase 1/Phase 2 setup:
+
+- inventory and workflow state still use typed local mock data
+- authentication and user management are wired for Supabase Auth
+- the app is ready for Supabase/Postgres when you want to move the inventory data off the browser store
+
+## Tech Stack
 
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
 - shadcn/ui-style components
-- PWA basics for Android installability
-- a Supabase/Postgres-ready architecture
-
-The current build is Phase 1. It uses typed mock data with browser-local persistence so the workflows are stable before the Supabase migration.
+- Supabase-ready auth and data helpers
+- PWA manifest, icons, and theme metadata
 
 ## What The App Does
 
 - Dashboard for inventory health and low-stock review
-- Parts inventory table with search, filters, and quick stock changes
-- Part detail pages plus create/edit flows
-- Mobile lookup for parts, bins, and models
-- Printer/copier model management
-- Location and bin management
+- Parts inventory table with search, filters, and quick quantity changes
+- Add, edit, and view parts
+- Location/bin tracking
+- Compatible printer/copier model management
 - Printable part tags and bin tags
-- CSV import/export and report downloads
+- CSV import/export
 - Activity log placeholder
-- Role-aware UI for admin, manager, technician, and viewer users
-- Responsive desktop, tablet, and Android web support
+- Mobile-friendly lookup and edit flows
+- Admin-only user management for Supabase Auth
 
 ## Local Setup
 
@@ -53,18 +58,34 @@ npm run typecheck
 npm run build
 ```
 
-## Development Notes
+## Supabase Auth Setup
 
-- The local demo auth flow is intentionally separate from Supabase for Phase 1.
-- Role logic is centralized in `src/lib/auth.ts`.
-- Inventory state lives in a reducer and typed helpers so the UI can stay stable when the database layer changes.
-- Print output uses the dedicated `/print` route so the browser print preview only shows labels.
+Authentication uses Supabase Email Auth. Public signups are disabled, so users do not self-register.
 
-## Supabase Phase 2
+### Environment Variables
 
-Phase 2 is ready to connect without rewriting the UI.
+Create a local `.env.local` with:
 
-Use the SQL setup file at [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql) to create:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as a legacy fallback by the helper layer, but `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the preferred public client key.
+
+Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
+
+### Required Supabase Settings
+
+In your Supabase project:
+
+1. Enable Email auth.
+2. Disable public signups.
+3. Keep password sign-in enabled.
+4. Run [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql).
+
+That schema creates the `profiles` table and the supporting tables used by the app:
 
 - `profiles`
 - `parts`
@@ -73,40 +94,71 @@ Use the SQL setup file at [`supabase/phase2_schema.sql`](./supabase/phase2_schem
 - `part_model_links`
 - `inventory_transactions`
 
-Supabase helper files already exist in `src/lib/supabase` for:
+## First Admin Account
 
-- browser client setup
-- server client setup
-- shared table/profile type definitions
+Because self-registration is off, the first admin needs to be created manually in Supabase.
 
-### Environment Variables
+Recommended setup:
 
-Set these in `.env.local` when you are ready to connect Supabase:
+1. Open the Supabase dashboard.
+2. Go to Authentication > Users.
+3. Add a user with the admin email address and a temporary password.
+4. Confirm the email if prompted or set the account to confirmed.
+5. Open the SQL editor and promote the profile row to admin:
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+```sql
+update public.profiles
+set
+  role = 'admin',
+  full_name = 'Your Name',
+  active = true,
+  must_change_password = true
+where id = '<auth-user-uuid>';
 ```
 
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the preferred public client key. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still accepted by the helper layer as a legacy fallback if you already have it in an older Supabase project.
+The app also has a profile trigger, so newly created auth users should get a matching profile row automatically. If you need to repair a missing profile, insert or update the row manually.
 
-### Supabase Setup Steps
+## Admin User Management
 
-1. Create a Supabase project.
-2. Open the SQL editor.
-3. Run [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql).
-4. Add the environment variables above.
-5. Keep the Phase 1 local auth/store until the Phase 2 migration is ready to swap in real auth and persistence.
-6. Add the root `middleware.ts` session refresh helper once Supabase auth is enabled so browser sessions stay fresh.
+The admin user-management area lives at `/admin/users`.
 
-The schema file uses a `profiles.role` column so future auth can map cleanly to:
+Rules:
 
-- admin
-- manager
-- technician
-- viewer
+- Admin users can create accounts, edit users, deactivate accounts, and force password changes.
+- Manager users can view the roster if allowed, but they cannot create admin users.
+- Technician and viewer users cannot access the page.
+- User creation happens server-side only.
+- The service-role key stays on the server.
+
+When an admin creates a user:
+
+1. The admin enters name, email, role, and a temporary password.
+2. Supabase Auth creates the account with `email_confirm: true`.
+3. The app writes or updates the matching profile row.
+4. The new profile is marked `must_change_password = true`.
+
+## First Login Password Change
+
+If `profiles.must_change_password` is true after sign-in, the app redirects the user to `/change-password`.
+
+That page:
+
+- explains why the password change is required
+- asks for a new password and confirmation
+- validates that the passwords match
+- uses Supabase client auth to update the password
+- clears `must_change_password` in the profile row
+- sends the user back to the dashboard
+
+Users can log out from the password change screen if they need to stop and come back later.
+
+## Development Notes
+
+- Keep role logic centralized in `src/lib/auth.ts`.
+- Keep Supabase helpers in `src/lib/supabase`.
+- Keep the `/print` route label-only so browser print previews never include the whole app shell.
+- Keep the mobile navigation simple and touch-friendly.
+- Do not reintroduce root-level workspace assumptions; the app lives in `inventory-web`.
 
 ## Deployment
 
@@ -114,15 +166,12 @@ This app is ready for Vercel deployment.
 
 1. Push the repo to GitHub.
 2. Import the project in Vercel.
-3. Let Vercel detect it as a Next.js app.
-4. Set the environment variables if you are using Supabase.
-5. Deploy with the default build command:
+3. Set the environment variables above.
+4. Deploy with the default build command:
 
 ```bash
 npm run build
 ```
-
-Vercel handles HTTPS, static assets, the manifest, and the Android-friendly PWA experience.
 
 ## Android Installation
 
@@ -134,13 +183,12 @@ To install on Android phones:
 4. Choose `Install app` or `Add to Home screen`.
 5. Confirm the install prompt.
 
-The app already includes:
+The app includes:
 
 - manifest metadata
 - app icons
 - theme color
 - standalone display mode
-- a safe production service worker
 
 ## Project Map
 
@@ -148,8 +196,8 @@ The app already includes:
 - `src/components/pages` - Route-level screens for the business workflows
 - `src/components` - Shared shell, providers, and UI primitives
 - `src/lib` - Typed inventory models, seed data, reducers, helpers, and Supabase utilities
-- `supabase/phase2_schema.sql` - Phase 2 schema and starter RLS policies
+- `supabase/phase2_schema.sql` - Phase 2 schema and RLS starter kit
 
 ## Resetting Phase 1 Data
 
-If you need a clean local reset, use the `Reset demo data` action in the settings page or the desktop/mobile workspace shell.
+If you need a clean local reset, use the `Reset demo data` action in the desktop shell or mobile menu.

@@ -1,6 +1,6 @@
 # Project Standards
 
-This repository is the Green NVentory rebuild for Novatech's green and reusable printer/copier parts inventory. Future Codex work should keep the app maintainable, mobile-friendly, and ready for a later Supabase migration.
+This repository is the Green NVentory rebuild for Novatech's green and reusable printer/copier parts inventory. Future Codex work should keep the app maintainable, mobile-friendly, and ready for the remaining Supabase migration work.
 
 ## Architecture Rules
 
@@ -9,7 +9,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Preserve the typed mock-data layer until Phase 2 explicitly replaces it.
 - Keep inventory state flows in `src/lib` reducers and helpers rather than scattering logic across pages.
 - Keep role logic centralized in `src/lib/auth.ts`.
-- Use `src/lib/supabase` for Supabase client, server, middleware, and type helpers.
+- Use `src/lib/supabase` for Supabase client, server, middleware, profile, and type helpers.
+- Do not let client components import server-only helpers that depend on `next/headers`.
 
 ## Data Rules
 
@@ -17,7 +18,21 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Do not connect Supabase unless the app is already stable and the migration is explicitly in scope.
 - Keep inventory, bin, model, profile, and transaction shapes typed and reusable.
 - Update the seed data and migration notes when the structure changes.
-- Use `profiles.role` as the source of truth for admin, manager, technician, and viewer access once Supabase is live.
+- Use `profiles.role`, `profiles.active`, and `profiles.must_change_password` as the source of truth once Supabase is live.
+
+## Auth and User-Management Rules
+
+- Supabase Auth is the source of truth for login.
+- Public signups stay disabled.
+- Admins create users from `/admin/users`.
+- User creation must stay server-side only.
+- Only server routes or server actions may use `SUPABASE_SERVICE_ROLE_KEY`.
+- Never expose the service role key to client components.
+- Admins may create and edit users, set roles, deactivate users, and force password changes.
+- Managers may view the roster if allowed, but they must not create admin users.
+- Technician and viewer users must not access `/admin/users`.
+- If `profiles.must_change_password` is true, the app must redirect to `/change-password`.
+- The change-password flow must clear `must_change_password` after a successful password update.
 
 ## UI Rules
 
@@ -38,6 +53,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
   - `canPrintLabels`
   - `canExportReports`
   - `canViewActivity`
+  - `canViewUsers`
+  - `canManageUsers`
 - Admin and manager users are elevated.
 - Viewer users are read-only.
 - Technician users can view, look up, adjust stock if allowed, and print labels if allowed.
@@ -52,10 +69,11 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Update `README.md` and `MIGRATION_PLAN.md` when the app structure or workflow changes.
 - Keep the Supabase schema notes in `supabase/phase2_schema.sql` current when Phase 2 planning changes.
 - Prefer `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for the public client key; keep `NEXT_PUBLIC_SUPABASE_ANON_KEY` only for backward compatibility.
+- If dev/Turbopack starts resolving from the wrong directory, check for root-level workspace artifacts first. The app belongs in `inventory-web`.
 
 ## Current File Map
 
-- `src/app` - Routes, layout, metadata, PWA files
+- `src/app` - Routes, layout, metadata, and PWA files
 - `src/components/app-shell.tsx` - Desktop and mobile navigation
 - `src/components/inventory-provider.tsx` - Client store and action API
 - `src/lib/auth.ts` - User roles and permission helpers
@@ -63,7 +81,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - `src/lib/inventory-seed.ts` - Phase 1 seed records
 - `src/lib/inventory-reducer.ts` - Store mutations and activity entries
 - `src/lib/inventory-utils.ts` - Filtering, summaries, and CSV helpers
-- `src/lib/supabase` - Future Supabase client and type helpers
+- `src/lib/supabase` - Supabase client, auth, session, and type helpers
 - `supabase/phase2_schema.sql` - Phase 2 schema and RLS starter kit
 
 ## Phase 2 Reminder

@@ -1,21 +1,19 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { SESSION_STORAGE_KEY } from "@/lib/brand";
+import { createClient } from "@/lib/supabase/client";
 import {
   type AuthSession,
-  createSession,
   getPermissions,
   type PermissionSet,
-  type UserRole,
 } from "@/lib/auth";
+import { profileDisplayName } from "@/lib/profile-display";
+import type { ProfileRow } from "@/lib/supabase/types";
 
 type SignInInput = {
-  displayName: string;
   email: string;
-  role: UserRole;
+  password: string;
 };
 
 type AuthContextValue = {
@@ -23,31 +21,65 @@ type AuthContextValue = {
   hydrated: boolean;
   permissions: PermissionSet;
   isAuthenticated: boolean;
-  signIn: (input: SignInInput) => Promise<void>;
-  signOut: () => void;
+  signIn: (input: SignInInput) => Promise<AuthSession>;
+  signOut: () => Promise<void>;
+  refreshSession: () => Promise<AuthSession | null>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function safeParseSession(raw: string | null): AuthSession | null {
-  if (!raw) return null;
+function toAppSession(
+  user: { id: string; email?: string | null; created_at?: string | null },
+  profile: ProfileRow,
+): AuthSession {
+  return {
+    id: user.id,
+    displayName: profileDisplayName(profile),
+    email: profile.email,
+    role: profile.role,
+    provider: "supabase",
+    lastSignedInAt: user.created_at ?? new Date().toISOString(),
+    active: profile.active,
+    mustChangePassword: profile.must_change_password,
+  };
+}
 
-  try {
-    const parsed = JSON.parse(raw) as AuthSession;
-    if (
-      parsed &&
-      typeof parsed.displayName === "string" &&
-      typeof parsed.email === "string" &&
-      typeof parsed.role === "string" &&
-      typeof parsed.lastSignedInAt === "string"
-    ) {
-      return parsed;
-    }
-  } catch {
+async function loadSupabaseSession(
+  supabase: ReturnType<typeof createClient>,
+  setSession: (session: AuthSession | null) => void,
+) {
+  const { data: userResponse, error } = await supabase.auth.getUser();
+
+  if (error || !userResponse.user) {
+    setSession(null);
     return null;
   }
 
-  return null;
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userResponse.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    setSession(null);
+    return null;
+  }
+
+  if (!profile.active) {
+    await supabase.auth.signOut();
+    setSession(null);
+    return null;
+  }
+
+  const nextSession = toAppSession(
+    userResponse.user,
+    profile,
+  );
+
+  setSession(nextSession);
+  return nextSession;
 }
 
 export function AuthProvider({
@@ -57,42 +89,79 @@ export function AuthProvider({
 }>) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    setSession(safeParseSession(window.localStorage.getItem(SESSION_STORAGE_KEY)));
-    setHydrated(true);
-  }, []);
+    let mounted = true;
 
-  useEffect(() => {
-    if (!hydrated) return;
+    void loadSupabaseSession(supabase, (nextSession) => {
+      if (mounted) {
+        setSession(nextSession);
+      }
+    }).finally(() => {
+      if (mounted) {
+        setHydrated(true);
+      }
+    });
 
-    if (session) {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-    } else {
-      window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
-  }, [hydrated, session]);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async () => {
+      if (!mounted) return;
+      await loadSupabaseSession(supabase, setSession);
+    });
 
-  const value = useMemo<AuthContextValue>(() => {
-    const permissions = session ? getPermissions(session.role) : getPermissions("viewer");
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
-    return {
+  const refreshSession = useCallback(async () => {
+    return loadSupabaseSession(supabase, setSession);
+  }, [supabase]);
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  }, [supabase]);
+
+  const signIn = useCallback(
+    async ({ email, password }: SignInInput) => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const nextSession = await loadSupabaseSession(supabase, setSession);
+
+      if (!nextSession) {
+        throw new Error("Unable to load your account profile. Please contact an admin.");
+      }
+
+      return nextSession;
+    },
+    [supabase],
+  );
+
+  const permissions = session ? getPermissions(session.role) : getPermissions("viewer");
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
       session,
       hydrated,
       permissions,
       isAuthenticated: Boolean(session),
-      signIn: async ({ displayName, email, role }) => {
-        setSession(
-          createSession({
-            displayName,
-            email,
-            role,
-          }),
-        );
-      },
-      signOut: () => setSession(null),
-    };
-  }, [hydrated, session]);
+      signIn,
+      signOut,
+      refreshSession,
+    }),
+    [hydrated, permissions, refreshSession, session, signIn, signOut],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
