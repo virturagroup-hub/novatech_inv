@@ -26,6 +26,15 @@ begin
 end;
 $$;
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role public.inventory_role not null default 'viewer',
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.is_elevated_user()
 returns boolean
 language sql
@@ -57,15 +66,6 @@ as $$
       and is_active = true
   );
 $$;
-
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  role public.inventory_role not null default 'viewer',
-  is_active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
 
 create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
