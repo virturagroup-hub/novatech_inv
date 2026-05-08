@@ -87,6 +87,8 @@ In your Supabase project:
 3. Keep password sign-in enabled.
 4. Run [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql).
 
+The SQL file is rerunnable. If an older `profiles.is_active` column exists, the script will migrate it to `profiles.active`.
+
 That schema creates the `profiles` table and the supporting tables used by the app:
 
 - `profiles`

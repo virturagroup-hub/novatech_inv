@@ -30,6 +30,40 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'is_active'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'active'
+  ) then
+    execute 'alter table public.profiles rename column is_active to active';
+  end if;
+
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'active'
+  ) then
+    execute 'alter table public.profiles add column active boolean';
+  end if;
+
+  execute 'update public.profiles set active = true where active is null';
+  execute 'alter table public.profiles alter column active set default true';
+  execute 'alter table public.profiles alter column active set not null';
+  execute 'alter table public.profiles drop column if exists is_active';
+end $$;
+
 create or replace function public.is_elevated_user()
 returns boolean
 language sql

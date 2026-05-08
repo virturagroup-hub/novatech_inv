@@ -63,6 +63,7 @@ The Phase 1 implementation now includes:
 - The Supabase helper layer now includes a middleware session-refresh path and publishable-key support.
 - The Next/Turbopack root was pinned to the `inventory-web` project directory so dev no longer resolves Tailwind from the parent folder.
 - The Supabase middleware was hardened to fail closed on missing or invalid env vars, and a diagnostic env-presence route was added for safe Vercel troubleshooting.
+- The Supabase schema file now reruns safely against older databases by migrating the legacy `profiles.is_active` column to `profiles.active`.
 
 ## What Remains For Phase 2
 
