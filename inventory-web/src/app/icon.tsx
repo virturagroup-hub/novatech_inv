@@ -20,11 +20,12 @@ export default function Icon() {
           alignItems: "center",
           justifyContent: "center",
           background:
-            "linear-gradient(135deg, rgba(245,158,11,1) 0%, rgba(15,23,42,1) 58%, rgba(14,116,144,1) 100%)",
-          color: "#020617",
-          fontSize: 88,
+            "linear-gradient(135deg, rgba(4,120,87,1) 0%, rgba(8,145,178,1) 56%, rgba(15,23,42,1) 100%)",
+          color: "#ffffff",
+          fontSize: 86,
           fontWeight: 800,
           borderRadius: 32,
+          boxShadow: "inset 0 0 0 2px rgba(255,255,255,0.12)",
         }}
       >
         N

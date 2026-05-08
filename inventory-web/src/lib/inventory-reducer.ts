@@ -35,8 +35,10 @@ export type InventoryAction =
   | { type: "adjustPart"; partId: string; delta: number }
   | { type: "upsertBin"; bin: BinDraft }
   | { type: "deleteBin"; binId: string }
+  | { type: "setBinStatus"; binId: string; status: "active" | "inactive" }
   | { type: "upsertModel"; model: ModelDraft }
   | { type: "deleteModel"; modelId: string }
+  | { type: "setModelStatus"; modelId: string; status: "active" | "inactive" }
   | { type: "importParts"; rows: PartImportRow[] }
   | { type: "updateSettings"; settings: Partial<InventorySettings> };
 
@@ -128,6 +130,7 @@ function upsertBinDraft(state: InventoryState, draft: BinDraft) {
     row: Number(draft.row) || 1,
     column: Number(draft.column) || 1,
     manufacturer: draft.manufacturer ? normalizeText(draft.manufacturer) : null,
+    status: draft.status,
     notes: normalizeText(draft.notes) || undefined,
   };
 
@@ -320,6 +323,30 @@ export function inventoryReducer(
       );
     }
 
+    case "setBinStatus": {
+      const bin = state.bins.find((item) => item.id === action.binId);
+      if (!bin) return state;
+
+      const next: InventoryState = {
+        ...state,
+        bins: state.bins.map((item) =>
+          item.id === action.binId ? { ...item, status: action.status } : item,
+        ),
+      };
+
+      return pushActivity(
+        next,
+        createActivity({
+          action: "updated",
+          tone: action.status === "active" ? "success" : "warning",
+          entityType: "bin",
+          entityId: action.binId,
+          title: action.status === "active" ? "Bin restored" : "Bin archived",
+          detail: `${bin.code} was marked ${action.status}.`,
+        }),
+      );
+    }
+
     case "upsertModel": {
       const next = upsertModelDraft(state, action.model);
       return pushActivity(
@@ -364,6 +391,30 @@ export function inventoryReducer(
           entityId: action.modelId,
           title: "Model removed",
           detail: `${removed.manufacturer} ${removed.name} was removed from the model list.`,
+        }),
+      );
+    }
+
+    case "setModelStatus": {
+      const model = state.models.find((item) => item.id === action.modelId);
+      if (!model) return state;
+
+      const next: InventoryState = {
+        ...state,
+        models: state.models.map((item) =>
+          item.id === action.modelId ? { ...item, status: action.status } : item,
+        ),
+      };
+
+      return pushActivity(
+        next,
+        createActivity({
+          action: "updated",
+          tone: action.status === "active" ? "success" : "warning",
+          entityType: "model",
+          entityId: action.modelId,
+          title: action.status === "active" ? "Model restored" : "Model archived",
+          detail: `${model.manufacturer} ${model.name} was marked ${action.status}.`,
         }),
       );
     }

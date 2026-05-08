@@ -22,8 +22,16 @@ export function getBinById(bins: Bin[], binId: string | null | undefined) {
   return bins.find((bin) => bin.id === binId) ?? null;
 }
 
+export function getBinStatusLabel(bin: Bin) {
+  return bin.status === "active" ? "Active" : "Inactive";
+}
+
 export function getModelById(models: DeviceModel[], modelId: string) {
   return models.find((model) => model.id === modelId) ?? null;
+}
+
+export function getModelStatusLabel(model: DeviceModel) {
+  return model.status === "active" ? "Active" : "Inactive";
 }
 
 export function getCompatibleModels(part: Part, models: DeviceModel[]) {
@@ -44,7 +52,8 @@ export function requiresAttention(part: Part) {
 
 export function getPartLocationLabel(part: Part, bins: Bin[]) {
   const bin = getBinById(bins, part.binId);
-  return bin ? `${bin.code} · ${bin.name}` : "Unassigned";
+  if (!bin) return "Unassigned";
+  return `${bin.code} · ${bin.name}${bin.status === "inactive" ? " (Inactive)" : ""}`;
 }
 
 export function getPartLookupBlob(part: Part, bins: Bin[], models: DeviceModel[]) {
@@ -152,6 +161,10 @@ export function getDashboardSummary(state: InventoryState) {
   const taggedParts = state.parts.filter(
     (part) => part.compatibleModelIds.length > 0 || part.universal,
   );
+  const activeBins = state.bins.filter((bin) => bin.status === "active");
+  const inactiveBins = state.bins.filter((bin) => bin.status === "inactive");
+  const activeModels = state.models.filter((model) => model.status === "active");
+  const inactiveModels = state.models.filter((model) => model.status === "inactive");
   const coverage = state.parts.length
     ? Math.round((taggedParts.length / state.parts.length) * 100)
     : 0;
@@ -219,7 +232,11 @@ export function getDashboardSummary(state: InventoryState) {
     universalCount: universalParts.length,
     coverage,
     binCount: state.bins.length,
+    activeBinCount: activeBins.length,
+    inactiveBinCount: inactiveBins.length,
     modelCount: state.models.length,
+    activeModelCount: activeModels.length,
+    inactiveModelCount: inactiveModels.length,
     lastUpdated: updatedAt,
     manufacturers,
     categories,
@@ -288,6 +305,7 @@ export function serializePartsCsv(
     "Reorder Point",
     "Reorder Target",
     "Bin Code",
+    "Bin Status",
     "Compatible Models",
     "Universal",
     "Notes",
@@ -310,6 +328,7 @@ export function serializePartsCsv(
       part.reorderPoint,
       part.reorderTarget,
       escapeCsvCell(bin?.code ?? ""),
+      escapeCsvCell(bin?.status ?? ""),
       escapeCsvCell(modelNames),
       escapeCsvCell(part.universal ? "Yes" : "No"),
       escapeCsvCell(part.notes),
@@ -323,13 +342,15 @@ export function serializePartsCsv(
 
 export function serializeBinsCsv(state: InventoryState) {
   const header = [
-    "Bin Code",
-    "Bin Name",
+    "Location Code",
+    "Location Name",
     "Description",
-    "Aisle",
-    "Row",
-    "Column",
+    "Area",
+    "Shelf",
+    "Bin",
     "Manufacturer",
+    "Status",
+    "Notes",
   ];
 
   const rows = state.bins.map((bin) =>
@@ -341,6 +362,8 @@ export function serializeBinsCsv(state: InventoryState) {
       bin.row,
       bin.column,
       escapeCsvCell(bin.manufacturer ?? ""),
+      escapeCsvCell(bin.status),
+      escapeCsvCell(bin.notes ?? ""),
     ].join(","),
   );
 
@@ -360,6 +383,55 @@ export function serializeModelsCsv(state: InventoryState) {
   );
 
   return [header.join(","), ...rows].join("\n");
+}
+
+export function serializeLowStockCsv(
+  state: Pick<InventoryState, "parts" | "bins" | "models">,
+) {
+  const lowStockParts = state.parts.filter(
+    (part) => getPartStockStatus(part) !== "healthy",
+  );
+
+  const header = [
+    "Part Number",
+    "Part Name",
+    "Manufacturer",
+    "Quantity On Hand",
+    "Reorder Point",
+    "Reorder Target",
+    "Location",
+    "Status",
+    "Compatibility",
+    "Notes",
+  ];
+
+  const rows = lowStockParts.map((part) => {
+    const bin = getBinById(state.bins, part.binId);
+    const compatibility = part.universal
+      ? "Universal"
+      : getCompatibleModels(part, state.models)
+          .map((model) => `${model.manufacturer} ${model.name}`)
+          .join("; ");
+
+    return [
+      escapeCsvCell(part.partNumber),
+      escapeCsvCell(part.partName),
+      escapeCsvCell(part.manufacturer),
+      part.quantityOnHand,
+      part.reorderPoint,
+      part.reorderTarget,
+      escapeCsvCell(bin ? `${bin.code} · ${bin.name}` : "Unassigned"),
+      escapeCsvCell(getPartStockStatus(part)),
+      escapeCsvCell(compatibility),
+      escapeCsvCell(part.notes),
+    ].join(",");
+  });
+
+  return [header.join(","), ...rows].join("\n");
+}
+
+export function serializeLocationsCsv(state: InventoryState) {
+  return serializeBinsCsv(state);
 }
 
 export function serializeActivityCsv(state: InventoryState) {

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,8 +15,8 @@ import {
   Tag,
 } from "lucide-react";
 
+import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
-import { PartEditorSheet } from "@/components/part-editor-sheet";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -34,9 +33,9 @@ import {
 } from "@/lib/inventory-utils";
 
 export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
+  const { permissions } = useAuth();
   const { activity, bins, deletePart, getBinById, getCompatibleModels, getPartById, adjustPart } =
     useInventory();
-  const [editorOpen, setEditorOpen] = useState(false);
 
   const part = getPartById(partId);
 
@@ -106,7 +105,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               Inventory
             </Link>
             <Link
-              href={`/tags?partId=${part.id}`}
+              href={`/print?partId=${part.id}`}
               className={cn(
                 buttonVariants({ variant: "outline", size: "default" }),
                 "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
@@ -115,13 +114,18 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               <Printer className="mr-2 h-4 w-4" />
               Print tag
             </Link>
-            <Button
-              className="bg-amber-400 text-slate-950 hover:bg-amber-300"
-              onClick={() => setEditorOpen(true)}
-            >
-              <Edit3 className="mr-2 h-4 w-4" />
-              Edit part
-            </Button>
+            {permissions.canManageParts && (
+              <Link
+                href={`/inventory/${part.id}/edit`}
+                className={cn(
+                  buttonVariants({ variant: "default", size: "default" }),
+                  "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                )}
+              >
+                <Edit3 className="mr-2 h-4 w-4" />
+                Edit part
+              </Link>
+            )}
           </>
         }
       />
@@ -228,22 +232,26 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                    onClick={() => adjustPart(part.id, -1)}
-                  >
-                    <Minus className="mr-2 h-4 w-4" />
-                    -1
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                    onClick={() => adjustPart(part.id, 1)}
-                  >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    +1
-                  </Button>
+                  {permissions.canAdjustStock && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        onClick={() => adjustPart(part.id, -1)}
+                      >
+                        <Minus className="mr-2 h-4 w-4" />
+                        -1
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        onClick={() => adjustPart(part.id, 1)}
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        +1
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -340,7 +348,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
             </CardHeader>
             <CardContent className="grid gap-2">
               <Link
-                href={`/tags?partId=${part.id}`}
+                href={`/print?partId=${part.id}`}
                 className={cn(
                   buttonVariants({ variant: "outline", size: "default" }),
                   "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
@@ -349,6 +357,18 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                 <Tag className="mr-2 h-4 w-4" />
                 Print a tag
               </Link>
+              {permissions.canManageParts && (
+                <Link
+                  href={`/inventory/${part.id}/edit`}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <Edit3 className="mr-2 h-4 w-4" />
+                  Edit part
+                </Link>
+              )}
               <Link
                 href="/lookup"
                 className={cn(
@@ -359,35 +379,28 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                 <ScanSearch className="mr-2 h-4 w-4" />
                 Lookup nearby parts
               </Link>
-              <Button
-                variant="outline"
-                className="h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Delete ${part.partNumber}? This removes the part from the browser store.`,
-                    )
-                  ) {
-                    deletePart(part.id);
-                  }
-                }}
-              >
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                Delete part
-              </Button>
+              {permissions.canManageParts && (
+                <Button
+                  variant="outline"
+                  className="h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${part.partNumber}? This removes the part from the browser store.`,
+                      )
+                    ) {
+                      deletePart(part.id);
+                    }
+                  }}
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Delete part
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
-
-      {editorOpen && (
-        <PartEditorSheet
-          key={part.id}
-          open={editorOpen}
-          onOpenChange={setEditorOpen}
-          part={part}
-        />
-      )}
     </div>
   );
 }

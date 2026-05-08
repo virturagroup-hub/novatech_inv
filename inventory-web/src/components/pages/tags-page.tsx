@@ -1,76 +1,155 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import {
-  ArrowLeft,
-  ClipboardList,
-  Copy,
-  MapPin,
-  PackageSearch,
-  Printer,
-  Tag,
-} from "lucide-react";
+/* eslint-disable react-hooks/set-state-in-effect */
 
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, MapPin, PackageSearch, Printer, QrCode, Search, Tag } from "lucide-react";
+
+import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
+import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import {
-  getBinSummary,
-  getPartLocationLabel,
-  getPartStockStatus,
-  requiresAttention,
-} from "@/lib/inventory-utils";
+import { APP_NAME, COMPANY_NAME } from "@/lib/brand";
+import { getBinSummary, getPartLocationLabel, getPartStockStatus } from "@/lib/inventory-utils";
+import type { Bin, Part } from "@/lib/inventory-types";
 
-export function TagsPage({ searchParams }: Readonly<{ searchParams?: { partId?: string; binId?: string } }>) {
-  const { bins, parts, settings, getCompatibleModels } = useInventory();
-  const [selectedPartId, setSelectedPartId] = useState(searchParams?.partId ?? parts[0]?.id ?? "");
-  const [selectedBinId, setSelectedBinId] = useState(searchParams?.binId ?? bins[0]?.id ?? "");
-  const [copies, setCopies] = useState(String(settings.defaultPrintCopies));
-  const [partQuery, setPartQuery] = useState("");
-  const [binQuery, setBinQuery] = useState("");
+type LabelMode = "part" | "bin";
 
-  const selectedPart = useMemo(
-    () => parts.find((part) => part.id === selectedPartId) ?? null,
-    [parts, selectedPartId],
-  );
-  const selectedBin = useMemo(
-    () => bins.find((bin) => bin.id === selectedBinId) ?? null,
-    [bins, selectedBinId],
-  );
-  const compatibleModels = selectedPart ? getCompatibleModels(selectedPart) : [];
-  const binSummary = selectedBin ? getBinSummary(selectedBin, parts) : null;
-  const filteredParts = useMemo(() => {
-    const search = partQuery.trim().toLowerCase();
-    if (!search) return parts;
-    return parts.filter((part) =>
-      `${part.partNumber} ${part.partName} ${part.manufacturer} ${part.notes}`.toLowerCase().includes(search),
-    );
-  }, [partQuery, parts]);
-  const filteredBins = useMemo(() => {
-    const search = binQuery.trim().toLowerCase();
-    if (!search) return bins;
-    return bins.filter((bin) =>
-      `${bin.code} ${bin.name} ${bin.description} ${bin.manufacturer ?? ""}`.toLowerCase().includes(search),
-    );
-  }, [binQuery, bins]);
+function buildPrintHref(options: {
+  mode: LabelMode;
+  part?: Part | null;
+  bin?: Bin | null;
+  copies: number;
+}) {
+  const params = new URLSearchParams({ copies: String(options.copies) });
 
-  const printTag = () => {
-    window.print();
+  if (options.mode === "part" && options.part) {
+    params.set("partId", options.part.id);
+  }
+
+  if (options.mode === "bin" && options.bin) {
+    params.set("binId", options.bin.id);
+  }
+
+  return `/print?${params.toString()}`;
+}
+
+function normalizeCopies(value: string, fallback: number) {
+  return Math.max(1, Math.min(12, Number(value) || fallback));
+}
+
+export function TagsPage({
+  searchParams,
+}: Readonly<{
+  searchParams: {
+    partId?: string;
+    binId?: string;
+    mode?: string;
   };
+}>) {
+  const { permissions } = useAuth();
+  const { bins, getPartById, parts, settings } = useInventory();
+  const initialMode: LabelMode =
+    searchParams.mode === "bin" || searchParams.binId ? "bin" : "part";
+  const [mode, setMode] = useState<LabelMode>(initialMode);
+  const [query, setQuery] = useState("");
+  const [copies, setCopies] = useState(String(settings.defaultPrintCopies));
+  const [selectedPartId, setSelectedPartId] = useState(searchParams.partId ?? "");
+  const [selectedBinId, setSelectedBinId] = useState(searchParams.binId ?? "");
+
+  useEffect(() => {
+    setCopies(String(settings.defaultPrintCopies));
+  }, [settings.defaultPrintCopies]);
+
+  useEffect(() => {
+    if (searchParams.mode === "bin" || searchParams.binId) {
+      setMode("bin");
+      if (searchParams.binId) {
+        setSelectedBinId(searchParams.binId);
+      }
+      setSelectedPartId("");
+      return;
+    }
+
+    if (searchParams.mode === "part" || searchParams.partId) {
+      setMode("part");
+      if (searchParams.partId) {
+        setSelectedPartId(searchParams.partId);
+      }
+      setSelectedBinId("");
+      return;
+    }
+  }, [searchParams.binId, searchParams.mode, searchParams.partId]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const partMatches = useMemo(() => {
+    return [...parts]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .filter((part) => {
+        if (mode !== "part") return false;
+        if (!normalizedQuery) return true;
+        return `${part.partNumber} ${part.partName} ${part.manufacturer} ${part.notes}`
+          .toLowerCase()
+          .includes(normalizedQuery);
+      });
+  }, [mode, normalizedQuery, parts]);
+
+  const binMatches = useMemo(() => {
+    return [...bins]
+      .sort((left, right) => left.code.localeCompare(right.code))
+      .filter((bin) => {
+        if (mode !== "bin") return false;
+        if (!normalizedQuery) return true;
+        return `${bin.code} ${bin.name} ${bin.description} ${bin.aisle} ${bin.row} ${bin.column} ${
+          bin.manufacturer ?? ""
+        }`
+          .toLowerCase()
+          .includes(normalizedQuery);
+      });
+  }, [bins, mode, normalizedQuery]);
+
+  const selectedPart = selectedPartId ? getPartById(selectedPartId) ?? null : null;
+  const selectedBin = selectedBinId ? bins.find((bin) => bin.id === selectedBinId) ?? null : null;
+  const selectedPrintHref = buildPrintHref({
+    mode,
+    part: selectedPart,
+    bin: selectedBin,
+    copies: normalizeCopies(copies, settings.defaultPrintCopies),
+  });
+  const canPrint = permissions.canPrintLabels && Boolean(selectedPart || selectedBin);
+
+  const summaryCards = [
+    { label: "Parts ready", value: parts.length, hint: "Available for tags", icon: <PackageSearch className="h-5 w-5" /> },
+    { label: "Bins ready", value: bins.length, hint: "Available for bin labels", icon: <MapPin className="h-5 w-5" /> },
+    {
+      label: "Low stock",
+      value: parts.filter((part) => getPartStockStatus(part) !== "healthy").length,
+      hint: "Needs attention",
+      icon: <Tag className="h-5 w-5" />,
+      tone: "amber" as const,
+    },
+    {
+      label: "Copies",
+      value: normalizeCopies(copies, settings.defaultPrintCopies),
+      hint: "Per print run",
+      icon: <Printer className="h-5 w-5" />,
+      tone: "emerald" as const,
+    },
+  ];
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
-        eyebrow="Printable tags"
-        title="Generate inventory and bin labels for the floor."
-        description="Use these preview cards for quick printouts, bin tags, and barcode-style lookup sheets. The controls stay out of the print layout so the output is clean."
+        eyebrow="Labels"
+        title="Prepare part and bin labels."
+        description="Choose a part or bin, check the preview, and send only the labels to the dedicated print route. The workflow stays simple for desktop and Android browsers."
         actions={
           <>
             <Link
@@ -80,357 +159,360 @@ export function TagsPage({ searchParams }: Readonly<{ searchParams?: { partId?: 
                 "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
               )}
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Inventory
+              <PackageSearch className="mr-2 h-4 w-4" />
+              Parts
             </Link>
-            <Button className="bg-amber-400 text-slate-950 hover:bg-amber-300" onClick={printTag}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
+            <Link
+              href="/locations"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "default" }),
+                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <MapPin className="mr-2 h-4 w-4" />
+              Locations
+            </Link>
           </>
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-white/10 bg-white/5">
-          <CardContent className="p-4">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Parts ready</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{parts.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-white/10 bg-white/5">
-          <CardContent className="p-4">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Bins ready</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{bins.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-white/10 bg-white/5">
-          <CardContent className="p-4">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Label copies</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{copies}</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            hint={card.hint}
+            icon={card.icon}
+            tone={card.tone}
+          />
+        ))}
       </div>
 
-      <Card className="border-white/10 bg-white/5 print:hidden">
-        <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="grid gap-4 md:grid-cols-[1fr_180px]">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Selected copies</p>
-              <div className="flex gap-2">
+      {!permissions.canPrintLabels && (
+        <Card className="border-amber-400/20 bg-amber-400/10">
+          <CardContent className="p-4 text-sm text-amber-100">
+            Your current role can preview labels, but printing is restricted.
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Label picker</CardTitle>
+            <CardDescription className="text-slate-400">
+              Search for a part or location, then choose the label you want to print.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button
+                variant={mode === "part" ? "default" : "outline"}
+                className={cn(
+                  "h-12 justify-start",
+                  mode === "part"
+                    ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                    : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+                onClick={() => setMode("part")}
+              >
+                <PackageSearch className="mr-2 h-4 w-4" />
+                Part tags
+              </Button>
+              <Button
+                variant={mode === "bin" ? "default" : "outline"}
+                className={cn(
+                  "h-12 justify-start",
+                  mode === "bin"
+                    ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                    : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+                onClick={() => setMode("bin")}
+              >
+                <MapPin className="mr-2 h-4 w-4" />
+                Bin labels
+              </Button>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1fr_160px]">
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Search</p>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={
+                      mode === "part"
+                        ? "Search part number, name, or notes"
+                        : "Search location code, aisle, shelf, or bin"
+                    }
+                    className="h-12 border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Copies</p>
                 <Input
                   value={copies}
                   onChange={(event) => setCopies(event.target.value.replace(/[^0-9]/g, ""))}
                   inputMode="numeric"
-                  className="border-white/10 bg-slate-950/70 text-white"
+                  className="h-12 border-white/10 bg-slate-950/70 text-white"
                 />
-                <Button
-                  variant="outline"
-                  className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                  onClick={() => setCopies((current) => String(Math.max(1, Number(current) || 1)))}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Normalize
-                </Button>
               </div>
             </div>
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Jump to</p>
-              <div className="flex gap-2">
-                <Link
-                  href="/lookup"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "default" }),
-                    "h-11 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <PackageSearch className="mr-2 h-4 w-4" />
-                  Lookup
-                </Link>
-                <Link
-                  href="/locations"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "default" }),
-                    "h-11 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <MapPin className="mr-2 h-4 w-4" />
-                  Locations
-                </Link>
-              </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                onClick={() => {
+                  setQuery("");
+                  setSelectedPartId("");
+                  setSelectedBinId("");
+                }}
+              >
+                Clear selection
+              </Button>
+              <Link
+                href={selectedPrintHref}
+                aria-disabled={!canPrint}
+                tabIndex={canPrint ? 0 : -1}
+                className={cn(
+                  buttonVariants({ variant: "default", size: "default" }),
+                  "h-11",
+                  canPrint
+                    ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                    : "pointer-events-none bg-slate-700 text-slate-300 opacity-60",
+                )}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print labels
+              </Link>
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Tabs defaultValue="parts" className="space-y-4">
-        <TabsList className="grid h-auto grid-cols-2 bg-white/5 p-1">
-          <TabsTrigger value="parts" className="data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950">
-            Part tags
-          </TabsTrigger>
-          <TabsTrigger value="bins" className="data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950">
-            Bin tags
-          </TabsTrigger>
-        </TabsList>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {mode === "part"
+                ? partMatches.slice(0, 8).map((part) => (
+                    <button
+                      key={part.id}
+                      type="button"
+                      onClick={() => setSelectedPartId(part.id)}
+                      className={cn(
+                        "rounded-3xl border p-4 text-left transition-colors",
+                        selectedPartId === part.id
+                          ? "border-emerald-400/30 bg-emerald-400/10"
+                          : "border-white/10 bg-slate-950/50 hover:bg-white/10",
+                      )}
+                    >
+                      <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                      <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
+                      <p className="mt-2 text-xs text-slate-400">
+                        {getPartLocationLabel(part, bins)}
+                      </p>
+                    </button>
+                  ))
+                : binMatches.slice(0, 8).map((bin) => (
+                    <button
+                      key={bin.id}
+                      type="button"
+                      onClick={() => setSelectedBinId(bin.id)}
+                      className={cn(
+                        "rounded-3xl border p-4 text-left transition-colors",
+                        selectedBinId === bin.id
+                          ? "border-emerald-400/30 bg-emerald-400/10"
+                          : "border-white/10 bg-slate-950/50 hover:bg-white/10",
+                      )}
+                    >
+                      <p className="font-mono text-sm font-semibold text-white">{bin.code}</p>
+                      <p className="mt-1 text-sm text-slate-200">{bin.name}</p>
+                      <p className="mt-2 text-xs text-slate-400">{bin.description}</p>
+                    </button>
+                  ))}
+            </div>
 
-        <TabsContent value="parts" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <Card className="border-white/10 bg-white/5 print:hidden">
-              <CardHeader>
-                <CardTitle className="text-white">Pick a part</CardTitle>
-                <CardDescription className="text-slate-400">
-                  The preview updates as soon as you change the selection.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Input
-                  placeholder="Filter part number or name"
-                  value={partQuery}
-                  onChange={(event) => setPartQuery(event.target.value)}
-                  className="border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                />
-                <div className="max-h-[30rem] space-y-2 overflow-auto pr-1">
-                  {filteredParts.map((part) => {
-                    const active = selectedPartId === part.id;
-                    return (
-                      <button
-                        key={part.id}
-                        type="button"
-                        onClick={() => setSelectedPartId(part.id)}
-                        className={cn(
-                          "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-colors",
-                          active
-                            ? "border-amber-400/30 bg-amber-400/10"
-                            : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                        )}
-                      >
-                        <Tag className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">{part.partNumber}</p>
-                          <p className="truncate text-xs text-slate-400">{part.partName}</p>
-                        </div>
-                        <Badge
-                          className={cn(
-                            "border",
-                            getPartStockStatus(part) === "critical"
-                              ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
-                              : getPartStockStatus(part) === "low"
-                                ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                                : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
-                          )}
-                        >
-                          {part.quantityOnHand}
-                        </Badge>
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="rounded-3xl border border-dashed border-white/10 bg-slate-950/30 p-4 text-sm text-slate-300">
+              {mode === "part"
+                ? `${partMatches.length} part tag${partMatches.length === 1 ? "" : "s"} found.`
+                : `${binMatches.length} bin label${binMatches.length === 1 ? "" : "s"} found.`}
+            </div>
+          </CardContent>
+        </Card>
 
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Selected preview</CardTitle>
+            <CardDescription className="text-slate-400">
+              This is the record that will open in the print layout.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {selectedPart ? (
-              <Card className="border-white/10 bg-white/5">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+              <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <CardTitle className="text-white">Part tag preview</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Print this for shelf labels or service tickets.
-                    </CardDescription>
-                  </div>
-                  <Badge
-                    className={cn(
-                      "border",
-                      requiresAttention(selectedPart)
-                        ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                        : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
-                    )}
-                  >
-                    {requiresAttention(selectedPart) ? "Attention" : "Ready"}
-                  </Badge>
-                </CardHeader>
-                <CardContent className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-                  <div className="rounded-[2rem] border border-dashed border-white/10 bg-slate-950/70 p-5 text-center">
-                    <QRCodeSVG
-                      value={`part:${selectedPart.partNumber}`}
-                      includeMargin
-                      size={176}
-                      className="mx-auto rounded-2xl bg-white p-2"
-                    />
-                    <p className="mt-4 font-mono text-xs uppercase tracking-[0.24em] text-slate-500">
+                    <Badge className="border-white/10 bg-white/5 text-slate-200">
+                      Part tag
+                    </Badge>
+                    <p className="mt-3 font-mono text-lg font-semibold text-white">
                       {selectedPart.partNumber}
                     </p>
+                    <p className="mt-1 text-sm text-slate-200">{selectedPart.partName}</p>
                   </div>
-                  <div className="space-y-4">
-                    <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Part</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{selectedPart.partName}</p>
-                      <p className="mt-2 text-sm text-slate-400">
-                        {selectedPart.manufacturer} · {selectedPart.category}
-                      </p>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Location</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {getPartLocationLabel(selectedPart, bins)}
-                        </p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Quantity</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {selectedPart.quantityOnHand} on hand
-                        </p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Compatibility</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {selectedPart.universal ? "Universal" : compatibleModels.length + " models"}
-                        </p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Need by</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          Reorder point {selectedPart.reorderPoint}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      Copies selected: {copies}. The print dialog will use your browser settings.
-                    </p>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <QrCode className="h-5 w-5 text-emerald-300" />
                   </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="border-white/10 bg-white/5">
-                <CardContent className="flex min-h-[22rem] flex-col items-center justify-center gap-3 p-8 text-center">
-                  <ClipboardList className="h-12 w-12 text-slate-500" />
-                  <p className="text-sm text-slate-400">No part selected for tag preview.</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="bins" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <Card className="border-white/10 bg-white/5 print:hidden">
-              <CardHeader>
-                <CardTitle className="text-white">Pick a bin</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Print a shelf tag or bin reference card.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Input
-                  placeholder="Filter by bin code or name"
-                  value={binQuery}
-                  onChange={(event) => setBinQuery(event.target.value)}
-                  className="border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                />
-                <div className="max-h-[30rem] space-y-2 overflow-auto pr-1">
-                  {filteredBins.map((bin) => {
-                    const active = selectedBinId === bin.id;
-                    return (
-                      <button
-                        key={bin.id}
-                        type="button"
-                        onClick={() => setSelectedBinId(bin.id)}
-                        className={cn(
-                          "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-colors",
-                          active
-                            ? "border-amber-400/30 bg-amber-400/10"
-                            : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                        )}
-                      >
-                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">{bin.code}</p>
-                          <p className="truncate text-xs text-slate-400">{bin.name}</p>
-                        </div>
-                        <Badge className="border-white/10 bg-white/5 text-slate-200">
-                          {parts.filter((part) => part.binId === bin.id).length}
-                        </Badge>
-                      </button>
-                    );
-                  })}
                 </div>
-              </CardContent>
-            </Card>
-
-            {selectedBin ? (
-              <Card className="border-white/10 bg-white/5">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-                  <div>
-                    <CardTitle className="text-white">Bin tag preview</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Shelf reference and location barcode for the aisle.
-                    </CardDescription>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Location</p>
+                    <p className="mt-2 text-sm text-white">{getPartLocationLabel(selectedPart, bins)}</p>
                   </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Stock</p>
+                    <p className="mt-2 text-sm text-white">{getPartStockStatus(selectedPart)}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {binSummary?.parts.length ?? 0} parts
+                    {selectedPart.manufacturer}
                   </Badge>
-                </CardHeader>
-                <CardContent className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-                  <div className="rounded-[2rem] border border-dashed border-white/10 bg-slate-950/70 p-5 text-center">
-                    <QRCodeSVG
-                      value={`bin:${selectedBin.code}`}
-                      includeMargin
-                      size={176}
-                      className="mx-auto rounded-2xl bg-white p-2"
-                    />
-                    <p className="mt-4 font-mono text-xs uppercase tracking-[0.24em] text-slate-500">
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    {selectedPart.category}
+                  </Badge>
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    Qty {selectedPart.quantityOnHand}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/inventory/${selectedPart.id}`}
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "default" }),
+                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <ArrowRight className="mr-2 h-4 w-4" />
+                    Open part
+                  </Link>
+                  <Link
+                    href={selectedPrintHref}
+                    className={cn(
+                      buttonVariants({ variant: "default", size: "default" }),
+                      "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                    )}
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print labels
+                  </Link>
+                </div>
+              </div>
+            ) : selectedBin ? (
+              <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Badge className="border-white/10 bg-white/5 text-slate-200">
+                      Bin tag
+                    </Badge>
+                    <p className="mt-3 font-mono text-lg font-semibold text-white">
                       {selectedBin.code}
                     </p>
+                    <p className="mt-1 text-sm text-slate-200">{selectedBin.name}</p>
                   </div>
-                  <div className="space-y-4">
-                    <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Bin</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{selectedBin.name}</p>
-                      <p className="mt-2 text-sm text-slate-400">{selectedBin.description}</p>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Aisle</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {selectedBin.aisle}-{selectedBin.row}-{selectedBin.column}
-                        </p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Category</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {selectedBin.manufacturer || "General"}
-                        </p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Parts stored</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {binSummary?.parts.length ?? 0}
-                        </p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Low stock</p>
-                        <p className="mt-2 text-sm font-semibold text-white">
-                          {binSummary?.lowStockCount ?? 0}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      Suggested usage: print one bin tag and keep it with the shelf map.
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <QrCode className="h-5 w-5 text-emerald-300" />
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Area</p>
+                    <p className="mt-2 text-sm text-white">{selectedBin.aisle}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Shelf / Bin</p>
+                    <p className="mt-2 text-sm text-white">
+                      {selectedBin.row} / {selectedBin.column}
                     </p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    {selectedBin.manufacturer || "General"}
+                  </Badge>
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    {getBinSummary(selectedBin, parts).parts.length} parts
+                  </Badge>
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    {getBinSummary(selectedBin, parts).lowStockCount} low
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="/locations"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "default" }),
+                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <ArrowRight className="mr-2 h-4 w-4" />
+                    Open locations
+                  </Link>
+                  <Link
+                    href={selectedPrintHref}
+                    className={cn(
+                      buttonVariants({ variant: "default", size: "default" }),
+                      "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                    )}
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print labels
+                  </Link>
+                </div>
+              </div>
             ) : (
-              <Card className="border-white/10 bg-white/5">
-                <CardContent className="flex min-h-[22rem] flex-col items-center justify-center gap-3 p-8 text-center">
-                  <MapPin className="h-12 w-12 text-slate-500" />
-                  <p className="text-sm text-slate-400">No bin selected for tag preview.</p>
-                </CardContent>
-              </Card>
+              <div className="flex min-h-[26rem] flex-col items-center justify-center gap-4 rounded-[1.5rem] border border-dashed border-white/10 bg-slate-950/30 p-6 text-center">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <Tag className="h-8 w-8 text-emerald-300" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-lg font-semibold text-white">Select a label to print</h2>
+                  <p className="max-w-md text-sm leading-6 text-slate-400">
+                    Pick a part or bin on the left, then send it to the print layout. The print page only shows labels.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Link
+                    href="/inventory"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "default" }),
+                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    Parts
+                  </Link>
+                  <Link
+                    href="/locations"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "default" }),
+                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    Locations
+                  </Link>
+                </div>
+              </div>
             )}
-          </div>
-        </TabsContent>
-      </Tabs>
+
+            <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
+              <p className="font-medium text-white">{APP_NAME}</p>
+              <p className="mt-1 text-slate-400">
+                {COMPANY_NAME} label workflow for parts room printers, bin tags, and Android mobile use.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

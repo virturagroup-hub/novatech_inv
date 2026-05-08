@@ -19,6 +19,7 @@ export const seedBins: Bin[] = [
     row: 1,
     column: 1,
     manufacturer: "Canon",
+    status: "active",
   },
   {
     id: "bin-canon-path",
@@ -29,6 +30,7 @@ export const seedBins: Bin[] = [
     row: 1,
     column: 2,
     manufacturer: "Canon",
+    status: "active",
   },
   {
     id: "bin-hp-mono",
@@ -39,6 +41,7 @@ export const seedBins: Bin[] = [
     row: 2,
     column: 1,
     manufacturer: "HP",
+    status: "active",
   },
   {
     id: "bin-xerox-transfer",
@@ -49,6 +52,7 @@ export const seedBins: Bin[] = [
     row: 2,
     column: 2,
     manufacturer: "Xerox",
+    status: "active",
   },
   {
     id: "bin-ricoh-service",
@@ -59,6 +63,7 @@ export const seedBins: Bin[] = [
     row: 3,
     column: 1,
     manufacturer: "Ricoh",
+    status: "active",
   },
   {
     id: "bin-universal",
@@ -69,6 +74,7 @@ export const seedBins: Bin[] = [
     row: 3,
     column: 2,
     manufacturer: "Universal",
+    status: "active",
   },
   {
     id: "bin-model-cards",
@@ -79,6 +85,7 @@ export const seedBins: Bin[] = [
     row: 4,
     column: 1,
     manufacturer: null,
+    status: "active",
   },
   {
     id: "bin-review",
@@ -89,6 +96,7 @@ export const seedBins: Bin[] = [
     row: 4,
     column: 2,
     manufacturer: null,
+    status: "inactive",
     notes: "Use for parts that need review before they are shelved.",
   },
   {
@@ -100,6 +108,7 @@ export const seedBins: Bin[] = [
     row: 5,
     column: 1,
     manufacturer: null,
+    status: "active",
   },
   {
     id: "bin-field-kit",
@@ -110,6 +119,7 @@ export const seedBins: Bin[] = [
     row: 5,
     column: 2,
     manufacturer: "Universal",
+    status: "active",
   },
 ];
 
@@ -182,7 +192,7 @@ export const seedModels: DeviceModel[] = [
     manufacturer: "Canon",
     name: "imageRUNNER C3300 Series",
     series: "Legacy",
-    status: "legacy",
+    status: "inactive",
     notes: "Keep for older installed units until the fleet refresh is complete.",
   },
 ];
@@ -532,4 +542,3 @@ export function createSeedState(): InventoryState {
     settings: structuredClone(seedSettings),
   };
 }
-

@@ -3,7 +3,7 @@ import { TagsPage } from "@/components/pages/tags-page";
 export default async function Page({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ partId?: string; binId?: string }>;
+  searchParams: Promise<{ partId?: string; binId?: string; mode?: string }>;
 }>) {
   const resolvedSearchParams = await searchParams;
   return <TagsPage searchParams={resolvedSearchParams} />;

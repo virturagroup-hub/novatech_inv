@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -39,6 +40,7 @@ function emptyBinDraft(): BinDraft {
     row: 1,
     column: 1,
     manufacturer: null,
+    status: "active",
     notes: "",
   };
 }
@@ -53,6 +55,7 @@ function binDraftFromBin(bin?: Bin | null): BinDraft {
     row: bin.row,
     column: bin.column,
     manufacturer: bin.manufacturer,
+    status: bin.status,
     notes: bin.notes ?? "",
   };
 }
@@ -79,6 +82,7 @@ function modelDraftFromModel(model?: DeviceModel | null): ModelDraft {
 }
 
 export function SettingsPage() {
+  const { permissions } = useAuth();
   const {
     bins,
     models,
@@ -99,6 +103,11 @@ export function SettingsPage() {
   const [selectedModelId, setSelectedModelId] = useState<string | "new">(models[0]?.id ?? "new");
   const [binDraft, setBinDraft] = useState<BinDraft>(binDraftFromBin(bins[0] ?? null));
   const [modelDraft, setModelDraft] = useState<ModelDraft>(modelDraftFromModel(models[0] ?? null));
+  const canManageWorkspace =
+    permissions.canManageParts &&
+    permissions.canManageModels &&
+    permissions.canManageLocations &&
+    permissions.canExportReports;
 
   useEffect(() => {
     setLowStockThreshold(String(settings.lowStockThreshold));
@@ -189,6 +198,35 @@ export function SettingsPage() {
       ),
     [models],
   );
+
+  if (!canManageWorkspace) {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+        <PageHero
+          eyebrow="Admin settings"
+          title="Settings are restricted to admin and manager users."
+          description="Viewer and technician accounts can still search inventory, but the master-data controls live here for elevated users only."
+          actions={
+            <Link
+              href="/inventory"
+              className={cn(
+                buttonVariants({ variant: "default", size: "default" }),
+                "bg-amber-400 text-slate-950 hover:bg-amber-300",
+              )}
+            >
+              Inventory
+            </Link>
+          }
+        />
+        <Card className="border-amber-400/20 bg-amber-400/10">
+          <CardContent className="p-4 text-sm text-amber-100">
+            Your current role can view inventory data, but model, location, and workspace settings are reserved
+            for admin and manager users.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
@@ -555,7 +593,7 @@ export function SettingsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="legacy">Legacy</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

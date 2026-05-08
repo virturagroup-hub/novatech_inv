@@ -13,6 +13,7 @@ import {
   Layers3,
 } from "lucide-react";
 
+import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/inventory-utils";
 
 export function DashboardPage() {
+  const { permissions } = useAuth();
   const {
     bins,
     parts,
@@ -281,48 +283,62 @@ export function DashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <Card className="border-white/10 bg-white/5">
-            <CardHeader>
-              <CardTitle className="text-white">Recent activity</CardTitle>
-              <CardDescription className="text-slate-400">
-                Local audit trail from this Phase 1 browser store.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {summary.recentActivity.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <Badge
-                      className={cn(
-                        "border",
-                        entry.tone === "danger"
-                          ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
-                          : entry.tone === "warning"
-                            ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                            : entry.tone === "success"
-                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                              : "border-sky-400/20 bg-sky-400/10 text-sky-200",
-                      )}
-                    >
-                      {entry.action}
-                    </Badge>
-                    <span className="font-mono text-[11px] text-slate-500">
-                      {formatCompactDate(entry.occurredAt)}
-                    </span>
+          {permissions.canViewActivity ? (
+            <Card className="border-white/10 bg-white/5">
+              <CardHeader>
+                <CardTitle className="text-white">Recent activity</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Local audit trail from this Phase 1 browser store.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {summary.recentActivity.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge
+                        className={cn(
+                          "border",
+                          entry.tone === "danger"
+                            ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                            : entry.tone === "warning"
+                              ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                              : entry.tone === "success"
+                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                : "border-sky-400/20 bg-sky-400/10 text-sky-200",
+                        )}
+                      >
+                        {entry.action}
+                      </Badge>
+                      <span className="font-mono text-[11px] text-slate-500">
+                        {formatCompactDate(entry.occurredAt)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {entry.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      {entry.detail}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-white">
-                    {entry.title}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    {entry.detail}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-white/10 bg-white/5">
+              <CardHeader>
+                <CardTitle className="text-white">Recent activity</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Activity is hidden for read-only users.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">
+                View the lookup or inventory screens for read-only work. Technicians, managers, and admins can see the audit trail.
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
