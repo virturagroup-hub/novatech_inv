@@ -9,7 +9,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Preserve the typed mock-data layer until Phase 2 explicitly replaces it.
 - Keep inventory state flows in `src/lib` reducers and helpers rather than scattering logic across pages.
 - Keep role logic centralized in `src/lib/auth.ts`.
-- Use `src/lib/supabase` for future client and server Supabase helpers.
+- Use `src/lib/supabase` for Supabase client, server, middleware, and type helpers.
 
 ## Data Rules
 
@@ -51,6 +51,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Run `npm run lint`, `npm run typecheck`, and `npm run build` before finishing.
 - Update `README.md` and `MIGRATION_PLAN.md` when the app structure or workflow changes.
 - Keep the Supabase schema notes in `supabase/phase2_schema.sql` current when Phase 2 planning changes.
+- Prefer `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for the public client key; keep `NEXT_PUBLIC_SUPABASE_ANON_KEY` only for backward compatibility.
 
 ## Current File Map
 

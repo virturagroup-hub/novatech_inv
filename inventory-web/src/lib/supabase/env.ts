@@ -8,16 +8,22 @@ export function getSupabaseUrl() {
   return url;
 }
 
-export function getSupabaseAnonKey() {
+export function getSupabasePublishableKey() {
   const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!key) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY).",
+    );
   }
 
   return key;
+}
+
+export function getSupabaseAnonKey() {
+  return getSupabasePublishableKey();
 }
 
 export function getSupabaseServiceRoleKey() {
@@ -28,4 +34,12 @@ export function getSupabaseServiceRoleKey() {
   }
 
   return key;
+}
+
+export function hasSupabaseCredentials() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  );
 }

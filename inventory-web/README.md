@@ -85,11 +85,12 @@ Set these in `.env.local` when you are ready to connect Supabase:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` is optional and only needed for true server-side admin tasks. If your Supabase dashboard exposes the older publishable key name, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is also accepted by the helper layer as a fallback.
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the preferred public client key. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still accepted by the helper layer as a legacy fallback if you already have it in an older Supabase project.
 
 ### Supabase Setup Steps
 
@@ -98,6 +99,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 3. Run [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql).
 4. Add the environment variables above.
 5. Keep the Phase 1 local auth/store until the Phase 2 migration is ready to swap in real auth and persistence.
+6. Add the root `middleware.ts` session refresh helper once Supabase auth is enabled so browser sessions stay fresh.
 
 The schema file uses a `profiles.role` column so future auth can map cleanly to:
 

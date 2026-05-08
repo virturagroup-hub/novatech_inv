@@ -53,6 +53,7 @@ The Phase 1 implementation now includes:
 - Printing now uses a dedicated `/print` route with print-only CSS.
 - PWA metadata, icons, and theme color were kept in sync with the new brand.
 - Supabase-ready client helpers, table types, and schema docs were added without replacing the Phase 1 store.
+- The Supabase helper layer now also includes a middleware session-refresh path and publishable-key support.
 
 ## What Remains For Phase 2
 
