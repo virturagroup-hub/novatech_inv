@@ -76,6 +76,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
 
+If you deploy to Vercel, add the public Supabase vars to both Preview and Production environments. If either one is missing, middleware will fall back to a safe no-op instead of refreshing sessions.
+
 ### Required Supabase Settings
 
 In your Supabase project:
@@ -171,6 +173,14 @@ This app is ready for Vercel deployment.
 
 ```bash
 npm run build
+```
+
+Vercel handles HTTPS, static assets, the manifest, and the Android-friendly PWA experience.
+
+You can verify the public Supabase env wiring without exposing secret values at:
+
+```text
+/api/diagnostics/supabase
 ```
 
 ## Android Installation

@@ -11,6 +11,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Keep role logic centralized in `src/lib/auth.ts`.
 - Use `src/lib/supabase` for Supabase client, server, middleware, profile, and type helpers.
 - Do not let client components import server-only helpers that depend on `next/headers`.
+- Middleware must fail closed: if Supabase env vars are missing or invalid, log a warning and return `NextResponse.next()`.
+- Keep the `/api/diagnostics/supabase` route secret-safe; it may report presence/absence only, never values.
 
 ## Data Rules
 
