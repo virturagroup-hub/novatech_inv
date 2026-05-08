@@ -8,35 +8,43 @@ import {
 } from "./env";
 
 export async function refreshSession(request: NextRequest) {
-  if (!hasSupabaseCredentials()) {
-    return NextResponse.next({
+  const passthrough = () =>
+    NextResponse.next({
       request: {
         headers: request.headers,
       },
     });
+
+  if (!hasSupabaseCredentials()) {
+    return passthrough();
   }
 
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  try {
+    const response = passthrough();
 
-  const supabase = createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+    const supabase = createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            try {
+              request.cookies.set(name, value);
+            } catch {
+              // Some runtime environments expose a read-only request cookie jar.
+            }
+
+            response.cookies.set(name, value, options);
+          });
+        },
       },
-      setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value);
-          response.cookies.set(name, value, options);
-        });
-      },
-    },
-  });
+    });
 
-  await supabase.auth.getUser();
+    await supabase.auth.getClaims();
 
-  return response;
+    return response;
+  } catch {
+    return passthrough();
+  }
 }
