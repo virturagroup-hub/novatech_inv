@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAuthBlockMessage, type AuthBlockReason } from "@/lib/auth";
+import { buildChangePasswordPath, sanitizeInternalPath } from "@/lib/navigation";
 import { APP_DESCRIPTION, APP_NAME, APP_SUBTITLE, COMPANY_NAME } from "@/lib/brand";
 
 export function LoginScreen({
@@ -29,6 +30,7 @@ export function LoginScreen({
 }>) {
   const router = useRouter();
   const { signIn, isAuthenticated, session, hydrated, authIssue } = useAuth();
+  const safeNextPath = sanitizeInternalPath(nextPath);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,12 +42,12 @@ export function LoginScreen({
     if (!hydrated || !isAuthenticated || !session) return;
 
     if (session.mustChangePassword) {
-      router.replace("/change-password");
+      router.replace(buildChangePasswordPath(safeNextPath));
       return;
     }
 
-    router.replace(nextPath || "/");
-  }, [hydrated, isAuthenticated, nextPath, router, session]);
+    router.replace(safeNextPath);
+  }, [hydrated, isAuthenticated, router, session, safeNextPath]);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.16),_transparent_34%),linear-gradient(180deg,#04110d_0%,#050d13_55%,#020617_100%)] px-4 py-6 text-white sm:px-6 lg:px-8">
@@ -176,7 +178,11 @@ export function LoginScreen({
                     password,
                   });
 
-                  router.replace(nextSession.mustChangePassword ? "/change-password" : nextPath || "/");
+                  router.replace(
+                    nextSession.mustChangePassword
+                      ? buildChangePasswordPath(safeNextPath)
+                      : safeNextPath,
+                  );
                 } catch (error) {
                   setErrorMessage(
                     error instanceof Error

@@ -38,6 +38,7 @@ import { useInventory } from "@/components/inventory-provider";
 import { useAuth } from "@/components/auth-provider";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/brand";
 import { getRoleLabel } from "@/lib/auth";
+import { buildChangePasswordPath, buildLoginPath, sanitizeInternalPath } from "@/lib/navigation";
 import type { ComponentType } from "react";
 
 const primaryNav = [
@@ -142,6 +143,10 @@ export function AppShell({
   useEffect(() => {
     if (!hydrated) return;
 
+    const currentPath = typeof window !== "undefined"
+      ? sanitizeInternalPath(`${window.location.pathname}${window.location.search}`)
+      : sanitizeInternalPath(pathname);
+
     if (isLogoutRoute) {
       void signOut().finally(() => router.replace("/login"));
       return;
@@ -150,19 +155,19 @@ export function AppShell({
     if (!isAuthenticated && !isPublicRoute) {
       router.replace(
         authIssue
-          ? `/login?reason=${encodeURIComponent(authIssue)}`
-          : `/login?next=${encodeURIComponent(pathname)}`,
+          ? buildLoginPath({ reason: authIssue, nextPath: currentPath })
+          : buildLoginPath({ nextPath: currentPath }),
       );
       return;
     }
 
     if (isAuthenticated && session?.mustChangePassword && pathname !== "/change-password") {
-      router.replace("/change-password");
+      router.replace(buildChangePasswordPath(currentPath));
       return;
     }
 
     if (isAuthenticated && pathname === "/login") {
-      router.replace(session?.mustChangePassword ? "/change-password" : "/");
+      router.replace(session?.mustChangePassword ? buildChangePasswordPath(currentPath) : "/");
       return;
     }
 

@@ -4,9 +4,17 @@ import { requireAppSession } from "@/lib/supabase/route-guards";
 export default async function Page({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ partId?: string; binId?: string; mode?: string }>;
+  searchParams: Promise<{
+    partId?: string;
+    partIds?: string;
+    binId?: string;
+    mode?: string;
+    labelMode?: string;
+    copies?: string;
+    includeZero?: string;
+  }>;
 }>) {
   const resolvedSearchParams = await searchParams;
-  await requireAppSession();
+  await requireAppSession({ nextPath: "/tags" });
   return <TagsPage searchParams={resolvedSearchParams} />;
 }

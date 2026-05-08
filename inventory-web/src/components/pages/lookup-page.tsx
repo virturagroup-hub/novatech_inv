@@ -18,6 +18,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { buildPartPrintHref } from "@/lib/labels";
 import {
   countCompatiblePartsForModel,
   getPartLocationLabel,
@@ -238,7 +239,7 @@ export function LookupPage() {
                       Open detail
                     </Link>
                     <Link
-                      href={`/print?partId=${part.id}`}
+                      href={buildPartPrintHref({ partIds: [part.id] })}
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }),
                         "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",

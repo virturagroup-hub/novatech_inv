@@ -4,7 +4,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, MapPin, PackageSearch, Printer, QrCode, Search, Tag } from "lucide-react";
+import {
+  ArrowRight,
+  MapPin,
+  PackageSearch,
+  Printer,
+  QrCode,
+  Search,
+  Tag,
+} from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
@@ -15,33 +23,47 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { APP_NAME, COMPANY_NAME } from "@/lib/brand";
-import { getBinSummary, getPartLocationLabel, getPartStockStatus } from "@/lib/inventory-utils";
 import type { Bin, Part } from "@/lib/inventory-types";
+import { buildBinPrintHref, buildPartPrintHref, normalizePrintCopies, parseIdList, type LabelMode } from "@/lib/labels";
+import { getPartLocationLabel } from "@/lib/inventory-utils";
 
-type LabelMode = "part" | "bin";
+type BuilderMode = "part" | "bin";
 
-function buildPrintHref(options: {
-  mode: LabelMode;
-  part?: Part | null;
-  bin?: Bin | null;
-  copies: number;
-}) {
-  const params = new URLSearchParams({ copies: String(options.copies) });
-
-  if (options.mode === "part" && options.part) {
-    params.set("partId", options.part.id);
-  }
-
-  if (options.mode === "bin" && options.bin) {
-    params.set("binId", options.bin.id);
-  }
-
-  return `/print?${params.toString()}`;
+function formatPartLocation(part: Part, bins: Bin[]) {
+  const location = getPartLocationLabel(part, bins);
+  return location.replace(" (Inactive)", "");
 }
 
-function normalizeCopies(value: string, fallback: number) {
-  return Math.max(1, Math.min(12, Number(value) || fallback));
+function toggleValue(values: string[], value: string) {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value];
+}
+
+function summarizeLabelCount(
+  mode: BuilderMode,
+  labelMode: LabelMode,
+  selectedParts: Part[],
+  selectedBin: Bin | null,
+  copies: number,
+  includeZero: boolean,
+) {
+  if (mode === "bin") {
+    return selectedBin ? copies : 0;
+  }
+
+  if (labelMode === "copies") {
+    return selectedParts.length * copies;
+  }
+
+  if (labelMode === "quantity") {
+    return selectedParts.reduce((total, part) => {
+      const repeatCount = part.quantityOnHand > 0 ? part.quantityOnHand : includeZero ? 1 : 0;
+      return total + repeatCount;
+    }, 0);
+  }
+
+  return selectedParts.length;
 }
 
 export function TagsPage({
@@ -49,45 +71,52 @@ export function TagsPage({
 }: Readonly<{
   searchParams: {
     partId?: string;
+    partIds?: string;
     binId?: string;
     mode?: string;
+    labelMode?: string;
+    copies?: string;
+    includeZero?: string;
   };
 }>) {
   const { permissions } = useAuth();
   const { bins, getPartById, parts, settings } = useInventory();
-  const initialMode: LabelMode =
+
+  const initialPartIds = parseIdList(searchParams.partIds ?? searchParams.partId);
+  const initialMode: BuilderMode =
     searchParams.mode === "bin" || searchParams.binId ? "bin" : "part";
-  const [mode, setMode] = useState<LabelMode>(initialMode);
+  const initialLabelMode: LabelMode =
+    searchParams.labelMode === "copies" || searchParams.labelMode === "quantity"
+      ? searchParams.labelMode
+      : "each";
+
+  const [mode, setMode] = useState<BuilderMode>(initialMode);
   const [query, setQuery] = useState("");
-  const [copies, setCopies] = useState(String(settings.defaultPrintCopies));
-  const [selectedPartId, setSelectedPartId] = useState(searchParams.partId ?? "");
+  const [labelMode, setLabelMode] = useState<LabelMode>(initialLabelMode);
+  const [copies, setCopies] = useState(() =>
+    String(normalizePrintCopies(searchParams.copies ?? settings.defaultPrintCopies, settings.defaultPrintCopies)),
+  );
+  const [includeZero, setIncludeZero] = useState(searchParams.includeZero === "1");
+  const [selectedPartIds, setSelectedPartIds] = useState<string[]>(initialPartIds);
   const [selectedBinId, setSelectedBinId] = useState(searchParams.binId ?? "");
 
   useEffect(() => {
-    setCopies(String(settings.defaultPrintCopies));
-  }, [settings.defaultPrintCopies]);
-
-  useEffect(() => {
-    if (searchParams.mode === "bin" || searchParams.binId) {
+    if (searchParams.binId || searchParams.mode === "bin") {
       setMode("bin");
-      if (searchParams.binId) {
-        setSelectedBinId(searchParams.binId);
-      }
-      setSelectedPartId("");
+      setSelectedBinId(searchParams.binId ?? selectedBinId);
+      setSelectedPartIds([]);
       return;
     }
 
-    if (searchParams.mode === "part" || searchParams.partId) {
+    if (searchParams.partId || searchParams.partIds || searchParams.mode === "part") {
       setMode("part");
-      if (searchParams.partId) {
-        setSelectedPartId(searchParams.partId);
-      }
+      setSelectedPartIds(initialPartIds);
       setSelectedBinId("");
-      return;
     }
-  }, [searchParams.binId, searchParams.mode, searchParams.partId]);
+  }, [initialPartIds, searchParams.binId, searchParams.mode, searchParams.partId, searchParams.partIds, selectedBinId]);
 
   const normalizedQuery = query.trim().toLowerCase();
+  const normalizedCopies = normalizePrintCopies(copies, settings.defaultPrintCopies);
 
   const partMatches = useMemo(() => {
     return [...parts]
@@ -95,11 +124,12 @@ export function TagsPage({
       .filter((part) => {
         if (mode !== "part") return false;
         if (!normalizedQuery) return true;
-        return `${part.partNumber} ${part.partName} ${part.manufacturer} ${part.notes}`
+
+        return `${part.partNumber} ${part.partName} ${part.manufacturer} ${part.notes} ${formatPartLocation(part, bins)}`
           .toLowerCase()
           .includes(normalizedQuery);
       });
-  }, [mode, normalizedQuery, parts]);
+  }, [bins, mode, normalizedQuery, parts]);
 
   const binMatches = useMemo(() => {
     return [...bins]
@@ -107,6 +137,7 @@ export function TagsPage({
       .filter((bin) => {
         if (mode !== "bin") return false;
         if (!normalizedQuery) return true;
+
         return `${bin.code} ${bin.name} ${bin.description} ${bin.aisle} ${bin.row} ${bin.column} ${
           bin.manufacturer ?? ""
         }`
@@ -115,32 +146,68 @@ export function TagsPage({
       });
   }, [bins, mode, normalizedQuery]);
 
-  const selectedPart = selectedPartId ? getPartById(selectedPartId) ?? null : null;
+  const selectedParts = useMemo(
+    () =>
+      selectedPartIds
+        .map((partId) => getPartById(partId))
+        .filter((part): part is Part => Boolean(part)),
+    [getPartById, selectedPartIds],
+  );
+
   const selectedBin = selectedBinId ? bins.find((bin) => bin.id === selectedBinId) ?? null : null;
-  const selectedPrintHref = buildPrintHref({
+
+  const estimatedLabelCount = summarizeLabelCount(
     mode,
-    part: selectedPart,
-    bin: selectedBin,
-    copies: normalizeCopies(copies, settings.defaultPrintCopies),
-  });
-  const canPrint = permissions.canPrintLabels && Boolean(selectedPart || selectedBin);
+    labelMode,
+    selectedParts,
+    selectedBin,
+    normalizedCopies,
+    includeZero,
+  );
+
+  const selectedPrintHref =
+    mode === "part" && selectedParts.length > 0
+      ? buildPartPrintHref({
+          partIds: selectedPartIds,
+          labelMode,
+          copies: normalizedCopies,
+          includeZero,
+        })
+      : selectedBin
+        ? buildBinPrintHref({
+            binId: selectedBin.id,
+            copies: normalizedCopies,
+          })
+        : "/print";
+
+  const canPrint = permissions.canPrintLabels && Boolean(selectedParts.length > 0 || selectedBin);
 
   const summaryCards = [
-    { label: "Parts ready", value: parts.length, hint: "Available for tags", icon: <PackageSearch className="h-5 w-5" /> },
-    { label: "Bins ready", value: bins.length, hint: "Available for bin labels", icon: <MapPin className="h-5 w-5" /> },
     {
-      label: "Low stock",
-      value: parts.filter((part) => getPartStockStatus(part) !== "healthy").length,
-      hint: "Needs attention",
-      icon: <Tag className="h-5 w-5" />,
-      tone: "amber" as const,
+      label: "Parts ready",
+      value: parts.length,
+      hint: "Available for scan labels",
+      icon: <PackageSearch className="h-5 w-5" />,
     },
     {
-      label: "Copies",
-      value: normalizeCopies(copies, settings.defaultPrintCopies),
-      hint: "Per print run",
-      icon: <Printer className="h-5 w-5" />,
+      label: "Bins ready",
+      value: bins.length,
+      hint: "Available for location labels",
+      icon: <MapPin className="h-5 w-5" />,
+    },
+    {
+      label: "Selected",
+      value: mode === "part" ? selectedParts.length : selectedBin ? 1 : 0,
+      hint: mode === "part" ? "Part labels picked" : "Bin label picked",
+      icon: <Tag className="h-5 w-5" />,
       tone: "emerald" as const,
+    },
+    {
+      label: "Queued",
+      value: estimatedLabelCount,
+      hint: "Labels that will print",
+      icon: <Printer className="h-5 w-5" />,
+      tone: "sky" as const,
     },
   ];
 
@@ -148,8 +215,8 @@ export function TagsPage({
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Labels"
-        title="Prepare part and bin labels."
-        description="Choose a part or bin, check the preview, and send only the labels to the dedicated print route. The workflow stays simple for desktop and Android browsers."
+        title="Prepare scan labels."
+        description="Choose part labels or bin labels, preview the selection, and send only the clean scan labels to the print route."
         actions={
           <>
             <Link
@@ -200,9 +267,9 @@ export function TagsPage({
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
-            <CardTitle className="text-white">Label picker</CardTitle>
+            <CardTitle className="text-white">Label builder</CardTitle>
             <CardDescription className="text-slate-400">
-              Search for a part or location, then choose the label you want to print.
+              Search, select, and choose how the labels should repeat on the page.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -215,10 +282,13 @@ export function TagsPage({
                     ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
                     : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
                 )}
-                onClick={() => setMode("part")}
+                onClick={() => {
+                  setMode("part");
+                  setSelectedBinId("");
+                }}
               >
                 <PackageSearch className="mr-2 h-4 w-4" />
-                Part tags
+                Part labels
               </Button>
               <Button
                 variant={mode === "bin" ? "default" : "outline"}
@@ -228,14 +298,17 @@ export function TagsPage({
                     ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
                     : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
                 )}
-                onClick={() => setMode("bin")}
+                onClick={() => {
+                  setMode("bin");
+                  setSelectedPartIds([]);
+                }}
               >
                 <MapPin className="mr-2 h-4 w-4" />
                 Bin labels
               </Button>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[1fr_160px]">
+            <div className="grid gap-3 lg:grid-cols-[1fr_180px]">
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Search</p>
                 <div className="relative">
@@ -245,15 +318,18 @@ export function TagsPage({
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder={
                       mode === "part"
-                        ? "Search part number, name, or notes"
-                        : "Search location code, aisle, shelf, or bin"
+                        ? "Search part number, name, notes, or location"
+                        : "Search location code, aisle, shelf, or description"
                     }
                     className="h-12 border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Copies</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                  {mode === "part" ? "Copies" : "Sheets"}
+                </p>
                 <Input
                   value={copies}
                   onChange={(event) => setCopies(event.target.value.replace(/[^0-9]/g, ""))}
@@ -263,13 +339,71 @@ export function TagsPage({
               </div>
             </div>
 
+            {mode === "part" && (
+              <div className="space-y-3 rounded-3xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant={labelMode === "each" ? "default" : "outline"}
+                    className={cn(
+                      "h-10",
+                      labelMode === "each"
+                        ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                        : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                    onClick={() => setLabelMode("each")}
+                  >
+                    One each
+                  </Button>
+                  <Button
+                    variant={labelMode === "copies" ? "default" : "outline"}
+                    className={cn(
+                      "h-10",
+                      labelMode === "copies"
+                        ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                        : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                    onClick={() => setLabelMode("copies")}
+                  >
+                    Custom copies
+                  </Button>
+                  <Button
+                    variant={labelMode === "quantity" ? "default" : "outline"}
+                    className={cn(
+                      "h-10",
+                      labelMode === "quantity"
+                        ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                        : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                    onClick={() => setLabelMode("quantity")}
+                  >
+                    Quantity on hand
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={includeZero}
+                      onChange={(event) => setIncludeZero(event.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/5 text-emerald-400"
+                    />
+                    Include zero-stock parts
+                  </label>
+                  <span className="text-xs text-slate-500">
+                    Quantity mode prints one label per unit on hand.
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 onClick={() => {
                   setQuery("");
-                  setSelectedPartId("");
+                  setSelectedPartIds([]);
                   setSelectedBinId("");
                 }}
               >
@@ -294,42 +428,68 @@ export function TagsPage({
 
             <div className="grid gap-3 sm:grid-cols-2">
               {mode === "part"
-                ? partMatches.slice(0, 8).map((part) => (
-                    <button
-                      key={part.id}
-                      type="button"
-                      onClick={() => setSelectedPartId(part.id)}
-                      className={cn(
-                        "rounded-3xl border p-4 text-left transition-colors",
-                        selectedPartId === part.id
-                          ? "border-emerald-400/30 bg-emerald-400/10"
-                          : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                      )}
-                    >
-                      <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
-                      <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
-                      <p className="mt-2 text-xs text-slate-400">
-                        {getPartLocationLabel(part, bins)}
-                      </p>
-                    </button>
-                  ))
-                : binMatches.slice(0, 8).map((bin) => (
-                    <button
-                      key={bin.id}
-                      type="button"
-                      onClick={() => setSelectedBinId(bin.id)}
-                      className={cn(
-                        "rounded-3xl border p-4 text-left transition-colors",
-                        selectedBinId === bin.id
-                          ? "border-emerald-400/30 bg-emerald-400/10"
-                          : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                      )}
-                    >
-                      <p className="font-mono text-sm font-semibold text-white">{bin.code}</p>
-                      <p className="mt-1 text-sm text-slate-200">{bin.name}</p>
-                      <p className="mt-2 text-xs text-slate-400">{bin.description}</p>
-                    </button>
-                  ))}
+                ? partMatches.slice(0, 12).map((part) => {
+                    const selected = selectedPartIds.includes(part.id);
+
+                    return (
+                      <button
+                        key={part.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedBinId("");
+                          setSelectedPartIds((current) => toggleValue(current, part.id));
+                        }}
+                        className={cn(
+                          "rounded-3xl border p-4 text-left transition-colors",
+                          selected
+                            ? "border-emerald-400/30 bg-emerald-400/10"
+                            : "border-white/10 bg-slate-950/50 hover:bg-white/10",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                            <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
+                            <p className="mt-2 text-xs text-slate-400">
+                              {formatPartLocation(part, bins)}
+                            </p>
+                          </div>
+                          {selected && <Badge className="border-white/10 bg-white/5 text-slate-200">Selected</Badge>}
+                        </div>
+                      </button>
+                    );
+                  })
+                : binMatches.slice(0, 12).map((bin) => {
+                    const selected = selectedBinId === bin.id;
+
+                    return (
+                      <button
+                        key={bin.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPartIds([]);
+                          setSelectedBinId(bin.id);
+                        }}
+                        className={cn(
+                          "rounded-3xl border p-4 text-left transition-colors",
+                          selected
+                            ? "border-emerald-400/30 bg-emerald-400/10"
+                            : "border-white/10 bg-slate-950/50 hover:bg-white/10",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-sm font-semibold text-white">{bin.code}</p>
+                            <p className="mt-1 text-sm text-slate-200">{bin.name}</p>
+                            <p className="mt-2 text-xs text-slate-400">
+                              {bin.aisle}-{bin.row}-{bin.column}
+                            </p>
+                          </div>
+                          {selected && <Badge className="border-white/10 bg-white/5 text-slate-200">Selected</Badge>}
+                        </div>
+                      </button>
+                    );
+                  })}
             </div>
 
             <div className="rounded-3xl border border-dashed border-white/10 bg-slate-950/30 p-4 text-sm text-slate-300">
@@ -344,57 +504,72 @@ export function TagsPage({
           <CardHeader>
             <CardTitle className="text-white">Selected preview</CardTitle>
             <CardDescription className="text-slate-400">
-              This is the record that will open in the print layout.
+              The right panel shows what will go to the print layout.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {selectedPart ? (
+            {mode === "part" && selectedParts.length > 0 ? (
               <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      Part tag
-                    </Badge>
-                    <p className="mt-3 font-mono text-lg font-semibold text-white">
-                      {selectedPart.partNumber}
+                    <Badge className="border-white/10 bg-white/5 text-slate-200">Part labels</Badge>
+                    <p className="mt-3 text-sm text-slate-400">
+                      {selectedParts.length} part{selectedParts.length === 1 ? "" : "s"} selected.
                     </p>
-                    <p className="mt-1 text-sm text-slate-200">{selectedPart.partName}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                     <QrCode className="h-5 w-5 text-emerald-300" />
                   </div>
                 </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {selectedParts.slice(0, 6).map((part) => (
+                    <div
+                      key={part.id}
+                      className="rounded-2xl border border-white/10 bg-slate-950/70 p-3"
+                    >
+                      <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                      <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
+                      <p className="mt-2 text-xs text-slate-400">{formatPartLocation(part, bins)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {selectedParts.length > 6 && (
+                  <p className="text-xs text-slate-400">
+                    + {selectedParts.length - 6} more selected parts
+                  </p>
+                )}
+
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Location</p>
-                    <p className="mt-2 text-sm text-white">{getPartLocationLabel(selectedPart, bins)}</p>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Mode</p>
+                    <p className="mt-2 text-sm text-white">
+                      {labelMode === "each"
+                        ? "One label each"
+                        : labelMode === "copies"
+                          ? `Custom copies x ${normalizedCopies}`
+                          : includeZero
+                            ? "Quantity on hand, including zero-stock parts"
+                            : "Quantity on hand"}
+                    </p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Stock</p>
-                    <p className="mt-2 text-sm text-white">{getPartStockStatus(selectedPart)}</p>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Queued</p>
+                    <p className="mt-2 text-sm text-white">{estimatedLabelCount} labels</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {selectedPart.manufacturer}
-                  </Badge>
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {selectedPart.category}
-                  </Badge>
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    Qty {selectedPart.quantityOnHand}
-                  </Badge>
-                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <Link
-                    href={`/inventory/${selectedPart.id}`}
+                    href={`/inventory/${selectedParts[0]?.id}`}
                     className={cn(
                       buttonVariants({ variant: "outline", size: "default" }),
                       "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
                     )}
                   >
                     <ArrowRight className="mr-2 h-4 w-4" />
-                    Open part
+                    Open first part
                   </Link>
                   <Link
                     href={selectedPrintHref}
@@ -408,22 +583,19 @@ export function TagsPage({
                   </Link>
                 </div>
               </div>
-            ) : selectedBin ? (
+            ) : mode === "bin" && selectedBin ? (
               <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      Bin tag
-                    </Badge>
-                    <p className="mt-3 font-mono text-lg font-semibold text-white">
-                      {selectedBin.code}
-                    </p>
+                    <Badge className="border-white/10 bg-white/5 text-slate-200">Bin labels</Badge>
+                    <p className="mt-3 font-mono text-lg font-semibold text-white">{selectedBin.code}</p>
                     <p className="mt-1 text-sm text-slate-200">{selectedBin.name}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                     <QrCode className="h-5 w-5 text-emerald-300" />
                   </div>
                 </div>
+
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Area</p>
@@ -436,27 +608,37 @@ export function TagsPage({
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {selectedBin.manufacturer || "General"}
-                  </Badge>
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {getBinSummary(selectedBin, parts).parts.length} parts
-                  </Badge>
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {getBinSummary(selectedBin, parts).lowStockCount} low
-                  </Badge>
+
+                {selectedBin.description && (
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Description</p>
+                    <p className="mt-2 text-sm leading-6 text-white">{selectedBin.description}</p>
+                  </div>
+                )}
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Queued</p>
+                    <p className="mt-2 text-sm text-white">
+                      {estimatedLabelCount} label{estimatedLabelCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Scan target</p>
+                    <p className="mt-2 text-sm text-white">Location detail page</p>
+                  </div>
                 </div>
+
                 <div className="flex flex-wrap gap-2">
                   <Link
-                    href="/locations"
+                    href={`/locations/${selectedBin.id}`}
                     className={cn(
                       buttonVariants({ variant: "outline", size: "default" }),
                       "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
                     )}
                   >
                     <ArrowRight className="mr-2 h-4 w-4" />
-                    Open locations
+                    Open location
                   </Link>
                   <Link
                     href={selectedPrintHref}
@@ -476,9 +658,9 @@ export function TagsPage({
                   <Tag className="h-8 w-8 text-emerald-300" />
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-lg font-semibold text-white">Select a label to print</h2>
+                  <h2 className="text-lg font-semibold text-white">Select labels to preview</h2>
                   <p className="max-w-md text-sm leading-6 text-slate-400">
-                    Pick a part or bin on the left, then send it to the print layout. The print page only shows labels.
+                    Pick one or more parts on the left for part labels, or choose a bin for location labels.
                   </p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -505,9 +687,9 @@ export function TagsPage({
             )}
 
             <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
-              <p className="font-medium text-white">{APP_NAME}</p>
+              <p className="font-medium text-white">Green NVentory</p>
               <p className="mt-1 text-slate-400">
-                {COMPANY_NAME} label workflow for parts room printers, bin tags, and Android mobile use.
+                QR labels open the inventory or location record directly on desktop or Android mobile.
               </p>
             </div>
           </CardContent>

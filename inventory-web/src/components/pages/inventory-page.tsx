@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { buildPartPrintHref } from "@/lib/labels";
 import { categories, manufacturers, type Bin, type InventorySortKey, type Part, type PartFilters } from "@/lib/inventory-types";
 import {
   filterParts,
@@ -596,7 +597,7 @@ function InventoryTableRow({
           )}
           {canPrintLabels && (
             <Link
-              href={`/print?partId=${part.id}&copies=1`}
+              href={buildPartPrintHref({ partIds: [part.id] })}
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon-sm" }),
                 "text-slate-300 hover:bg-white/10 hover:text-white",
@@ -722,7 +723,7 @@ function InventoryMobileCard({
           )}
           {canPrintLabels && (
             <Link
-              href={`/print?partId=${part.id}&copies=1`}
+              href={buildPartPrintHref({ partIds: [part.id] })}
               className={cn(
                 buttonVariants({ variant: "outline", size: "default" }),
                 "h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",

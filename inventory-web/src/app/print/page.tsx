@@ -6,11 +6,14 @@ export default async function Page({
 }: Readonly<{
   searchParams: Promise<{
     partId?: string;
+    partIds?: string;
     binId?: string;
     copies?: string;
+    labelMode?: string;
+    includeZero?: string;
   }>;
 }>) {
   const params = await searchParams;
-  await requireAppSession();
+  await requireAppSession({ nextPath: "/print" });
   return <PrintPage searchParams={params} />;
 }

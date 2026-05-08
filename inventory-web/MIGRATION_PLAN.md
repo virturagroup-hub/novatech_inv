@@ -60,6 +60,8 @@ The Phase 1 implementation now includes:
 - The login flow now blocks missing-profile and inactive accounts with clear user-facing messages.
 - Admins can preview viewer, technician, or manager permissions from Settings without mutating their real role.
 - A persistent banner appears during role preview so it is clear that the UI is in preview mode only.
+- QR label printing now uses clean scan labels instead of report-style cards, with larger QR codes and absolute URLs that land on the part or bin record.
+- Scanned routes preserve login return paths through a sanitized internal `next` parameter.
 - The edit part experience was widened and broken into clear sections.
 - The compatible model picker and location picker were made easier to use on desktop and mobile.
 - The reports page now uses simple action cards.

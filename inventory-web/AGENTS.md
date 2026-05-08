@@ -37,6 +37,9 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - If `profiles.must_change_password` is true, the app must redirect to `/change-password`.
 - If `profiles.active` is false or a profile row is missing, block access and surface a clear login message.
 - The change-password flow must clear `must_change_password` after a successful password update.
+- The login flow must be real Supabase email/password auth with a sanitized internal `next` parameter only.
+- QR code URLs should be built from `NEXT_PUBLIC_APP_URL` when present, with browser-origin fallback in client code.
+- Part labels should only show QR code, part number, part name, and location/bin. Bin labels should only show QR code, location code, area/shelf/bin, and short description if space allows.
 
 ## Role Preview Rules
 
@@ -58,6 +61,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Preserve the PWA basics: manifest, icons, theme color, and the safe service worker registration.
 - Use the dedicated `/print` route for labels; do not reintroduce page-wide `window.print()` flows.
 - Keep the print layout strictly label-only with no app chrome.
+- Preserve scan-to-login-return behavior by passing only internal relative paths through `next`.
 
 ## Permission Rules
 

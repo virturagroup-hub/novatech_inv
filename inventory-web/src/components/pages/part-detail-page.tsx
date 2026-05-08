@@ -8,6 +8,7 @@ import {
   CalendarClock,
   Edit3,
   Minus,
+  MapPin,
   Package,
   Printer,
   PlusCircle,
@@ -24,6 +25,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { buildPartPrintHref } from "@/lib/labels";
 import {
   formatDateTime,
   formatRelative,
@@ -105,7 +107,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               Inventory
             </Link>
             <Link
-              href={`/print?partId=${part.id}`}
+              href={buildPartPrintHref({ partIds: [part.id] })}
               className={cn(
                 buttonVariants({ variant: "outline", size: "default" }),
                 "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
@@ -200,6 +202,18 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                       ? `${bin.aisle}-${bin.row}-${bin.column} · ${bin.description}`
                       : "This part still needs a storage bin."}
                   </p>
+                  {bin && (
+                    <Link
+                      href={`/locations/${bin.id}`}
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "default" }),
+                        "mt-4 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                      )}
+                    >
+                      <MapPin className="mr-2 h-4 w-4" />
+                      Open location
+                    </Link>
+                  )}
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Notes</p>
@@ -348,7 +362,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
             </CardHeader>
             <CardContent className="grid gap-2">
               <Link
-                href={`/print?partId=${part.id}`}
+                href={buildPartPrintHref({ partIds: [part.id] })}
                 className={cn(
                   buttonVariants({ variant: "outline", size: "default" }),
                   "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",

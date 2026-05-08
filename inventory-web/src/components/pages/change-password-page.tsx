@@ -11,10 +11,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buildLoginPath, sanitizeInternalPath } from "@/lib/navigation";
 
-export function ChangePasswordPage() {
+export function ChangePasswordPage({
+  nextPath = "/",
+}: Readonly<{
+  nextPath?: string;
+}>) {
+  return <ChangePasswordForm nextPath={nextPath} />;
+}
+
+function ChangePasswordForm({
+  nextPath = "/",
+}: Readonly<{
+  nextPath?: string;
+}>) {
   const router = useRouter();
   const { session, refreshSession, signOut } = useAuth();
+  const safeNextPath = sanitizeInternalPath(nextPath);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,7 +72,7 @@ export function ChangePasswordPage() {
 
       await refreshSession();
       toast.success("Password updated");
-      router.replace("/");
+      router.replace(safeNextPath);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "We could not update your password.",
@@ -134,7 +148,7 @@ export function ChangePasswordPage() {
                 className="h-12 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 onClick={async () => {
                   await signOut();
-                  router.replace("/login");
+                  router.replace(buildLoginPath({ nextPath: safeNextPath }));
                 }}
               >
                 <LogOut className="mr-2 h-4 w-4" />

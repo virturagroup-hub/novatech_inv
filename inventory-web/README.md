@@ -81,14 +81,16 @@ Create a local `.env.local` with:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_APP_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the preferred public client key.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as a legacy fallback by the helper layer.
+- `NEXT_PUBLIC_APP_URL` is used to build absolute QR-code links for printed labels. Set it to your production domain in Vercel and to `http://localhost:3000` for local development.
 - Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
 
-If you deploy to Vercel, add the public Supabase vars to both **Preview** and **Production** environments. If either one is missing, middleware falls back to a safe no-op instead of refreshing sessions.
+If you deploy to Vercel, add the public Supabase vars and `NEXT_PUBLIC_APP_URL` to both **Preview** and **Production** environments. If either one is missing, middleware falls back to a safe no-op instead of refreshing sessions.
 
 ### Required Supabase Settings
 
@@ -166,9 +168,19 @@ That page:
 - validates that the passwords match
 - uses Supabase client auth to update the password
 - clears `must_change_password` in the profile row
-- sends the user back to the dashboard
+- sends the user back to the scanned route when one was provided, otherwise the dashboard
 
 Users can log out from the password change screen if they need to stop and come back later.
+
+## QR Scan Flow
+
+Printed labels use absolute URLs so phones can scan them outside the app.
+
+- Part labels open `/inventory/[partId]`.
+- Bin labels open `/locations/[binId]`.
+- If the user is not signed in, the app redirects to `/login?next=<relative-path>`.
+- After login, the user returns to the scanned part or location page.
+- The `next` value is sanitized so external URLs are rejected.
 
 ## View As Role
 
@@ -196,6 +208,7 @@ To verify the auth flow locally:
 5. If `must_change_password` is true, you should be sent to `/change-password`.
 6. Open Settings and use **View as Role** to preview technician, viewer, or manager behavior.
 7. Use **Return to Admin** to restore the real admin UI.
+8. Open a part or location page in a private browser session to confirm the login redirect returns you to the scanned route.
 
 ## Development Notes
 
@@ -211,7 +224,7 @@ This app is ready for Vercel deployment.
 
 1. Push the repo to GitHub.
 2. Import the project in Vercel.
-3. Set the environment variables above for both Preview and Production.
+3. Set the environment variables above for both Preview and Production, including `NEXT_PUBLIC_APP_URL`.
 4. Deploy with the default build command:
 
 ```bash

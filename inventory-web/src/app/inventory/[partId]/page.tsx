@@ -6,7 +6,7 @@ export default async function Page({
 }: Readonly<{
   params: Promise<{ partId: string }>;
 }>) {
-  await requireAppSession();
   const { partId } = await params;
+  await requireAppSession({ nextPath: `/inventory/${partId}` });
   return <PartDetailPage partId={partId} />;
 }
