@@ -2,61 +2,67 @@
 
 ## What Was Found
 
-The original Anything AI Builder project was treated as reference material rather than a clean production architecture. The source material exposed the business intent clearly enough to rebuild the app around the real workflows:
+The original Anything AI Builder project was useful as product reference material, not as the final architecture. It showed the real business intent clearly enough to rebuild around the workflows that matter:
 
-- Printer/copier parts inventory
-- Location/bin tracking
-- Quantity management
-- Compatibility with printer/copier models
-- Tag printing
+- printer/copier parts inventory
+- location/bin tracking
+- quantity management
+- compatibility with printer/copier models
+- label printing
 - CSV import/export
-- Basic activity tracking
+- basic activity tracking
 
-The old structure was not kept as the final foundation.
+The old folder structure was not preserved as the production foundation.
 
 ## What Was Rebuilt
 
-The app was rebuilt as a modern Next.js App Router project inside `inventory-web` with:
+The app is now a modern Next.js App Router project inside `inventory-web` with:
 
 - TypeScript
 - Tailwind CSS
 - shadcn/ui-style components
-- A typed local inventory store
-- Responsive desktop and Android-first layouts
+- a typed Phase 1 local inventory store
+- responsive desktop and Android-first layouts
 - PWA basics for Android installability
 - Vercel-ready routes and metadata
 
 The Phase 1 implementation now includes:
 
-- Dashboard
-- Inventory table
-- Part detail screen
-- Lookup screen
-- Printable tags screen
-- Locations screen
-- Models screen
-- Import/export screen
-- Activity screen
-- Settings and admin-style views
+- dashboard
+- inventory table
+- dedicated part detail screen
+- dedicated part editor screen
+- lookup screen
+- print label workflow
+- locations screen
+- models screen
+- reports and exports screen
+- activity screen
+- settings and admin-style views
 
-## What Changed
+## What Changed In This Pass
 
-- The app now uses typed mock data and browser-local persistence instead of an assumed database layer.
-- Inventory mutations are centralized in a reducer.
-- Reusable utilities handle filtering, summaries, compatibility checks, and CSV serialization.
-- The mobile experience now has a bottom navigation pattern and large touch targets.
-- PWA support was added through manifest, icons, theme color, and a minimal safe service worker.
-- The docs were rewritten for setup, deployment, Android install, and future work.
+- The product was rebranded to Green NVentory.
+- Role-aware UI helpers were centralized in `src/lib/auth.ts`.
+- Elevated users can manage models, locations, parts, labels, and exports.
+- Technician users can view, look up, adjust stock, and print labels when allowed.
+- Viewer users remain read-only.
+- The edit part experience was widened and broken into clear sections.
+- The compatible model picker and location picker were made easier to use on desktop and mobile.
+- The reports page now uses simple action cards.
+- Printing now uses a dedicated `/print` route with print-only CSS.
+- PWA metadata, icons, and theme color were kept in sync with the new brand.
+- Supabase-ready client helpers, table types, and schema docs were added without replacing the Phase 1 store.
 
 ## What Remains For Phase 2
 
 - Replace browser-local persistence with Supabase/Postgres.
-- Add real multi-user sync and authentication.
-- Move audit logging into a proper database table.
-- Add server-side validation and import processing.
-- Improve printing templates if the tag workflow needs tighter physical formatting.
-- Expand search or barcode scanning if the crew wants faster on-floor lookup.
+- Add real authentication and role lookup from `profiles.role`.
+- Move audit logging into the `inventory_transactions` table.
+- Wire server-side data fetching and mutation into the new Supabase helpers.
+- Expand validation and import processing on the server.
+- Add barcode scanning if the crew wants faster on-floor lookup later.
 
 ## Guiding Principle
 
-Phase 2 should swap the data layer without rewriting the UI or business workflows that are already working well in Phase 1.
+Phase 2 should swap the data layer without rewriting the UI or the workflows that are already working well in Phase 1.

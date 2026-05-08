@@ -20,11 +20,12 @@ export default function AppleIcon() {
           alignItems: "center",
           justifyContent: "center",
           background:
-            "radial-gradient(circle at 30% 30%, rgba(250,204,21,0.95), rgba(15,23,42,1) 70%)",
-          color: "#020617",
-          fontSize: 80,
+            "radial-gradient(circle at 30% 30%, rgba(16,185,129,0.95), rgba(3,7,18,1) 72%)",
+          color: "#ffffff",
+          fontSize: 76,
           fontWeight: 800,
           borderRadius: 42,
+          boxShadow: "inset 0 0 0 2px rgba(255,255,255,0.12)",
         }}
       >
         N

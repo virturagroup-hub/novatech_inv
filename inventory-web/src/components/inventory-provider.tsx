@@ -38,8 +38,10 @@ type InventoryContextValue = InventoryState & {
   adjustPart: (partId: string, delta: number) => void;
   saveBin: (draft: BinDraft) => void;
   deleteBin: (binId: string) => void;
+  setBinStatus: (binId: string, status: "active" | "inactive") => void;
   saveModel: (draft: ModelDraft) => void;
   deleteModel: (modelId: string) => void;
+  setModelStatus: (modelId: string, status: "active" | "inactive") => void;
   importParts: (rows: PartImportRow[]) => void;
   updateSettings: (settings: Partial<InventorySettings>) => void;
   resetDemoData: () => void;
@@ -112,6 +114,8 @@ export function InventoryProvider({
         dispatch({ type: "adjustPart", partId, delta }),
       saveBin: (draft: BinDraft) => dispatch({ type: "upsertBin", bin: draft }),
       deleteBin: (binId: string) => dispatch({ type: "deleteBin", binId }),
+      setBinStatus: (binId: string, status: "active" | "inactive") =>
+        dispatch({ type: "setBinStatus", binId, status }),
       saveModel: (draft: ModelDraft) =>
         dispatch({
           type: "upsertModel",
@@ -125,6 +129,8 @@ export function InventoryProvider({
           },
         }),
       deleteModel: (modelId: string) => dispatch({ type: "deleteModel", modelId }),
+      setModelStatus: (modelId: string, status: "active" | "inactive") =>
+        dispatch({ type: "setModelStatus", modelId, status }),
       importParts: (rows) => dispatch({ type: "importParts", rows }),
       updateSettings: (settings) => dispatch({ type: "updateSettings", settings }),
       resetDemoData: () => dispatch({ type: "reset" }),

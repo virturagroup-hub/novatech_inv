@@ -1,6 +1,6 @@
 # Project Standards
 
-This repository is the Phase 1 rebuild of Novatech Inventory. Future Codex work should keep the app maintainable, mobile-friendly, and ready for a later Supabase migration.
+This repository is the Green NVentory rebuild for Novatech's green and reusable printer/copier parts inventory. Future Codex work should keep the app maintainable, mobile-friendly, and ready for a later Supabase migration.
 
 ## Architecture Rules
 
@@ -8,15 +8,16 @@ This repository is the Phase 1 rebuild of Novatech Inventory. Future Codex work 
 - Keep route files in `src/app` and route-level client components in `src/components/pages`.
 - Preserve the typed mock-data layer until Phase 2 explicitly replaces it.
 - Keep inventory state flows in `src/lib` reducers and helpers rather than scattering logic across pages.
-- Use shadcn/ui-style components for product UI.
-- Favor responsive, dark, internal-tool layouts with large touch targets for Android phones.
+- Keep role logic centralized in `src/lib/auth.ts`.
+- Use `src/lib/supabase` for future client and server Supabase helpers.
 
 ## Data Rules
 
 - Treat the browser-local store as Phase 1 only.
 - Do not connect Supabase unless the app is already stable and the migration is explicitly in scope.
-- Keep inventory, bin, model, and activity shapes typed and reusable.
+- Keep inventory, bin, model, profile, and transaction shapes typed and reusable.
 - Update the seed data and migration notes when the structure changes.
+- Use `profiles.role` as the source of truth for admin, manager, technician, and viewer access once Supabase is live.
 
 ## UI Rules
 
@@ -24,6 +25,23 @@ This repository is the Phase 1 rebuild of Novatech Inventory. Future Codex work 
 - Use `buttonVariants` for link-as-button patterns instead of fragile wrapper hacks.
 - Keep mobile navigation simple and touch-friendly.
 - Preserve the PWA basics: manifest, icons, theme color, and the safe service worker registration.
+- Use the dedicated `/print` route for labels; do not reintroduce page-wide `window.print()` flows.
+- Keep the print layout strictly label-only with no app chrome.
+
+## Permission Rules
+
+- Use the centralized helpers in `src/lib/auth.ts`:
+  - `canManageParts`
+  - `canManageModels`
+  - `canManageLocations`
+  - `canAdjustStock`
+  - `canPrintLabels`
+  - `canExportReports`
+  - `canViewActivity`
+- Admin and manager users are elevated.
+- Viewer users are read-only.
+- Technician users can view, look up, adjust stock if allowed, and print labels if allowed.
+- Do not scatter role checks directly through components when a helper will do.
 
 ## Workflow Rules
 
@@ -32,16 +50,20 @@ This repository is the Phase 1 rebuild of Novatech Inventory. Future Codex work 
 - Do not revert user changes unless explicitly asked.
 - Run `npm run lint`, `npm run typecheck`, and `npm run build` before finishing.
 - Update `README.md` and `MIGRATION_PLAN.md` when the app structure or workflow changes.
+- Keep the Supabase schema notes in `supabase/phase2_schema.sql` current when Phase 2 planning changes.
 
 ## Current File Map
 
 - `src/app` - Routes, layout, metadata, PWA files
 - `src/components/app-shell.tsx` - Desktop and mobile navigation
 - `src/components/inventory-provider.tsx` - Client store and action API
+- `src/lib/auth.ts` - User roles and permission helpers
 - `src/lib/inventory-types.ts` - Shared domain types
 - `src/lib/inventory-seed.ts` - Phase 1 seed records
 - `src/lib/inventory-reducer.ts` - Store mutations and activity entries
 - `src/lib/inventory-utils.ts` - Filtering, summaries, and CSV helpers
+- `src/lib/supabase` - Future Supabase client and type helpers
+- `supabase/phase2_schema.sql` - Phase 2 schema and RLS starter kit
 
 ## Phase 2 Reminder
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowUpRight, Clock3, History, WandSparkles } from "lucide-react";
 
+import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -18,6 +19,7 @@ import { formatDateTime, formatRelative, getActivityColor } from "@/lib/inventor
 type ActivityFilter = "all" | "part" | "bin" | "model" | "inventory" | "system";
 
 export function ActivityPage() {
+  const { permissions } = useAuth();
   const { activity, summary } = useInventory();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ActivityFilter>("all");
@@ -39,6 +41,29 @@ export function ActivityPage() {
       printed: activity.filter((entry) => entry.action === "printed").length,
     };
   }, [activity]);
+
+  if (!permissions.canViewActivity) {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+        <PageHero
+          eyebrow="Activity log"
+          title="Activity is restricted for your role."
+          description="Viewer accounts can still use lookup and inventory search, but the audit trail is limited to elevated users and technicians."
+          actions={
+            <Link
+              href="/inventory"
+              className={cn(
+                buttonVariants({ variant: "default", size: "default" }),
+                "bg-amber-400 text-slate-950 hover:bg-amber-300",
+              )}
+            >
+              Inventory
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">

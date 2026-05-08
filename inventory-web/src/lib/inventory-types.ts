@@ -59,10 +59,11 @@ export interface Bin {
   row: number;
   column: number;
   manufacturer: string | null;
+  status: "active" | "inactive";
   notes?: string;
 }
 
-export type ModelStatus = "active" | "legacy";
+export type ModelStatus = "active" | "inactive";
 
 export interface DeviceModel {
   id: string;
@@ -143,6 +144,7 @@ export interface BinDraft {
   row: number;
   column: number;
   manufacturer: string | null;
+  status: "active" | "inactive";
   notes: string;
 }
 
@@ -169,4 +171,3 @@ export interface DashboardMetric {
   value: string;
   hint: string;
 }
-

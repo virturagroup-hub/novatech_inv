@@ -128,3 +128,34 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.25in;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-sheet {
+    break-after: page;
+    page-break-after: always;
+    box-shadow: none !important;
+    background: #fff !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .print-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

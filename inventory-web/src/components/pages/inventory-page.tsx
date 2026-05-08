@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Download,
@@ -20,18 +19,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/components/auth-provider";
+import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
-import { PartEditorSheet } from "@/components/part-editor-sheet";
-import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { useInventory } from "@/components/inventory-provider";
 import { categories, manufacturers, type Bin, type InventorySortKey, type Part, type PartFilters } from "@/lib/inventory-types";
 import {
   filterParts,
@@ -53,28 +52,13 @@ const defaultFilters: PartFilters = {
 };
 
 export function InventoryPage() {
-  const searchParams = useSearchParams();
-  const {
-    parts,
-    bins,
-    models,
-    summary,
-    deletePart,
-    adjustPart,
-  } = useInventory();
+  const { permissions } = useAuth();
+  const { parts, bins, models, summary, deletePart, adjustPart } = useInventory();
   const [filters, setFilters] = useState<PartFilters>(defaultFilters);
   const [sortKey, setSortKey] = useState<InventorySortKey>("updatedAt");
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingPart, setEditingPart] = useState<Part | null>(null);
-  const [createSheetHandled, setCreateSheetHandled] = useState(false);
-  const createRequested = searchParams.get("create") === "1";
-  const sheetOpen = editorOpen || (createRequested && !createSheetHandled);
 
   const filteredParts = useMemo(() => {
-    return sortParts(
-      filterParts(parts, bins, models, filters),
-      sortKey,
-    );
+    return sortParts(filterParts(parts, bins, models, filters), sortKey);
   }, [bins, filters, models, parts, sortKey]);
 
   const locationOptions = useMemo(
@@ -100,13 +84,18 @@ export function InventoryPage() {
   );
 
   const exportParts = () => {
+    if (!permissions.canExportReports) {
+      toast.error("Your role cannot export reports.");
+      return;
+    }
+
     const csv = serializePartsCsv({ parts, bins, models });
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `novatech-parts-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `green-nventory-parts-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success("Parts CSV exported");
@@ -116,7 +105,7 @@ export function InventoryPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Inventory management"
-        title="Browse, edit, and ship parts fast."
+        title="Browse, edit, and stock reusable parts quickly."
         description="Search part numbers, filter by location or manufacturer, and make quick quantity updates from the table or phone-friendly cards."
         actions={
           <>
@@ -138,17 +127,18 @@ export function InventoryPage() {
             >
               Print labels
             </Link>
-            <Button
-              className="bg-amber-400 text-slate-950 hover:bg-amber-300"
-              onClick={() => {
-                setCreateSheetHandled(false);
-                setEditingPart(null);
-                setEditorOpen(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add part
-            </Button>
+            {permissions.canManageParts && (
+              <Link
+                href="/inventory/new"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "default" }),
+                  "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                )}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add part
+              </Link>
+            )}
           </>
         }
       />
@@ -198,7 +188,7 @@ export function InventoryPage() {
                     setFilters((current) => ({ ...current, query: event.target.value }))
                   }
                   placeholder="Part number, name, bin, model, or note"
-                  className="border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
+                  className="h-12 border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
                 />
               </div>
             </div>
@@ -216,7 +206,7 @@ export function InventoryPage() {
                   }))
                 }
               >
-                <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
                   <SelectValue placeholder="All manufacturers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -243,7 +233,7 @@ export function InventoryPage() {
                   }))
                 }
               >
-                <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -270,7 +260,7 @@ export function InventoryPage() {
                   }))
                 }
               >
-                <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
                   <SelectValue placeholder="Any bin" />
                 </SelectTrigger>
                 <SelectContent>
@@ -299,7 +289,7 @@ export function InventoryPage() {
                   }))
                 }
               >
-                <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
                   <SelectValue placeholder="Any model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -326,7 +316,7 @@ export function InventoryPage() {
                   }))
                 }
               >
-                <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -348,7 +338,7 @@ export function InventoryPage() {
                 value={sortKey}
                 onValueChange={(value) => setSortKey(value as InventorySortKey)}
               >
-                <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
                   <SelectValue placeholder="Updated" />
                 </SelectTrigger>
                 <SelectContent>
@@ -363,20 +353,22 @@ export function InventoryPage() {
             <div className="flex items-end gap-2">
               <Button
                 variant="outline"
-                className="h-11 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                className="h-12 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 onClick={() => setFilters(defaultFilters)}
               >
                 <Filter className="mr-2 h-4 w-4" />
                 Reset
               </Button>
-              <Button
-                variant="outline"
-                className="h-11 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                onClick={exportParts}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
+              {permissions.canExportReports && (
+                <Button
+                  variant="outline"
+                  className="h-12 flex-1 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                  onClick={exportParts}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -385,8 +377,14 @@ export function InventoryPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         {[
           { label: "Results", value: filteredParts.length },
-          { label: "Selected low stock", value: filteredParts.filter((part) => getPartStockStatus(part) !== "healthy").length },
-          { label: "Attention", value: filteredParts.filter((part) => requiresAttention(part)).length },
+          {
+            label: "Selected low stock",
+            value: filteredParts.filter((part) => getPartStockStatus(part) !== "healthy").length,
+          },
+          {
+            label: "Attention",
+            value: filteredParts.filter((part) => requiresAttention(part)).length,
+          },
         ].map((metric) => (
           <Card key={metric.label} className="border-white/10 bg-white/5">
             <CardContent className="p-4">
@@ -419,14 +417,13 @@ export function InventoryPage() {
                     key={part.id}
                     part={part}
                     bins={bins}
-                    onEdit={() => {
-                      setEditingPart(part);
-                      setEditorOpen(true);
-                    }}
+                    canAdjustStock={permissions.canAdjustStock}
+                    canManageParts={permissions.canManageParts}
+                    canPrintLabels={permissions.canPrintLabels}
                     onDelete={() => {
                       if (
                         window.confirm(
-                          `Delete ${part.partNumber}? This will remove the part from the browser store.`,
+                          `Delete ${part.partNumber}? This will remove the part from the inventory.`,
                         )
                       ) {
                         deletePart(part.id);
@@ -446,14 +443,13 @@ export function InventoryPage() {
                 key={part.id}
                 part={part}
                 bins={bins}
-                onEdit={() => {
-                  setEditingPart(part);
-                  setEditorOpen(true);
-                }}
+                canAdjustStock={permissions.canAdjustStock}
+                canManageParts={permissions.canManageParts}
+                canPrintLabels={permissions.canPrintLabels}
                 onDelete={() => {
                   if (
                     window.confirm(
-                      `Delete ${part.partNumber}? This will remove the part from the browser store.`,
+                      `Delete ${part.partNumber}? This will remove the part from the inventory.`,
                     )
                   ) {
                     deletePart(part.id);
@@ -478,30 +474,13 @@ export function InventoryPage() {
               </p>
             </div>
             <Button
-              className="bg-amber-400 text-slate-950 hover:bg-amber-300"
+              className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
               onClick={() => setFilters(defaultFilters)}
             >
               Clear filters
             </Button>
           </CardContent>
         </Card>
-      )}
-
-      {sheetOpen && (
-        <PartEditorSheet
-          key={editingPart?.id ?? (createRequested ? "create" : "new")}
-          open={sheetOpen}
-          onOpenChange={(open) => {
-            setEditorOpen(open);
-            if (!open) {
-              setEditingPart(null);
-              if (createRequested) {
-                setCreateSheetHandled(true);
-              }
-            }
-          }}
-          part={editingPart}
-        />
       )}
     </div>
   );
@@ -510,13 +489,17 @@ export function InventoryPage() {
 function InventoryTableRow({
   part,
   bins,
-  onEdit,
+  canAdjustStock,
+  canManageParts,
+  canPrintLabels,
   onDelete,
   onAdjust,
 }: {
   part: Part;
   bins: Bin[];
-  onEdit: () => void;
+  canAdjustStock: boolean;
+  canManageParts: boolean;
+  canPrintLabels: boolean;
   onDelete: () => void;
   onAdjust: (delta: number) => void;
 }) {
@@ -528,14 +511,25 @@ function InventoryTableRow({
     <TableRow className="border-white/10 hover:bg-white/5">
       <TableCell>
         <div className="space-y-1">
-          <Link href={`/inventory/${part.id}`} className="font-mono text-sm font-semibold text-white hover:text-amber-300">
+          <Link
+            href={`/inventory/${part.id}`}
+            className="font-mono text-sm font-semibold text-white hover:text-emerald-300"
+          >
             {part.partNumber}
           </Link>
           <p className="text-sm text-slate-300">{part.partName}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className="border-white/10 bg-white/5 text-slate-200">{part.manufacturer}</Badge>
-            <Badge className="border-white/10 bg-white/5 text-slate-200">{part.category}</Badge>
-            {attention && <Badge className="border-amber-400/20 bg-amber-400/10 text-amber-200">Attention</Badge>}
+            <Badge className="border-white/10 bg-white/5 text-slate-200">
+              {part.manufacturer}
+            </Badge>
+            <Badge className="border-white/10 bg-white/5 text-slate-200">
+              {part.category}
+            </Badge>
+            {attention && (
+              <Badge className="border-amber-400/20 bg-amber-400/10 text-amber-200">
+                Attention
+              </Badge>
+            )}
           </div>
         </div>
       </TableCell>
@@ -554,55 +548,73 @@ function InventoryTableRow({
           >
             {part.quantityOnHand}
           </Badge>
-          <div className="flex gap-1">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => onAdjust(-1)}
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => onAdjust(1)}
-            >
-              <PlusCircle className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+          {canAdjustStock && (
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                onClick={() => onAdjust(-1)}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                onClick={() => onAdjust(1)}
+              >
+                <PlusCircle className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
       </TableCell>
       <TableCell className="text-slate-300">{compatibility}</TableCell>
       <TableCell className="text-slate-400">{formatCompactDate(part.updatedAt)}</TableCell>
       <TableCell>
         <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-slate-300 hover:bg-white/10 hover:text-white"
-            onClick={onEdit}
-          >
-            <Edit3 className="h-4 w-4" />
-          </Button>
           <Link
-            href={`/tags?partId=${part.id}`}
+            href={`/inventory/${part.id}`}
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon-sm" }),
               "text-slate-300 hover:bg-white/10 hover:text-white",
             )}
           >
-            <Printer className="h-4 w-4" />
+            <PackageSearch className="h-4 w-4" />
           </Link>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-slate-300 hover:bg-white/10 hover:text-white"
-            onClick={onDelete}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canManageParts && (
+            <Link
+              href={`/inventory/${part.id}/edit`}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "text-slate-300 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <Edit3 className="h-4 w-4" />
+            </Link>
+          )}
+          {canPrintLabels && (
+            <Link
+              href={`/print?partId=${part.id}&copies=1`}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "text-slate-300 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <Printer className="h-4 w-4" />
+            </Link>
+          )}
+          {canManageParts && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-slate-300 hover:bg-white/10 hover:text-white"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -612,13 +624,17 @@ function InventoryTableRow({
 function InventoryMobileCard({
   part,
   bins,
-  onEdit,
+  canAdjustStock,
+  canManageParts,
+  canPrintLabels,
   onDelete,
   onAdjust,
 }: {
   part: Part;
   bins: Bin[];
-  onEdit: () => void;
+  canAdjustStock: boolean;
+  canManageParts: boolean;
+  canPrintLabels: boolean;
   onDelete: () => void;
   onAdjust: (delta: number) => void;
 }) {
@@ -629,7 +645,7 @@ function InventoryMobileCard({
       <CardContent className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <Link href={`/inventory/${part.id}`} className="font-mono text-sm font-semibold text-white hover:text-amber-300">
+            <Link href={`/inventory/${part.id}`} className="font-mono text-sm font-semibold text-white hover:text-emerald-300">
               {part.partNumber}
             </Link>
             <p className="mt-1 truncate text-sm text-slate-300">{part.partName}</p>
@@ -655,35 +671,34 @@ function InventoryMobileCard({
           <Badge className="border-white/10 bg-white/5 text-slate-200">{part.manufacturer}</Badge>
           <Badge className="border-white/10 bg-white/5 text-slate-200">{part.category}</Badge>
           {requiresAttention(part) && (
-            <Badge className="border-amber-400/20 bg-amber-400/10 text-amber-200">Attention</Badge>
+            <Badge className="border-amber-400/20 bg-amber-400/10 text-amber-200">
+              Attention
+            </Badge>
           )}
         </div>
 
+        {canAdjustStock && (
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              onClick={() => onAdjust(-1)}
+            >
+              <Minus className="mr-2 h-4 w-4" />
+              -1
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              onClick={() => onAdjust(1)}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              +1
+            </Button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-            onClick={() => onAdjust(-1)}
-          >
-            <Minus className="mr-2 h-4 w-4" />
-            -1
-          </Button>
-          <Button
-            variant="outline"
-            className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-            onClick={() => onAdjust(1)}
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            +1
-          </Button>
-          <Button
-            variant="outline"
-            className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-            onClick={onEdit}
-          >
-            <Edit3 className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
           <Link
             href={`/inventory/${part.id}`}
             className={cn(
@@ -693,26 +708,43 @@ function InventoryMobileCard({
           >
             Details
           </Link>
-          <Link
-            href={`/tags?partId=${part.id}`}
-            className={cn(
-              buttonVariants({ variant: "outline", size: "default" }),
-              "h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-            )}
-          >
-            <Printer className="mr-2 h-4 w-4" />
-            Print
-          </Link>
-          <Button
-            variant="outline"
-            className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-            onClick={onDelete}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+          {canManageParts && (
+            <Link
+              href={`/inventory/${part.id}/edit`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "default" }),
+                "h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <Edit3 className="mr-2 h-4 w-4" />
+              Edit
+            </Link>
+          )}
+          {canPrintLabels && (
+            <Link
+              href={`/print?partId=${part.id}&copies=1`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "default" }),
+                "h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Link>
+          )}
+          {canManageParts && (
+            <Button
+              variant="outline"
+              className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              onClick={onDelete}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
+

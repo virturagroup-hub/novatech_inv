@@ -2,8 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AppShell } from "@/components/app-shell";
+import { AuthProvider } from "@/components/auth-provider";
 import { InventoryProvider } from "@/components/inventory-provider";
 import { PwaRegister } from "@/components/pwa-register";
+import { APP_DESCRIPTION, APP_NAME, APP_TITLE_TEMPLATE } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,18 +20,17 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Novatech Inventory",
-    template: "%s | Novatech Inventory",
+    default: APP_NAME,
+    template: APP_TITLE_TEMPLATE,
   },
-  description:
-    "Internal printer and copier parts inventory for Novatech teams.",
-  applicationName: "Novatech Inventory",
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
   manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
   colorScheme: "dark",
-  themeColor: "#0f172a",
+  themeColor: "#064e3b",
 };
 
 export default function RootLayout({
@@ -40,9 +41,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full`}>
       <body className="min-h-full bg-background text-foreground antialiased">
-        <InventoryProvider>
-          <AppShell>{children}</AppShell>
-        </InventoryProvider>
+        <AuthProvider>
+          <InventoryProvider>
+            <AppShell>{children}</AppShell>
+          </InventoryProvider>
+        </AuthProvider>
         <PwaRegister />
         <Toaster position="top-right" richColors closeButton />
       </body>

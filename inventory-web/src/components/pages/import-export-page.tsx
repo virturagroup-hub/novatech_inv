@@ -1,11 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Papa from "papaparse";
-import { Download, FileUp, Files, PackageSearch, RotateCcw, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock3,
+  FileUp,
+  Files,
+  MapPin,
+  PackageSearch,
+  Printer,
+  RotateCcw,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -19,8 +30,8 @@ import { cn } from "@/lib/utils";
 import { categories } from "@/lib/inventory-types";
 import {
   serializeActivityCsv,
-  serializeBinsCsv,
-  serializeModelsCsv,
+  serializeLowStockCsv,
+  serializeLocationsCsv,
   serializePartsCsv,
 } from "@/lib/inventory-utils";
 import { type PartImportRow } from "@/lib/inventory-reducer";
@@ -30,6 +41,26 @@ type ImportPreviewState = {
   rawText: string;
   error: string;
 };
+
+type ReportCard =
+  | {
+      title: string;
+      description: string;
+      icon: ReactNode;
+      actionLabel: string;
+      disabled: boolean;
+      onClick: () => void;
+      href?: never;
+    }
+  | {
+      title: string;
+      description: string;
+      icon: ReactNode;
+      actionLabel: string;
+      disabled: boolean;
+      href: string;
+      onClick?: never;
+    };
 
 function downloadCsv(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -114,6 +145,7 @@ function parseImportRows(text: string): PartImportRow[] {
 }
 
 export function ImportExportPage() {
+  const { permissions } = useAuth();
   const { activity, bins, models, parts, settings, importParts } = useInventory();
   const [preview, setPreview] = useState<ImportPreviewState>({
     rows: [],
@@ -135,6 +167,57 @@ export function ImportExportPage() {
     () => ({ parts, bins, models, activity, settings }),
     [activity, bins, models, parts, settings],
   );
+
+  const reportCards: ReportCard[] = [
+    {
+      title: "Export Parts CSV",
+      description: "Download the full inventory list with quantities, locations, and compatibility data.",
+      icon: <Files className="h-5 w-5" />,
+      actionLabel: "Download CSV",
+      disabled: !permissions.canExportReports,
+      onClick: () => downloadCsv("green-nventory-parts.csv", serializePartsCsv(exportState)),
+    },
+    {
+      title: "Export Low Stock Report",
+      description: "Pull only the parts that are at or below reorder levels.",
+      icon: <AlertTriangle className="h-5 w-5" />,
+      actionLabel: "Download CSV",
+      disabled: !permissions.canExportReports,
+      onClick: () => downloadCsv("green-nventory-low-stock.csv", serializeLowStockCsv(exportState)),
+    },
+    {
+      title: "Export Locations Report",
+      description: "Save the current bin map with status, shelf, and area details.",
+      icon: <MapPin className="h-5 w-5" />,
+      actionLabel: "Download CSV",
+      disabled: !permissions.canExportReports,
+      onClick: () => downloadCsv("green-nventory-locations.csv", serializeLocationsCsv(exportState)),
+    },
+    {
+      title: "Export Activity Report",
+      description: "Keep a lightweight audit trail of what happened in the browser store.",
+      icon: <Clock3 className="h-5 w-5" />,
+      actionLabel: "Download CSV",
+      disabled: !permissions.canExportReports,
+      onClick: () => downloadCsv("green-nventory-activity.csv", serializeActivityCsv(exportState)),
+    },
+    {
+      title: "Print Part Labels",
+      description: "Open the label workflow with part tags selected as the starting point.",
+      icon: <Printer className="h-5 w-5" />,
+      actionLabel: "Open workflow",
+      disabled: !permissions.canPrintLabels,
+      href: "/tags?mode=part",
+    },
+    {
+      title: "Print Bin Labels",
+      description: "Open the label workflow with bin tags selected as the starting point.",
+      icon: <Printer className="h-5 w-5" />,
+      actionLabel: "Open workflow",
+      disabled: !permissions.canPrintLabels,
+      href: "/tags?mode=bin",
+    },
+  ];
 
   const parseCurrentText = () => {
     try {
@@ -188,9 +271,9 @@ export function ImportExportPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
-        eyebrow="CSV tools"
-        title="Export the current dataset or import a clean part list."
-        description="The app already speaks a Supabase-friendly shape, but this Phase 1 screen is useful for moving data in and out of the browser store right now."
+        eyebrow="Reports & Exports"
+        title="Clean action cards for the jobs managers and technicians use most."
+        description="Export reports, open the print workflow, and still keep the CSV import tool nearby for Phase 1 browser data."
         actions={
           <>
             <Link
@@ -203,10 +286,16 @@ export function ImportExportPage() {
               <PackageSearch className="mr-2 h-4 w-4" />
               Inventory
             </Link>
-            <Button className="bg-amber-400 text-slate-950 hover:bg-amber-300" onClick={() => downloadCsv("novatech-parts.csv", serializePartsCsv(exportState))}>
-              <Download className="mr-2 h-4 w-4" />
-              Export parts
-            </Button>
+            <Link
+              href="/tags"
+              className={cn(
+                buttonVariants({ variant: "default", size: "default" }),
+                "bg-amber-400 text-slate-950 hover:bg-amber-300",
+              )}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Labels
+            </Link>
           </>
         }
       />
@@ -223,50 +312,69 @@ export function ImportExportPage() {
         ))}
       </div>
 
-      <Card className="border-white/10 bg-white/5">
-        <CardContent className="grid gap-3 p-4 sm:p-5 lg:grid-cols-[1fr_auto]">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Quick exports</p>
-            <p className="text-sm text-slate-300">
-              Download the current mock store as CSV files that can be edited in Excel, Google Sheets, or a future import job.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => downloadCsv("novatech-parts.csv", serializePartsCsv(exportState))}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Parts
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => downloadCsv("novatech-bins.csv", serializeBinsCsv(exportState))}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Bins
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => downloadCsv("novatech-models.csv", serializeModelsCsv(exportState))}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Models
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-              onClick={() => downloadCsv("novatech-activity.csv", serializeActivityCsv(exportState))}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Activity
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {reportCards.map((card) => (
+          <Card key={card.title} className="border-white/10 bg-white/5">
+            <CardHeader className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 text-white">
+                  {card.icon}
+                </div>
+                <div>
+                  <CardTitle className="text-white">{card.title}</CardTitle>
+                  <CardDescription className="text-slate-400">{card.description}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {card.href ? (
+                <Link
+                  href={card.href}
+                  aria-disabled={card.disabled}
+                  tabIndex={card.disabled ? -1 : 0}
+                  className={cn(
+                    buttonVariants({ variant: "default", size: "default" }),
+                    "h-11 w-full",
+                    card.disabled
+                      ? "pointer-events-none bg-slate-700 text-slate-300 opacity-60"
+                      : "bg-amber-400 text-slate-950 hover:bg-amber-300",
+                  )}
+                >
+                  {card.actionLabel}
+                </Link>
+              ) : (
+                <Button
+                  className={cn(
+                    "h-11 w-full",
+                    card.disabled
+                      ? "bg-slate-700 text-slate-300 hover:bg-slate-700 hover:text-slate-300"
+                      : "bg-amber-400 text-slate-950 hover:bg-amber-300",
+                  )}
+                  onClick={card.onClick}
+                  disabled={card.disabled}
+                >
+                  {card.actionLabel}
+                </Button>
+              )}
+              {card.disabled && (
+                <p className="mt-3 text-xs text-slate-400">
+                  {card.title.includes("Print")
+                    ? "Printing is available to elevated users and technicians."
+                    : "Exports are available to admins and managers."}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {!permissions.canManageParts && (
+        <Card className="border-white/10 bg-white/5">
+          <CardContent className="p-4 text-sm text-slate-300">
+            CSV import is available to elevated inventory editors. Viewers and technicians can still use the reports above.
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="import" className="space-y-4">
         <TabsList className="grid h-auto grid-cols-2 bg-white/5 p-1">
@@ -342,10 +450,10 @@ export function ImportExportPage() {
               <CardHeader>
                 <CardTitle className="text-white">Import rules</CardTitle>
                 <CardDescription className="text-slate-400">
-                  The parser does a few helpful matches before writing anything into the store.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-slate-300">
+                The parser does a few helpful matches before writing anything into the store.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
                 <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
                   Bin codes are matched against the current storage map. Unknown bins fall back to unassigned.
                 </div>
