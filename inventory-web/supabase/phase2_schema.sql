@@ -154,18 +154,22 @@ create table if not exists public.inventory_transactions (
   created_at timestamptz not null default now()
 );
 
+drop trigger if exists set_profiles_updated_at on public.profiles;
 create trigger set_profiles_updated_at
 before update on public.profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_locations_updated_at on public.locations;
 create trigger set_locations_updated_at
 before update on public.locations
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_models_updated_at on public.models;
 create trigger set_models_updated_at
 before update on public.models
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_parts_updated_at on public.parts;
 create trigger set_parts_updated_at
 before update on public.parts
 for each row execute function public.set_updated_at();
@@ -203,17 +207,20 @@ alter table public.parts enable row level security;
 alter table public.part_model_links enable row level security;
 alter table public.inventory_transactions enable row level security;
 
+drop policy if exists "Profiles: self read" on public.profiles;
 create policy "Profiles: self read"
 on public.profiles
 for select
 using (id = auth.uid() or public.is_elevated_user());
 
+drop policy if exists "Locations: authenticated read" on public.locations;
 create policy "Locations: authenticated read"
 on public.locations
 for select
 to authenticated
 using (true);
 
+drop policy if exists "Locations: elevated write" on public.locations;
 create policy "Locations: elevated write"
 on public.locations
 for all
@@ -221,12 +228,14 @@ to authenticated
 using (public.is_elevated_user())
 with check (public.is_elevated_user());
 
+drop policy if exists "Models: authenticated read" on public.models;
 create policy "Models: authenticated read"
 on public.models
 for select
 to authenticated
 using (true);
 
+drop policy if exists "Models: elevated write" on public.models;
 create policy "Models: elevated write"
 on public.models
 for all
@@ -234,12 +243,14 @@ to authenticated
 using (public.is_elevated_user())
 with check (public.is_elevated_user());
 
+drop policy if exists "Parts: authenticated read" on public.parts;
 create policy "Parts: authenticated read"
 on public.parts
 for select
 to authenticated
 using (true);
 
+drop policy if exists "Parts: elevated write" on public.parts;
 create policy "Parts: elevated write"
 on public.parts
 for all
@@ -247,12 +258,14 @@ to authenticated
 using (public.is_elevated_user())
 with check (public.is_elevated_user());
 
+drop policy if exists "Part model links: authenticated read" on public.part_model_links;
 create policy "Part model links: authenticated read"
 on public.part_model_links
 for select
 to authenticated
 using (true);
 
+drop policy if exists "Part model links: elevated write" on public.part_model_links;
 create policy "Part model links: elevated write"
 on public.part_model_links
 for all
@@ -260,12 +273,14 @@ to authenticated
 using (public.is_elevated_user())
 with check (public.is_elevated_user());
 
+drop policy if exists "Transactions: activity readers" on public.inventory_transactions;
 create policy "Transactions: activity readers"
 on public.inventory_transactions
 for select
 to authenticated
 using (public.can_view_activity());
 
+drop policy if exists "Transactions: elevated write" on public.inventory_transactions;
 create policy "Transactions: elevated write"
 on public.inventory_transactions
 for all
