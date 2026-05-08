@@ -1,5 +1,5 @@
 import { PrintPage } from "@/components/pages/print-page";
-import { requireAppSession } from "@/lib/supabase/route-guards";
+import { requirePrintLabelsSession } from "@/lib/supabase/route-guards";
 
 export default async function Page({
   searchParams,
@@ -14,6 +14,6 @@ export default async function Page({
   }>;
 }>) {
   const params = await searchParams;
-  await requireAppSession({ nextPath: "/print" });
+  await requirePrintLabelsSession({ nextPath: "/print" });
   return <PrintPage searchParams={params} />;
 }

@@ -13,16 +13,21 @@ export interface AuthSession {
 }
 
 export interface PermissionSet {
+  canViewParts: boolean;
   canManageParts: boolean;
+  canViewLocations: boolean;
   canManageModels: boolean;
   canManageLocations: boolean;
+  canViewModels: boolean;
   canAdjustStock: boolean;
+  canViewReports: boolean;
   canPrintLabels: boolean;
   canExportReports: boolean;
   canViewActivity: boolean;
-  canViewUsers: boolean;
   canManageUsers: boolean;
+  canAccessSettings: boolean;
   canPreviewRoles: boolean;
+  canViewUsers: boolean;
 }
 
 export interface RoleContext {
@@ -44,12 +49,12 @@ export const roleOptions: Array<{
   {
     role: "manager",
     label: "Manager",
-    description: "Can manage master data, labels, stock, and reports for the team.",
+    description: "Can manage inventory data, stock, labels, activity, and reports for the team.",
   },
   {
     role: "technician",
     label: "Technician",
-    description: "Can look up parts, adjust stock, and print labels on the floor.",
+    description: "Can look up parts, manage stock, and work with inventory records on the floor.",
   },
   {
     role: "viewer",
@@ -74,48 +79,60 @@ function getBasePermissions(role: UserRole) {
   switch (role) {
     case "admin":
       return {
+        canViewParts: true,
         canManageParts: true,
+        canViewLocations: true,
         canManageModels: true,
         canManageLocations: true,
+        canViewModels: true,
         canAdjustStock: true,
+        canViewReports: true,
         canPrintLabels: true,
         canExportReports: true,
         canViewActivity: true,
-        canViewUsers: true,
       };
     case "manager":
       return {
+        canViewParts: true,
         canManageParts: true,
+        canViewLocations: true,
         canManageModels: true,
         canManageLocations: true,
+        canViewModels: true,
         canAdjustStock: true,
+        canViewReports: true,
         canPrintLabels: true,
         canExportReports: true,
         canViewActivity: true,
-        canViewUsers: true,
       };
     case "technician":
       return {
-        canManageParts: false,
+        canViewParts: true,
+        canManageParts: true,
+        canViewLocations: true,
         canManageModels: false,
         canManageLocations: false,
+        canViewModels: true,
         canAdjustStock: true,
-        canPrintLabels: true,
+        canViewReports: false,
+        canPrintLabels: false,
         canExportReports: false,
-        canViewActivity: true,
-        canViewUsers: false,
+        canViewActivity: false,
       };
     case "viewer":
     default:
       return {
+        canViewParts: true,
         canManageParts: false,
+        canViewLocations: true,
         canManageModels: false,
         canManageLocations: false,
+        canViewModels: true,
         canAdjustStock: false,
+        canViewReports: false,
         canPrintLabels: false,
         canExportReports: false,
         canViewActivity: false,
-        canViewUsers: false,
       };
   }
 }
@@ -126,7 +143,9 @@ export function resolvePermissions(context: RoleContext): PermissionSet {
   return {
     ...base,
     canManageUsers: context.realRole === "admin",
+    canAccessSettings: context.realRole === "admin",
     canPreviewRoles: context.realRole === "admin",
+    canViewUsers: context.realRole === "admin",
   };
 }
 
@@ -138,8 +157,16 @@ export function getPermissions(role: UserRole): PermissionSet {
   });
 }
 
+export function canViewParts(role: UserRole) {
+  return getBasePermissions(role).canViewParts;
+}
+
 export function canManageParts(role: UserRole) {
   return getBasePermissions(role).canManageParts;
+}
+
+export function canViewLocations(role: UserRole) {
+  return getBasePermissions(role).canViewLocations;
 }
 
 export function canManageModels(role: UserRole) {
@@ -150,8 +177,16 @@ export function canManageLocations(role: UserRole) {
   return getBasePermissions(role).canManageLocations;
 }
 
+export function canViewModels(role: UserRole) {
+  return getBasePermissions(role).canViewModels;
+}
+
 export function canAdjustStock(role: UserRole) {
   return getBasePermissions(role).canAdjustStock;
+}
+
+export function canViewReports(role: UserRole) {
+  return getBasePermissions(role).canViewReports;
 }
 
 export function canPrintLabels(role: UserRole) {
@@ -166,8 +201,12 @@ export function canViewActivity(role: UserRole) {
   return getBasePermissions(role).canViewActivity;
 }
 
+export function canAccessSettings(role: UserRole) {
+  return role === "admin";
+}
+
 export function canViewUsers(role: UserRole) {
-  return getBasePermissions(role).canViewUsers;
+  return role === "admin";
 }
 
 export function canManageUsers(role: UserRole) {

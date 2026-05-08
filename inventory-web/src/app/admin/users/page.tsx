@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 
 import { AdminUsersPage } from "@/components/pages/admin-users-page";
-import { requireUserManagementSession } from "@/lib/supabase/route-guards";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminSession } from "@/lib/supabase/route-guards";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { ProfileRow } from "@/lib/supabase/types";
 
 export default async function Page() {
-  await requireUserManagementSession();
-  const supabase = await createClient();
+  const context = await requireAdminSession({ nextPath: "/admin/users" });
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("profiles")
@@ -18,5 +18,15 @@ export default async function Page() {
     redirect("/");
   }
 
-  return <AdminUsersPage users={(data ?? []) as ProfileRow[]} />;
+  const { data: authUsers } = await supabase.auth.admin.listUsers().catch(() => ({
+    data: null,
+  }));
+
+  return (
+    <AdminUsersPage
+      currentUserId={context.userId}
+      users={(data ?? []) as ProfileRow[]}
+      authUsers={authUsers?.users ?? []}
+    />
+  );
 }

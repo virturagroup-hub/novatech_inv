@@ -93,6 +93,7 @@ export async function POST(request: Request) {
     .single();
 
   if (profileError) {
+    await admin.auth.admin.deleteUser(authData.user.id).catch(() => undefined);
     return NextResponse.json(
       { error: profileError.message ?? "Unable to save the profile." },
       { status: 500 },

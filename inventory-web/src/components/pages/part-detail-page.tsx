@@ -106,16 +106,18 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Inventory
             </Link>
-            <Link
-              href={buildPartPrintHref({ partIds: [part.id] })}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "default" }),
-                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print tag
-            </Link>
+            {permissions.canPrintLabels && (
+              <Link
+                href={buildPartPrintHref({ partIds: [part.id] })}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "default" }),
+                  "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print tag
+              </Link>
+            )}
             {permissions.canManageParts && (
               <Link
                 href={`/inventory/${part.id}/edit`}
@@ -361,16 +363,18 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2">
-              <Link
-                href={buildPartPrintHref({ partIds: [part.id] })}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "default" }),
-                  "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                )}
-              >
-                <Tag className="mr-2 h-4 w-4" />
-                Print a tag
-              </Link>
+              {permissions.canPrintLabels && (
+                <Link
+                  href={buildPartPrintHref({ partIds: [part.id] })}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <Tag className="mr-2 h-4 w-4" />
+                  Print a tag
+                </Link>
+              )}
               {permissions.canManageParts && (
                 <Link
                   href={`/inventory/${part.id}/edit`}

@@ -7,7 +7,6 @@ import {
   MapPin,
   PackageSearch,
   ScanSearch,
-  Tag,
 } from "lucide-react";
 
 import { useInventory } from "@/components/inventory-provider";
@@ -18,7 +17,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { buildPartPrintHref } from "@/lib/labels";
 import {
   countCompatiblePartsForModel,
   getPartLocationLabel,
@@ -81,16 +79,6 @@ export function LookupPage() {
             >
               <PackageSearch className="mr-2 h-4 w-4" />
               Inventory
-            </Link>
-            <Link
-              href="/tags"
-              className={cn(
-                buttonVariants({ variant: "default", size: "default" }),
-                "bg-amber-400 text-slate-950 hover:bg-amber-300",
-              )}
-            >
-              <Tag className="mr-2 h-4 w-4" />
-              Print tags
             </Link>
           </>
         }
@@ -229,7 +217,7 @@ export function LookupPage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Link
+                  <Link
                       href={`/inventory/${part.id}`}
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }),
@@ -237,15 +225,6 @@ export function LookupPage() {
                       )}
                     >
                       Open detail
-                    </Link>
-                    <Link
-                      href={buildPartPrintHref({ partIds: [part.id] })}
-                      className={cn(
-                        buttonVariants({ variant: "outline", size: "sm" }),
-                        "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                      )}
-                    >
-                      Print tag
                     </Link>
                   </div>
                 </div>

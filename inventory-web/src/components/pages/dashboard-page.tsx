@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   Boxes,
-  ClipboardList,
   PackageSearch,
   QrCode,
   Truck,
@@ -65,24 +64,17 @@ export function DashboardPage() {
             >
               Inventory
             </Link>
-            <Link
-              href="/tags"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "default" }),
-                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              Print tags
-            </Link>
-            <Link
-              href="/import-export"
-              className={cn(
-                buttonVariants({ variant: "default", size: "default" }),
-                "bg-amber-400 text-slate-950 hover:bg-amber-300",
-              )}
-            >
-              CSV tools
-            </Link>
+            {permissions.canViewReports && (
+              <Link
+                href="/import-export"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "default" }),
+                  "bg-amber-400 text-slate-950 hover:bg-amber-300",
+                )}
+              >
+                CSV tools
+              </Link>
+            )}
           </>
         }
       />
@@ -335,7 +327,7 @@ export function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">
-                View the lookup or inventory screens for read-only work. Technicians, managers, and admins can see the audit trail.
+                View the lookup or inventory screens for read-only work. Managers and admins can see the audit trail.
               </CardContent>
             </Card>
           )}
@@ -348,16 +340,18 @@ export function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2 sm:grid-cols-2">
-              <Link
-                href="/inventory?create=1"
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "default" }),
-                  "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                )}
-              >
-                <PackageSearch className="mr-2 h-4 w-4" />
-                Add a part
-              </Link>
+              {permissions.canManageParts && (
+                <Link
+                  href="/inventory/new"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <PackageSearch className="mr-2 h-4 w-4" />
+                  Add a part
+                </Link>
+              )}
               <Link
                 href="/lookup"
                 className={cn(
@@ -368,16 +362,18 @@ export function DashboardPage() {
                 <QrCode className="mr-2 h-4 w-4" />
                 Lookup bin / part
               </Link>
-              <Link
-                href="/tags"
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "default" }),
-                  "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                )}
-              >
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Print labels
-              </Link>
+              {permissions.canViewReports && (
+                <Link
+                  href="/import-export"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <ArrowUpRight className="mr-2 h-4 w-4" />
+                  Reports & Exports
+                </Link>
+              )}
               <Link
                 href="/locations"
                 className={cn(

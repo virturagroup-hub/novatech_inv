@@ -30,6 +30,8 @@ The current application is a hybrid Phase 1/Phase 2 setup:
 - CSV import/export
 - Activity log placeholder
 - Mobile-friendly lookup and edit flows
+- List-first admin screens for users, locations, and models
+- Centralized print-label workflow in Reports & Exports
 - Admin-only user management for Supabase Auth
 - Admin-only role preview for testing permissions
 
@@ -144,11 +146,15 @@ The admin user-management area lives at `/admin/users`.
 
 Rules:
 
-- Admin users can create accounts, edit users, deactivate accounts, and force password changes.
+- The page is list-first. The roster shows by default and the New User flow opens in its own route at `/admin/users/new`.
+- Editing happens on `/admin/users/[userId]/edit`.
+- Admin users can create accounts, edit users, deactivate accounts, reset temporary passwords, and force password changes.
 - Manager users can view the roster if allowed, but they cannot create admin users.
 - Technician and viewer users cannot access the page.
 - User creation happens server-side only.
 - The service-role key stays on the server.
+- Deactivate/archive is preferred over hard delete unless the delete is explicitly safe.
+- The app blocks dangerous self-demotion and last-admin removal.
 
 When an admin creates a user:
 
@@ -156,6 +162,27 @@ When an admin creates a user:
 2. Supabase Auth creates the account with `email_confirm: true`.
 3. The app writes or updates the matching profile row.
 4. The new profile is marked `must_change_password = true`.
+
+## Role Model
+
+Green NVentory uses the real Supabase profile role for server-side security and a separate browser-side preview role for admin testing.
+
+- Admin: full access, user management, settings, reports, labels, and role preview.
+- Manager: manage inventory data, locations, models, stock, reports, labels, and activity. No users or system/security settings.
+- Technician: manage parts and stock, view locations and models, but no reports, labels, settings, or users.
+- Viewer: read-only access to parts, locations, and models.
+
+The app uses `realRole` for server checks and `effectiveRole` only for UI preview. Role preview never changes the stored Supabase role.
+
+## Management Screens
+
+- `/locations` and `/models` are list-first screens.
+- New records open in dedicated routes: `/locations/new` and `/models/new`.
+- Editing happens in dedicated routes: `/locations/[binId]/edit` and `/models/[modelId]/edit`.
+- Archive is preferred over delete when linked parts exist.
+- Inactive locations and models stay hidden from normal assignment flows unless they are explicitly shown.
+- Print labels live primarily in Reports & Exports at `/import-export`.
+- Contextual single-label print buttons remain only on the part detail and location detail screens when they help the current record.
 
 ## First Login Password Change
 
@@ -169,6 +196,8 @@ That page:
 - uses Supabase client auth to update the password
 - clears `must_change_password` in the profile row
 - sends the user back to the scanned route when one was provided, otherwise the dashboard
+
+Password resets from the admin edit screen follow the same pattern: the server updates the Supabase Auth password, marks `must_change_password = true`, and shows the temporary password only once.
 
 Users can log out from the password change screen if they need to stop and come back later.
 
@@ -215,6 +244,7 @@ To verify the auth flow locally:
 - Keep role logic centralized in `src/lib/auth.ts`.
 - Keep Supabase helpers in `src/lib/supabase`.
 - Keep the `/print` route label-only so browser print previews never include the whole app shell.
+- Keep label-print actions centralized in Reports & Exports unless a single contextual print button is genuinely helpful on a detail page.
 - Keep the mobile navigation simple and touch-friendly.
 - Do not reintroduce root-level workspace assumptions; the app lives in `inventory-web`.
 

@@ -18,6 +18,7 @@ export function BrandLockup({
           src="/brand/novatech-logo.png"
           alt={`${COMPANY_NAME} logo`}
           fill
+          sizes="44px"
           className="object-cover"
           priority
         />

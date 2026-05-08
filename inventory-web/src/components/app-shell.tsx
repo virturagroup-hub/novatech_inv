@@ -38,24 +38,13 @@ import { useInventory } from "@/components/inventory-provider";
 import { useAuth } from "@/components/auth-provider";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/brand";
 import { getRoleLabel } from "@/lib/auth";
-import { buildChangePasswordPath, buildLoginPath, sanitizeInternalPath } from "@/lib/navigation";
+import {
+  buildAccessDeniedPath,
+  buildChangePasswordPath,
+  buildLoginPath,
+  sanitizeInternalPath,
+} from "@/lib/navigation";
 import type { ComponentType } from "react";
-
-const primaryNav = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/lookup", label: "Lookup", icon: PackageSearch },
-  { href: "/inventory", label: "Parts", icon: Boxes },
-  { href: "/tags", label: "Labels", icon: Printer },
-];
-
-const secondaryNav = [
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/locations", label: "Locations", icon: MapPinned },
-  { href: "/models", label: "Models", icon: Boxes },
-  { href: "/import-export", label: "Reports / Exports", icon: ArrowUpRight },
-  { href: "/activity", label: "Activity", icon: FileClock },
-  { href: "/settings", label: "Settings", icon: Settings2 },
-];
 
 function isActiveRoute(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -134,11 +123,31 @@ export function AppShell({
     signOut,
   } = useAuth();
   const isPublicRoute =
-    pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/print");
+    pathname === "/login" ||
+    pathname === "/change-password" ||
+    pathname === "/access-denied" ||
+    pathname.startsWith("/print");
   const isLogoutRoute = pathname === "/logout";
-  const visibleSecondaryNav = permissions.canViewUsers || permissions.canManageUsers
-    ? secondaryNav
-    : secondaryNav.filter((item) => item.href !== "/admin/users");
+  const primaryNav = [
+    { href: "/", label: "Home", icon: Home, visible: true },
+    { href: "/lookup", label: "Lookup", icon: PackageSearch, visible: permissions.canViewParts },
+    { href: "/inventory", label: "Parts", icon: Boxes, visible: permissions.canViewParts },
+    { href: "/tags", label: "Labels", icon: Printer, visible: permissions.canPrintLabels },
+  ].filter((item) => item.visible);
+
+  const secondaryNav = [
+    { href: "/admin/users", label: "Users", icon: Users, visible: effectiveRole === "admin" },
+    { href: "/locations", label: "Locations", icon: MapPinned, visible: permissions.canViewLocations },
+    { href: "/models", label: "Models", icon: Boxes, visible: permissions.canViewModels },
+    {
+      href: "/import-export",
+      label: "Reports / Exports",
+      icon: ArrowUpRight,
+      visible: permissions.canViewReports,
+    },
+    { href: "/activity", label: "Activity", icon: FileClock, visible: permissions.canViewActivity },
+    { href: "/settings", label: "Settings", icon: Settings2, visible: effectiveRole === "admin" },
+  ].filter((item) => item.visible);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -171,12 +180,56 @@ export function AppShell({
       return;
     }
 
+    if (pathname.startsWith("/admin/users") && effectiveRole !== "admin") {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "users" }));
+      return;
+    }
+
+    if (pathname.startsWith("/settings") && effectiveRole !== "admin") {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "settings" }));
+      return;
+    }
+
+    if (pathname.startsWith("/activity") && !permissions.canViewActivity) {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "activity" }));
+      return;
+    }
+
     if (
-      pathname.startsWith("/admin/users") &&
-      !permissions.canViewUsers &&
-      !permissions.canManageUsers
+      (pathname.startsWith("/import-export") || pathname.startsWith("/reports")) &&
+      !permissions.canViewReports
     ) {
-      router.replace("/");
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "reports" }));
+      return;
+    }
+
+    if ((pathname.startsWith("/tags") || pathname.startsWith("/print")) && !permissions.canPrintLabels) {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "labels" }));
+      return;
+    }
+
+    if (
+      (pathname.startsWith("/inventory/new") || pathname.match(/^\/inventory\/[^/]+\/edit\/?$/)) &&
+      !permissions.canManageParts
+    ) {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "parts" }));
+      return;
+    }
+
+    if (
+      (pathname.startsWith("/locations/new") || pathname.match(/^\/locations\/[^/]+\/edit\/?$/)) &&
+      !permissions.canManageLocations
+    ) {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "locations" }));
+      return;
+    }
+
+    if (
+      (pathname.startsWith("/models/new") || pathname.match(/^\/models\/[^/]+\/edit\/?$/)) &&
+      !permissions.canManageModels
+    ) {
+      router.replace(buildAccessDeniedPath({ nextPath: currentPath, reason: "models" }));
+      return;
     }
   }, [
     authIssue,
@@ -185,8 +238,18 @@ export function AppShell({
     isLogoutRoute,
     isPublicRoute,
     pathname,
+    permissions.canAccessSettings,
+    permissions.canManageLocations,
+    permissions.canManageModels,
+    permissions.canManageParts,
     permissions.canManageUsers,
-    permissions.canViewUsers,
+    permissions.canPrintLabels,
+    permissions.canViewActivity,
+    permissions.canViewModels,
+    permissions.canViewParts,
+    permissions.canViewReports,
+    permissions.canViewLocations,
+    effectiveRole,
     router,
     session?.mustChangePassword,
     signOut,
@@ -274,7 +337,7 @@ export function AppShell({
           <Separator className="my-6 bg-white/10" />
 
           <div className="space-y-2">
-            {visibleSecondaryNav.map((item) => (
+            {secondaryNav.map((item) => (
               <AppLink
                 key={item.href}
                 href={item.href}
@@ -409,7 +472,7 @@ export function AppShell({
                     </div>
                     <Separator className="my-4 bg-white/10" />
                     <div className="space-y-2">
-                      {visibleSecondaryNav.map((item) => (
+                      {secondaryNav.map((item) => (
                         <AppLink
                           key={item.href}
                           href={item.href}
@@ -500,7 +563,10 @@ export function AppShell({
           <main className="min-w-0 flex-1 pb-24 lg:pb-8">{children}</main>
 
           <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 px-2 py-2 backdrop-blur-xl lg:hidden">
-            <div className="grid grid-cols-5 gap-1">
+            <div
+              className="grid gap-1"
+              style={{ gridTemplateColumns: `repeat(${primaryNav.length + 1}, minmax(0, 1fr))` }}
+            >
               {primaryNav.map((item) => {
                 const Icon = item.icon;
                 const active = isActiveRoute(pathname, item.href);
@@ -538,7 +604,7 @@ export function AppShell({
                     </SheetDescription>
                   </SheetHeader>
                   <div className="grid gap-2 px-4 pb-4">
-                    {visibleSecondaryNav.map((item) => (
+                    {secondaryNav.map((item) => (
                       <AppLink
                         key={item.href}
                         href={item.href}

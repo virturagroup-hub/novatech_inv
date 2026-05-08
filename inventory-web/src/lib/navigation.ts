@@ -79,3 +79,19 @@ export function buildChangePasswordPath(nextPath?: string | null) {
 
   return `/change-password?next=${encodeURIComponent(safeNextPath)}`;
 }
+
+export function buildAccessDeniedPath(options?: { nextPath?: string | null; reason?: string | null }) {
+  const params = new URLSearchParams();
+  const nextPath = sanitizeInternalPath(options?.nextPath);
+
+  if (options?.reason) {
+    params.set("reason", options.reason);
+  }
+
+  if (nextPath !== "/") {
+    params.set("next", nextPath);
+  }
+
+  const query = params.toString();
+  return query ? `/access-denied?${query}` : "/access-denied";
+}

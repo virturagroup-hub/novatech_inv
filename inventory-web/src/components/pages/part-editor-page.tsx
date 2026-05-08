@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   MapPin,
   PackageSearch,
-  Printer,
   Save,
   Search,
   Sparkles,
@@ -32,7 +31,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { buildPartPrintHref } from "@/lib/labels";
 import { categories, manufacturers, type Part, type PartDraft } from "@/lib/inventory-types";
 import {
   getPartLocationLabel,
@@ -786,18 +784,6 @@ export function PartEditorPage({
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Cancel
                 </Link>
-                {mode === "edit" && editingPart && (
-                  <Link
-                    href={buildPartPrintHref({ partIds: [editingPart.id] })}
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "default" }),
-                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                    )}
-                  >
-                    <Printer className="mr-2 h-4 w-4" />
-                    Print
-                  </Link>
-                )}
               </div>
             </CardContent>
           </Card>

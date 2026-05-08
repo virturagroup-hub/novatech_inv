@@ -27,19 +27,22 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Supabase Auth is the source of truth for login and logout.
 - Login must use email/password sign-in, not demo credentials or browser-local auth.
 - Public signups stay disabled.
-- Admins create users from `/admin/users`.
-- User creation must stay server-side only.
+- Admins create users from the dedicated list-first management area at `/admin/users` and the create/edit routes beneath it.
+- User creation and password resets must stay server-side only.
 - Only server routes or server actions may use `SUPABASE_SERVICE_ROLE_KEY`.
 - Never expose the service role key to client components.
 - Admins may create and edit users, set roles, deactivate users, and force password changes.
 - Managers may view the roster if allowed, but they must not create admin users.
 - Technician and viewer users must not access `/admin/users`.
+- Prefer deactivate/archive over hard delete unless the delete flow is explicitly safe and blocks the last admin.
+- Self-demotion, self-deactivation, and last-admin removal must be blocked or require a deliberate confirmation flow.
 - If `profiles.must_change_password` is true, the app must redirect to `/change-password`.
 - If `profiles.active` is false or a profile row is missing, block access and surface a clear login message.
 - The change-password flow must clear `must_change_password` after a successful password update.
 - The login flow must be real Supabase email/password auth with a sanitized internal `next` parameter only.
 - QR code URLs should be built from `NEXT_PUBLIC_APP_URL` when present, with browser-origin fallback in client code.
 - Part labels should only show QR code, part number, part name, and location/bin. Bin labels should only show QR code, location code, area/shelf/bin, and short description if space allows.
+- Print labels should live primarily in Reports & Exports. Keep contextual single-label buttons only on part and location detail screens when they are genuinely useful.
 
 ## Role Preview Rules
 
@@ -52,6 +55,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - `canManageUsers` and `canPreviewRoles` must require the real admin role, not a previewed role.
 - Show a persistent banner whenever role preview is active.
 - Provide an obvious `Return to Admin` action that clears the preview state.
+- Role preview must never grant server-side privileges or bypass route guards.
+- A previewed manager, technician, or viewer should only change what the browser shows.
 
 ## UI Rules
 
@@ -62,6 +67,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Use the dedicated `/print` route for labels; do not reintroduce page-wide `window.print()` flows.
 - Keep the print layout strictly label-only with no app chrome.
 - Preserve scan-to-login-return behavior by passing only internal relative paths through `next`.
+- Keep the Users, Locations, and Models screens list-first with dedicated create/edit routes instead of always-visible forms.
+- Avoid cramped drawers or narrow sidebars for management forms on desktop or mobile.
 
 ## Permission Rules
 
@@ -76,9 +83,13 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
   - `canViewUsers`
   - `canManageUsers`
   - `canPreviewRoles`
-- Admin and manager users are elevated.
-- Viewer users are read-only.
-- Technician users can view, look up, adjust stock if allowed, and print labels if allowed.
+- Admins can do everything.
+- Managers can manage inventory data, reports, labels, and activity, but not users or system/security settings.
+- Technicians can manage parts and stock only.
+- Technicians can view locations and models, but cannot edit them.
+- Viewers are read-only.
+- Technicians and viewers cannot access reports, exports, or label printing.
+- Only admin can manage users and use View as Role.
 - Do not scatter role checks directly through components when a helper will do.
 
 ## Workflow Rules

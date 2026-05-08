@@ -214,8 +214,8 @@ export function SettingsPage() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
         <PageHero
           eyebrow="Admin settings"
-          title="Settings are restricted to admin and manager users."
-          description="Viewer and technician accounts can still search inventory, but the master-data controls live here for elevated users only."
+          title="Settings are reserved for real admin users."
+          description="Viewer and technician accounts can still search inventory, but the master-data and role-preview controls live here for admin users only."
           actions={
             <Link
               href="/inventory"
@@ -230,8 +230,7 @@ export function SettingsPage() {
         />
         <Card className="border-amber-400/20 bg-amber-400/10">
           <CardContent className="p-4 text-sm text-amber-100">
-            Your current role can view inventory data, but model, location, and workspace settings are reserved
-            for admin and manager users.
+            Your current preview role cannot edit these settings, but your real admin role can still open this page.
           </CardContent>
         </Card>
       </div>

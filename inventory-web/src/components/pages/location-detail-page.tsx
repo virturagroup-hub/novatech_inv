@@ -87,16 +87,18 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Locations
             </Link>
-            <Link
-              href={buildBinPrintHref({ binId: bin.id })}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "default" }),
-                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print bin label
-            </Link>
+            {permissions.canPrintLabels && (
+              <Link
+                href={buildBinPrintHref({ binId: bin.id })}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "default" }),
+                  "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print bin label
+              </Link>
+            )}
           </>
         }
       />
@@ -201,16 +203,18 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
                   Manage locations
                 </Link>
               )}
-              <Link
-                href={buildBinPrintHref({ binId: bin.id })}
-                className={cn(
-                  buttonVariants({ variant: "default", size: "default" }),
-                  "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
-                )}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print bin label
-              </Link>
+              {permissions.canPrintLabels && (
+                <Link
+                  href={buildBinPrintHref({ binId: bin.id })}
+                  className={cn(
+                    buttonVariants({ variant: "default", size: "default" }),
+                    "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                  )}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print bin label
+                </Link>
+              )}
             </div>
           </CardContent>
         </Card>

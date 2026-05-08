@@ -60,7 +60,11 @@ The Phase 1 implementation now includes:
 - The login flow now blocks missing-profile and inactive accounts with clear user-facing messages.
 - Admins can preview viewer, technician, or manager permissions from Settings without mutating their real role.
 - A persistent banner appears during role preview so it is clear that the UI is in preview mode only.
+- The Users screen is now list-first, with dedicated create/edit routes and explicit reset/deactivate/delete actions in the admin flow.
+- Locations and Models are now list-first, with dedicated create/edit routes and archive-first behavior when records are linked.
+- The role matrix now matches the requested admin/manager/technician/viewer split, with technician/viewer access tightened on reports, labels, and settings.
 - QR label printing now uses clean scan labels instead of report-style cards, with larger QR codes and absolute URLs that land on the part or bin record.
+- Broad print-label buttons were removed from unrelated pages so Reports & Exports remains the main label workflow.
 - Scanned routes preserve login return paths through a sanitized internal `next` parameter.
 - The edit part experience was widened and broken into clear sections.
 - The compatible model picker and location picker were made easier to use on desktop and mobile.

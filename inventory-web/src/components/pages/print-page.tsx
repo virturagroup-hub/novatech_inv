@@ -334,7 +334,7 @@ function PartLabelCard({
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={116}
+          size={128}
           className="rounded-xl bg-white p-1"
         />
       </div>
@@ -361,7 +361,7 @@ function BinLabelCard({
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={116}
+          size={128}
           className="rounded-xl bg-white p-1"
         />
       </div>

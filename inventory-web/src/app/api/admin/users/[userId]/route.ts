@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { UserRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getActiveAdminCount } from "@/lib/supabase/admin-user-safety";
 import { getServerAuthContext } from "@/lib/supabase/session";
 
 type UpdateUserRequest = {
@@ -64,8 +65,28 @@ export async function PATCH(
     return NextResponse.json({ error: "That user profile could not be found." }, { status: 404 });
   }
 
+  if (userId === context.userId && (role !== existingProfile.role || active !== existingProfile.active)) {
+    return NextResponse.json(
+      { error: "You cannot remove your own admin access from this screen." },
+      { status: 403 },
+    );
+  }
+
+  const activeAdminCount = await getActiveAdminCount(admin, userId);
+  const targetWillBeActiveAdmin = role === "admin" && active;
+
+  if (activeAdminCount + (targetWillBeActiveAdmin ? 1 : 0) < 1) {
+    return NextResponse.json(
+      { error: "At least one active admin account must remain." },
+      { status: 403 },
+    );
+  }
+
   const { error: authError } = await admin.auth.admin.updateUserById(userId, {
     ban_duration: active ? "none" : "876000h",
+    user_metadata: {
+      full_name: fullName,
+    },
   });
 
   if (authError) {
@@ -96,3 +117,71 @@ export async function PATCH(
 
   return NextResponse.json({ user: profileData });
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ userId: string }> },
+) {
+  const context = await getServerAuthContext();
+
+  if (!context || !context.profile.active) {
+    return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
+  }
+
+  if (context.profile.role !== "admin") {
+    return NextResponse.json({ error: "Only admins can delete users." }, { status: 403 });
+  }
+
+  const { userId } = await params;
+
+  if (userId === context.userId) {
+    return NextResponse.json(
+      { error: "You cannot delete your own account from this screen." },
+      { status: 403 },
+    );
+  }
+
+  const admin = createAdminClient();
+
+  const { data: existingProfile, error: fetchError } = await admin
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (fetchError || !existingProfile) {
+    return NextResponse.json({ error: "That user profile could not be found." }, { status: 404 });
+  }
+
+  if (existingProfile.role === "admin" && existingProfile.active) {
+    const activeAdminCount = await getActiveAdminCount(admin, userId);
+
+    if (activeAdminCount < 1) {
+      return NextResponse.json(
+        { error: "At least one active admin account must remain." },
+        { status: 403 },
+      );
+    }
+  }
+
+  const { error: profileError } = await admin.from("profiles").delete().eq("id", userId);
+
+  if (profileError) {
+    return NextResponse.json(
+      { error: profileError.message ?? "Unable to delete the profile." },
+      { status: 500 },
+    );
+  }
+
+  const { error: authError } = await admin.auth.admin.deleteUser(userId);
+
+  if (authError) {
+    return NextResponse.json(
+      { error: authError.message ?? "Unable to delete the auth account." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}
+

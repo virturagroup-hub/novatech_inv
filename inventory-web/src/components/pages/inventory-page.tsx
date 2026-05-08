@@ -8,7 +8,6 @@ import {
   Edit3,
   Filter,
   Plus,
-  Printer,
   Trash2,
   PackageSearch,
   ScanSearch,
@@ -31,7 +30,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { buildPartPrintHref } from "@/lib/labels";
 import { categories, manufacturers, type Bin, type InventorySortKey, type Part, type PartFilters } from "@/lib/inventory-types";
 import {
   filterParts,
@@ -118,15 +116,6 @@ export function InventoryPage() {
               )}
             >
               Quick lookup
-            </Link>
-            <Link
-              href="/tags"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "default" }),
-                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              Print labels
             </Link>
             {permissions.canManageParts && (
               <Link
@@ -414,16 +403,15 @@ export function InventoryPage() {
               </TableHeader>
               <TableBody>
                 {filteredParts.map((part) => (
-                  <InventoryTableRow
-                    key={part.id}
-                    part={part}
-                    bins={bins}
-                    canAdjustStock={permissions.canAdjustStock}
-                    canManageParts={permissions.canManageParts}
-                    canPrintLabels={permissions.canPrintLabels}
-                    onDelete={() => {
-                      if (
-                        window.confirm(
+                <InventoryTableRow
+                  key={part.id}
+                  part={part}
+                  bins={bins}
+                  canAdjustStock={permissions.canAdjustStock}
+                  canManageParts={permissions.canManageParts}
+                  onDelete={() => {
+                    if (
+                      window.confirm(
                           `Delete ${part.partNumber}? This will remove the part from the inventory.`,
                         )
                       ) {
@@ -440,16 +428,15 @@ export function InventoryPage() {
 
           <div className="space-y-3 p-3 lg:hidden">
             {filteredParts.map((part) => (
-              <InventoryMobileCard
-                key={part.id}
-                part={part}
-                bins={bins}
-                canAdjustStock={permissions.canAdjustStock}
-                canManageParts={permissions.canManageParts}
-                canPrintLabels={permissions.canPrintLabels}
-                onDelete={() => {
-                  if (
-                    window.confirm(
+                <InventoryMobileCard
+                  key={part.id}
+                  part={part}
+                  bins={bins}
+                  canAdjustStock={permissions.canAdjustStock}
+                  canManageParts={permissions.canManageParts}
+                  onDelete={() => {
+                    if (
+                      window.confirm(
                       `Delete ${part.partNumber}? This will remove the part from the inventory.`,
                     )
                   ) {
@@ -492,7 +479,6 @@ function InventoryTableRow({
   bins,
   canAdjustStock,
   canManageParts,
-  canPrintLabels,
   onDelete,
   onAdjust,
 }: {
@@ -500,7 +486,6 @@ function InventoryTableRow({
   bins: Bin[];
   canAdjustStock: boolean;
   canManageParts: boolean;
-  canPrintLabels: boolean;
   onDelete: () => void;
   onAdjust: (delta: number) => void;
 }) {
@@ -595,17 +580,6 @@ function InventoryTableRow({
               <Edit3 className="h-4 w-4" />
             </Link>
           )}
-          {canPrintLabels && (
-            <Link
-              href={buildPartPrintHref({ partIds: [part.id] })}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                "text-slate-300 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              <Printer className="h-4 w-4" />
-            </Link>
-          )}
           {canManageParts && (
             <Button
               variant="ghost"
@@ -627,7 +601,6 @@ function InventoryMobileCard({
   bins,
   canAdjustStock,
   canManageParts,
-  canPrintLabels,
   onDelete,
   onAdjust,
 }: {
@@ -635,7 +608,6 @@ function InventoryMobileCard({
   bins: Bin[];
   canAdjustStock: boolean;
   canManageParts: boolean;
-  canPrintLabels: boolean;
   onDelete: () => void;
   onAdjust: (delta: number) => void;
 }) {
@@ -719,18 +691,6 @@ function InventoryMobileCard({
             >
               <Edit3 className="mr-2 h-4 w-4" />
               Edit
-            </Link>
-          )}
-          {canPrintLabels && (
-            <Link
-              href={buildPartPrintHref({ partIds: [part.id] })}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "default" }),
-                "h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print
             </Link>
           )}
           {canManageParts && (

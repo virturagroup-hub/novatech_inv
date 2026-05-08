@@ -1,5 +1,5 @@
 import { TagsPage } from "@/components/pages/tags-page";
-import { requireAppSession } from "@/lib/supabase/route-guards";
+import { requirePrintLabelsSession } from "@/lib/supabase/route-guards";
 
 export default async function Page({
   searchParams,
@@ -15,6 +15,6 @@ export default async function Page({
   }>;
 }>) {
   const resolvedSearchParams = await searchParams;
-  await requireAppSession({ nextPath: "/tags" });
+  await requirePrintLabelsSession({ nextPath: "/tags" });
   return <TagsPage searchParams={resolvedSearchParams} />;
 }
