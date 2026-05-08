@@ -328,7 +328,7 @@ function UserEditor({
 export function AdminUsersPage({ users }: AdminUsersPageProps) {
   const router = useRouter();
   const { permissions, hydrated } = useAuth();
-  const canViewUsers = permissions.canViewUsers;
+  const canViewUsers = permissions.canViewUsers || permissions.canManageUsers;
   const canManageUsers = permissions.canManageUsers;
   const [query, setQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | "new">("new");

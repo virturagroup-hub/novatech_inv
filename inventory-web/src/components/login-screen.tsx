@@ -2,28 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ShieldCheck, UserCircle2, Wrench, MonitorSmartphone } from "lucide-react";
+import {
+  Loader2,
+  MonitorSmartphone,
+  ShieldCheck,
+  UserCircle2,
+  Wrench,
+} from "lucide-react";
 
+import { useAuth } from "@/components/auth-provider";
 import { BrandLockup } from "@/components/brand-lockup";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/components/auth-provider";
+import { getAuthBlockMessage, type AuthBlockReason } from "@/lib/auth";
 import { APP_DESCRIPTION, APP_NAME, APP_SUBTITLE, COMPANY_NAME } from "@/lib/brand";
 
 export function LoginScreen({
   nextPath = "/",
+  reason = null,
 }: Readonly<{
   nextPath?: string;
+  reason?: AuthBlockReason | null;
 }>) {
   const router = useRouter();
-  const { signIn, isAuthenticated, session, hydrated } = useAuth();
-  const [email, setEmail] = useState("tech@novatech.local");
+  const { signIn, isAuthenticated, session, hydrated, authIssue } = useAuth();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const blockingReason = reason ?? authIssue;
 
   useEffect(() => {
     if (!hydrated || !isAuthenticated || !session) return;
@@ -46,9 +57,7 @@ export function LoginScreen({
               {COMPANY_NAME} internal tool
             </Badge>
             <div className="space-y-3">
-              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                {APP_NAME}
-              </h1>
+              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{APP_NAME}</h1>
               <p className="max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
                 {APP_SUBTITLE}. {APP_DESCRIPTION}
               </p>
@@ -63,7 +72,9 @@ export function LoginScreen({
                 </div>
                 <div>
                   <p className="text-sm font-medium text-white">Built for the parts room</p>
-                  <p className="text-xs text-slate-400">Quick lookups, label printing, and stock adjustments.</p>
+                  <p className="text-xs text-slate-400">
+                    Quick lookups, label printing, and stock adjustments.
+                  </p>
                 </div>
               </div>
             </div>
@@ -87,13 +98,14 @@ export function LoginScreen({
               <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-slate-100">
                 <UserCircle2 className="h-5 w-5" />
               </div>
-            <div>
-              <CardTitle className="text-white">Enter the workspace</CardTitle>
-              <CardDescription className="text-slate-400">
-                Sign in with the email and temporary password issued by your admin.
-              </CardDescription>
+              <div>
+                <CardTitle className="text-white">Sign in with your email</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Use your work email and password. If your admin issued a temporary password, enter that
+                  password here and you will be prompted to change it after sign-in.
+                </CardDescription>
+              </div>
             </div>
-          </div>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
@@ -102,18 +114,20 @@ export function LoginScreen({
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                placeholder="jane@novatech.local"
+                placeholder="jane@novatech.com"
                 inputMode="email"
+                autoComplete="email"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-200">Temporary password</Label>
+              <Label className="text-slate-200">Password</Label>
               <Input
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                placeholder="Enter your temporary password"
+                placeholder="Enter your password"
                 type="password"
+                autoComplete="current-password"
               />
             </div>
 
@@ -122,7 +136,8 @@ export function LoginScreen({
                 <div>
                   <p className="text-sm font-semibold text-white">Admin-managed accounts only</p>
                   <p className="text-xs text-slate-400">
-                    Public signups are off. If this is your first login, you will be prompted to change your password.
+                    Public signups are off. New accounts are created by an admin and may require a first-login
+                    password change.
                   </p>
                 </div>
                 <Badge className="border-emerald-400/30 bg-emerald-400/15 text-emerald-100">
@@ -135,6 +150,12 @@ export function LoginScreen({
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">Manage inventory</div>
               </div>
             </div>
+
+            {blockingReason && (
+              <div className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm leading-6 text-amber-50">
+                {getAuthBlockMessage(blockingReason)}
+              </div>
+            )}
 
             {errorMessage && (
               <div className="rounded-3xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-100">
@@ -160,7 +181,7 @@ export function LoginScreen({
                   setErrorMessage(
                     error instanceof Error
                       ? error.message
-                      : "We could not sign you in. Check the email and temporary password.",
+                      : "We could not sign you in. Check the email and password.",
                   );
                 } finally {
                   setBusy(false);
@@ -176,7 +197,8 @@ export function LoginScreen({
             </Button>
 
             <p className="text-xs leading-5 text-slate-400">
-              This app is for internal use only. If your password does not work, ask an admin to reset your temporary password.
+              This app is for internal use only. If your password does not work, ask an admin to reset your
+              account.
             </p>
           </CardContent>
         </Card>

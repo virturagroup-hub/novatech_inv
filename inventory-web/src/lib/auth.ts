@@ -1,11 +1,12 @@
 export type UserRole = "admin" | "manager" | "technician" | "viewer";
 
+export type AuthBlockReason = "missing-profile" | "inactive";
+
 export interface AuthSession {
   id: string;
   displayName: string;
   email: string;
   role: UserRole;
-  provider: "local-demo" | "supabase";
   lastSignedInAt: string;
   active: boolean;
   mustChangePassword: boolean;
@@ -21,6 +22,13 @@ export interface PermissionSet {
   canViewActivity: boolean;
   canViewUsers: boolean;
   canManageUsers: boolean;
+  canPreviewRoles: boolean;
+}
+
+export interface RoleContext {
+  realRole: UserRole;
+  effectiveRole: UserRole;
+  isRolePreviewActive: boolean;
 }
 
 export const roleOptions: Array<{
@@ -31,17 +39,17 @@ export const roleOptions: Array<{
   {
     role: "admin",
     label: "Admin",
-    description: "Full control over inventory, models, locations, reports, and settings.",
+    description: "Full control over inventory, users, settings, and reports.",
   },
   {
     role: "manager",
     label: "Manager",
-    description: "Can manage master data, stock, labels, and reports for the team.",
+    description: "Can manage master data, labels, stock, and reports for the team.",
   },
   {
     role: "technician",
     label: "Technician",
-    description: "Read inventory, adjust stock, and print labels while on the floor.",
+    description: "Can look up parts, adjust stock, and print labels on the floor.",
   },
   {
     role: "viewer",
@@ -49,6 +57,10 @@ export const roleOptions: Array<{
     description: "Read-only access for supervisors and occasional lookup users.",
   },
 ];
+
+export function isUserRole(value: unknown): value is UserRole {
+  return value === "admin" || value === "manager" || value === "technician" || value === "viewer";
+}
 
 export function getRoleLabel(role: UserRole) {
   return roleOptions.find((option) => option.role === role)?.label ?? role;
@@ -58,7 +70,7 @@ export function getRoleDescription(role: UserRole) {
   return roleOptions.find((option) => option.role === role)?.description ?? "";
 }
 
-export function getPermissions(role: UserRole): PermissionSet {
+function getBasePermissions(role: UserRole) {
   switch (role) {
     case "admin":
       return {
@@ -70,7 +82,6 @@ export function getPermissions(role: UserRole): PermissionSet {
         canExportReports: true,
         canViewActivity: true,
         canViewUsers: true,
-        canManageUsers: true,
       };
     case "manager":
       return {
@@ -82,7 +93,6 @@ export function getPermissions(role: UserRole): PermissionSet {
         canExportReports: true,
         canViewActivity: true,
         canViewUsers: true,
-        canManageUsers: false,
       };
     case "technician":
       return {
@@ -94,7 +104,6 @@ export function getPermissions(role: UserRole): PermissionSet {
         canExportReports: false,
         canViewActivity: true,
         canViewUsers: false,
-        canManageUsers: false,
       };
     case "viewer":
     default:
@@ -107,63 +116,77 @@ export function getPermissions(role: UserRole): PermissionSet {
         canExportReports: false,
         canViewActivity: false,
         canViewUsers: false,
-        canManageUsers: false,
       };
   }
 }
 
+export function resolvePermissions(context: RoleContext): PermissionSet {
+  const base = getBasePermissions(context.effectiveRole);
+
+  return {
+    ...base,
+    canManageUsers: context.realRole === "admin",
+    canPreviewRoles: context.realRole === "admin",
+  };
+}
+
+export function getPermissions(role: UserRole): PermissionSet {
+  return resolvePermissions({
+    realRole: role,
+    effectiveRole: role,
+    isRolePreviewActive: false,
+  });
+}
+
 export function canManageParts(role: UserRole) {
-  return getPermissions(role).canManageParts;
+  return getBasePermissions(role).canManageParts;
 }
 
 export function canManageModels(role: UserRole) {
-  return getPermissions(role).canManageModels;
+  return getBasePermissions(role).canManageModels;
 }
 
 export function canManageLocations(role: UserRole) {
-  return getPermissions(role).canManageLocations;
+  return getBasePermissions(role).canManageLocations;
 }
 
 export function canAdjustStock(role: UserRole) {
-  return getPermissions(role).canAdjustStock;
+  return getBasePermissions(role).canAdjustStock;
 }
 
 export function canPrintLabels(role: UserRole) {
-  return getPermissions(role).canPrintLabels;
+  return getBasePermissions(role).canPrintLabels;
 }
 
 export function canExportReports(role: UserRole) {
-  return getPermissions(role).canExportReports;
+  return getBasePermissions(role).canExportReports;
 }
 
 export function canViewActivity(role: UserRole) {
-  return getPermissions(role).canViewActivity;
+  return getBasePermissions(role).canViewActivity;
 }
 
 export function canViewUsers(role: UserRole) {
-  return getPermissions(role).canViewUsers;
+  return getBasePermissions(role).canViewUsers;
 }
 
 export function canManageUsers(role: UserRole) {
-  return getPermissions(role).canManageUsers;
+  return role === "admin";
+}
+
+export function canPreviewRoles(role: UserRole) {
+  return role === "admin";
 }
 
 export function isElevatedRole(role: UserRole) {
   return role === "admin" || role === "manager";
 }
 
-export function createSession(
-  profile: Omit<AuthSession, "id" | "lastSignedInAt"> & {
-    id?: string;
-    provider?: AuthSession["provider"];
-  },
-) {
-  const { id, provider: sessionProvider = "local-demo", ...sessionProfile } = profile;
-
-  return {
-    id: id ?? crypto.randomUUID(),
-    lastSignedInAt: new Date().toISOString(),
-    provider: sessionProvider,
-    ...sessionProfile,
-  } satisfies AuthSession;
+export function getAuthBlockMessage(reason: AuthBlockReason) {
+  switch (reason) {
+    case "missing-profile":
+      return "Your account exists, but no app profile was found. Contact an admin.";
+    case "inactive":
+      return "This account is inactive. Contact an admin.";
+  }
 }

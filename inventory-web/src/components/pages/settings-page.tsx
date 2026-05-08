@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { getRoleLabel } from "@/lib/auth";
 import { getBinSummary, countCompatiblePartsForModel } from "@/lib/inventory-utils";
 import type { Bin, BinDraft, DeviceModel, ModelDraft } from "@/lib/inventory-types";
 
@@ -82,7 +83,15 @@ function modelDraftFromModel(model?: DeviceModel | null): ModelDraft {
 }
 
 export function SettingsPage() {
-  const { permissions } = useAuth();
+  const {
+    permissions,
+    realRole,
+    effectiveRole,
+    previewRole,
+    isRolePreviewActive,
+    setRolePreview,
+    clearRolePreview,
+  } = useAuth();
   const {
     bins,
     models,
@@ -108,6 +117,7 @@ export function SettingsPage() {
     permissions.canManageModels &&
     permissions.canManageLocations &&
     permissions.canExportReports;
+  const canAccessWorkspaceSettings = canManageWorkspace || permissions.canPreviewRoles;
 
   useEffect(() => {
     setLowStockThreshold(String(settings.lowStockThreshold));
@@ -199,7 +209,7 @@ export function SettingsPage() {
     [models],
   );
 
-  if (!canManageWorkspace) {
+  if (!canAccessWorkspaceSettings) {
     return (
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
         <PageHero
@@ -257,6 +267,83 @@ export function SettingsPage() {
           </>
         }
       />
+
+      {permissions.canPreviewRoles && (
+        <Card className="border-amber-400/20 bg-amber-400/10">
+          <CardHeader className="space-y-2">
+            <CardTitle className="text-white">View as Role</CardTitle>
+            <CardDescription className="text-amber-100/80">
+              Preview the interface as viewer, technician, or manager. This only changes the UI for your current
+              browser session and never changes your real Supabase role.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Real role</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {getRoleLabel(realRole ?? "viewer")}
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Effective role</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {getRoleLabel(effectiveRole)}
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Preview</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {isRolePreviewActive ? "Active" : "Off"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-200">Preview role</Label>
+                <Select
+                  value={previewRole ?? "admin"}
+                  onValueChange={(value) => {
+                    if (value === "admin") {
+                      clearRolePreview();
+                      return;
+                    }
+
+                    setRolePreview(value as "viewer" | "technician" | "manager");
+                  }}
+                >
+                  <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin (current)</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="technician">Technician</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4 text-sm leading-6 text-slate-300">
+              <p className="font-semibold text-white">Safe preview</p>
+              <p className="mt-2">
+                The preview only changes what the app shows in this browser. Server actions, admin routes, and user
+                management still use your real Supabase role.
+              </p>
+              {isRolePreviewActive && (
+                <Button
+                  className="mt-4 h-11 bg-amber-400 text-slate-950 hover:bg-amber-300"
+                  onClick={clearRolePreview}
+                >
+                  Return to Admin
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard

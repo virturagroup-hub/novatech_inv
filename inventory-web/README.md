@@ -7,7 +7,7 @@ Green NVentory is Novatech’s internal inventory web app for reusable and green
 The current application is a hybrid Phase 1/Phase 2 setup:
 
 - inventory and workflow state still use typed local mock data
-- authentication and user management are wired for Supabase Auth
+- authentication and user management use real Supabase Auth
 - the app is ready for Supabase/Postgres when you want to move the inventory data off the browser store
 
 ## Tech Stack
@@ -31,6 +31,7 @@ The current application is a hybrid Phase 1/Phase 2 setup:
 - Activity log placeholder
 - Mobile-friendly lookup and edit flows
 - Admin-only user management for Supabase Auth
+- Admin-only role preview for testing permissions
 
 ## Local Setup
 
@@ -62,6 +63,16 @@ npm run build
 
 Authentication uses Supabase Email Auth. Public signups are disabled, so users do not self-register.
 
+### Login Behavior
+
+- The login page asks for email and password.
+- The app signs in with Supabase Auth `signInWithPassword`.
+- Temporary passwords are still supported, but only as the password value for admin-created users.
+- The email address is always the username.
+- If `profiles.must_change_password` is true, users are redirected to `/change-password`.
+- If `profiles.active` is false, the account is blocked until an admin reactivates it.
+- If a user has an auth account but no matching profile row, the app blocks access and tells them to contact an admin.
+
 ### Environment Variables
 
 Create a local `.env.local` with:
@@ -69,14 +80,15 @@ Create a local `.env.local` with:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as a legacy fallback by the helper layer, but `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the preferred public client key.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the preferred public client key.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as a legacy fallback by the helper layer.
+- Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
 
-Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
-
-If you deploy to Vercel, add the public Supabase vars to both Preview and Production environments. If either one is missing, middleware will fall back to a safe no-op instead of refreshing sessions.
+If you deploy to Vercel, add the public Supabase vars to both **Preview** and **Production** environments. If either one is missing, middleware falls back to a safe no-op instead of refreshing sessions.
 
 ### Required Supabase Settings
 
@@ -87,7 +99,7 @@ In your Supabase project:
 3. Keep password sign-in enabled.
 4. Run [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql).
 
-The SQL file is rerunnable. If an older `profiles.is_active` column exists, the script will migrate it to `profiles.active`.
+The SQL file is rerunnable. If an older `profiles.is_active` column exists, the script migrates it to `profiles.active`.
 
 That schema creates the `profiles` table and the supporting tables used by the app:
 
@@ -116,9 +128,11 @@ set
   role = 'admin',
   full_name = 'Your Name',
   active = true,
-  must_change_password = true
+  must_change_password = false
 where id = '<auth-user-uuid>';
 ```
+
+Set `must_change_password = true` instead if you want that first admin to go through the password-change flow the first time they sign in.
 
 The app also has a profile trigger, so newly created auth users should get a matching profile row automatically. If you need to repair a missing profile, insert or update the row manually.
 
@@ -156,6 +170,33 @@ That page:
 
 Users can log out from the password change screen if they need to stop and come back later.
 
+## View As Role
+
+Admins can use **View as Role** from the Settings page to preview the interface as viewer, technician, or manager.
+
+Important notes:
+
+- Only a real admin can use the preview.
+- The preview only changes the browser UI and local permission simulation.
+- It does not change `public.profiles.role`.
+- Server routes and server actions still use the real Supabase profile role.
+- A banner appears whenever role preview is active.
+- Use `Return to Admin` to clear the preview and restore the real admin UI.
+
+This is role preview, not user impersonation.
+
+## Local Testing
+
+To verify the auth flow locally:
+
+1. Start the dev server with `npm run dev`.
+2. Open `http://localhost:3000/login`.
+3. Sign in with your real Supabase email and password.
+4. If your profile is active and `must_change_password` is false, you should land on the dashboard.
+5. If `must_change_password` is true, you should be sent to `/change-password`.
+6. Open Settings and use **View as Role** to preview technician, viewer, or manager behavior.
+7. Use **Return to Admin** to restore the real admin UI.
+
 ## Development Notes
 
 - Keep role logic centralized in `src/lib/auth.ts`.
@@ -170,7 +211,7 @@ This app is ready for Vercel deployment.
 
 1. Push the repo to GitHub.
 2. Import the project in Vercel.
-3. Set the environment variables above.
+3. Set the environment variables above for both Preview and Production.
 4. Deploy with the default build command:
 
 ```bash

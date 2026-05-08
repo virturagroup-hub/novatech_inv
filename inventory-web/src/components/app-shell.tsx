@@ -120,11 +120,22 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const { summary, resetDemoData } = useInventory();
-  const { session, hydrated, isAuthenticated, permissions, signOut } = useAuth();
+  const {
+    session,
+    hydrated,
+    isAuthenticated,
+    permissions,
+    realRole,
+    effectiveRole,
+    isRolePreviewActive,
+    authIssue,
+    clearRolePreview,
+    signOut,
+  } = useAuth();
   const isPublicRoute =
     pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/print");
   const isLogoutRoute = pathname === "/logout";
-  const visibleSecondaryNav = permissions.canViewUsers
+  const visibleSecondaryNav = permissions.canViewUsers || permissions.canManageUsers
     ? secondaryNav
     : secondaryNav.filter((item) => item.href !== "/admin/users");
 
@@ -137,12 +148,11 @@ export function AppShell({
     }
 
     if (!isAuthenticated && !isPublicRoute) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-      return;
-    }
-
-    if (session?.active === false) {
-      void signOut().finally(() => router.replace("/login?reason=inactive"));
+      router.replace(
+        authIssue
+          ? `/login?reason=${encodeURIComponent(authIssue)}`
+          : `/login?next=${encodeURIComponent(pathname)}`,
+      );
       return;
     }
 
@@ -156,18 +166,23 @@ export function AppShell({
       return;
     }
 
-    if (pathname.startsWith("/admin/users") && !permissions.canViewUsers) {
+    if (
+      pathname.startsWith("/admin/users") &&
+      !permissions.canViewUsers &&
+      !permissions.canManageUsers
+    ) {
       router.replace("/");
     }
   }, [
+    authIssue,
     hydrated,
     isAuthenticated,
     isLogoutRoute,
     isPublicRoute,
     pathname,
+    permissions.canManageUsers,
     permissions.canViewUsers,
     router,
-    session?.active,
     session?.mustChangePassword,
     signOut,
   ]);
@@ -226,8 +241,13 @@ export function AppShell({
             <p className="mt-1 text-xs text-slate-400">{session.email}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Badge className="border-white/10 bg-white/5 text-slate-200">
-                {getRoleLabel(session.role)}
+                {getRoleLabel(realRole ?? session.role)}
               </Badge>
+              {isRolePreviewActive && (
+                <Badge className="border-amber-400/30 bg-amber-400/15 text-amber-100">
+                  Preview: {getRoleLabel(effectiveRole)}
+                </Badge>
+              )}
               <Badge className="border-emerald-400/30 bg-emerald-400/15 text-emerald-100">
                 {permissions.canManageParts ? "Elevated" : "Restricted"}
               </Badge>
@@ -436,14 +456,41 @@ export function AppShell({
 
               <div className="flex items-center gap-2">
                 <Badge className="border-white/10 bg-white/5 text-slate-200">
-                  {getRoleLabel(session.role)}
+                  {getRoleLabel(realRole ?? session.role)}
                 </Badge>
+                {isRolePreviewActive && (
+                  <Badge className="border-amber-400/30 bg-amber-400/15 text-amber-100">
+                    {getRoleLabel(effectiveRole)}
+                  </Badge>
+                )}
                 <Badge className="border-emerald-400/30 bg-emerald-400/15 text-emerald-100">
                   {summary.lowStockCount} low
                 </Badge>
               </div>
             </div>
           </header>
+
+          {isRolePreviewActive && (
+            <div className="mx-4 mt-4 rounded-3xl border border-amber-400/30 bg-amber-400/10 px-4 py-4 text-amber-50 shadow-lg shadow-amber-950/10 lg:mx-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">
+                    Viewing as {getRoleLabel(effectiveRole)}
+                  </p>
+                  <p className="text-xs leading-5 text-amber-100/90">
+                    Your real account is {getRoleLabel(realRole ?? session.role)}. This preview only changes the interface, not your server-side permissions.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="h-10 border-amber-200/30 bg-white/10 text-amber-50 hover:bg-white/20 hover:text-white"
+                  onClick={clearRolePreview}
+                >
+                  Return to Admin
+                </Button>
+              </div>
+            </div>
+          )}
 
           <main className="min-w-0 flex-1 pb-24 lg:pb-8">{children}</main>
 

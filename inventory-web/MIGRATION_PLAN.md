@@ -42,6 +42,8 @@ The Phase 1 implementation now includes:
 - settings and admin-style views
 - Supabase Auth login, logout, and first-login password change flow
 - admin user management at `/admin/users`
+- real Supabase email/password sign-in for Novatech staff
+- admin-only View as Role preview for UI testing without changing real roles
 
 ## What Changed In This Pass
 
@@ -54,6 +56,10 @@ The Phase 1 implementation now includes:
 - New users are created with `must_change_password = true` and are redirected to `/change-password` on first login.
 - The change-password flow updates both Supabase Auth and the matching profile row.
 - Manager access to users is view-only; admin-only actions stay behind server checks.
+- Login now uses real Supabase email/password auth instead of the old demo/temporary login defaults.
+- The login flow now blocks missing-profile and inactive accounts with clear user-facing messages.
+- Admins can preview viewer, technician, or manager permissions from Settings without mutating their real role.
+- A persistent banner appears during role preview so it is clear that the UI is in preview mode only.
 - The edit part experience was widened and broken into clear sections.
 - The compatible model picker and location picker were made easier to use on desktop and mobile.
 - The reports page now uses simple action cards.
@@ -73,6 +79,7 @@ The Phase 1 implementation now includes:
 - Wire server-side data fetching and mutation into the new Supabase helpers.
 - Expand validation and import processing on the server.
 - Add barcode scanning if the crew wants faster on-floor lookup later.
+- Consider moving the role preview banner into a dedicated reusable shell component if the UI needs more advanced preview states later.
 
 ## Guiding Principle
 

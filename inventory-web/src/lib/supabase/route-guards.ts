@@ -1,17 +1,21 @@
 import { redirect } from "next/navigation";
 
-import type { UserRole } from "@/lib/auth";
+import type { AuthBlockReason, UserRole } from "@/lib/auth";
 
-import { getServerAuthContext } from "./session";
+import { getServerAuthResolution } from "./session";
+
+function loginRedirectPath(reason: AuthBlockReason | null) {
+  return reason ? `/login?reason=${reason}` : "/login";
+}
 
 export async function requireAuthenticatedSession() {
-  const context = await getServerAuthContext();
+  const resolution = await getServerAuthResolution();
 
-  if (!context || !context.profile.active) {
-    redirect("/login");
+  if (resolution.state !== "authenticated") {
+    redirect(loginRedirectPath(resolution.reason));
   }
 
-  return context;
+  return resolution.context;
 }
 
 export async function requireAppSession() {
@@ -25,13 +29,17 @@ export async function requireAppSession() {
 }
 
 export async function requirePasswordChangeSession() {
-  const context = await requireAuthenticatedSession();
+  const resolution = await getServerAuthResolution();
 
-  if (!context.profile.must_change_password) {
+  if (resolution.state !== "authenticated") {
+    redirect(loginRedirectPath(resolution.reason));
+  }
+
+  if (!resolution.context.profile.must_change_password) {
     redirect("/");
   }
 
-  return context;
+  return resolution.context;
 }
 
 export async function requireUserManagementSession() {
@@ -54,16 +62,14 @@ export async function requireAdminSession() {
   return context;
 }
 
-export async function redirectAuthenticatedUser(options?: {
-  nextPath?: string;
-}) {
-  const context = await getServerAuthContext();
+export async function redirectAuthenticatedUser(options?: { nextPath?: string }) {
+  const resolution = await getServerAuthResolution();
 
-  if (!context || !context.profile.active) {
+  if (resolution.state !== "authenticated") {
     return;
   }
 
-  if (context.profile.must_change_password) {
+  if (resolution.context.profile.must_change_password) {
     redirect("/change-password");
   }
 

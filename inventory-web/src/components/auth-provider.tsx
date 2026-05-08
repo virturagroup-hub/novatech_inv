@@ -1,12 +1,23 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import {
+  getAuthBlockMessage,
+  resolvePermissions,
+  type AuthBlockReason,
   type AuthSession,
-  getPermissions,
   type PermissionSet,
+  isUserRole,
+  type UserRole,
 } from "@/lib/auth";
 import { profileDisplayName } from "@/lib/profile-display";
 import type { ProfileRow } from "@/lib/supabase/types";
@@ -21,12 +32,46 @@ type AuthContextValue = {
   hydrated: boolean;
   permissions: PermissionSet;
   isAuthenticated: boolean;
+  realRole: UserRole | null;
+  effectiveRole: UserRole;
+  previewRole: UserRole | null;
+  isRolePreviewActive: boolean;
+  authIssue: AuthBlockReason | null;
   signIn: (input: SignInInput) => Promise<AuthSession>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<AuthSession | null>;
+  setRolePreview: (role: UserRole | null) => void;
+  clearRolePreview: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const rolePreviewStorageKey = "green-nventory-role-preview";
+
+function isStoredPreviewRole(value: string | null): value is UserRole {
+  return isUserRole(value) && value !== "admin";
+}
+
+function readRolePreviewFromStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = window.localStorage.getItem(rolePreviewStorageKey);
+  return isStoredPreviewRole(stored) ? stored : null;
+}
+
+function writeRolePreviewToStorage(role: UserRole | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (role) {
+    window.localStorage.setItem(rolePreviewStorageKey, role);
+    return;
+  }
+
+  window.localStorage.removeItem(rolePreviewStorageKey);
+}
 
 function toAppSession(
   user: { id: string; email?: string | null; created_at?: string | null },
@@ -37,22 +82,45 @@ function toAppSession(
     displayName: profileDisplayName(profile),
     email: profile.email,
     role: profile.role,
-    provider: "supabase",
     lastSignedInAt: user.created_at ?? new Date().toISOString(),
     active: profile.active,
     mustChangePassword: profile.must_change_password,
   };
 }
 
+type SessionLoadResult =
+  | {
+      session: AuthSession;
+      issue: null;
+    }
+  | {
+      session: null;
+      issue: AuthBlockReason | null;
+    };
+
 async function loadSupabaseSession(
   supabase: ReturnType<typeof createClient>,
   setSession: (session: AuthSession | null) => void,
-) {
-  const { data: userResponse, error } = await supabase.auth.getUser();
+  setAuthIssue: (issue: AuthBlockReason | null) => void,
+  currentUser?: { id: string; email?: string | null; created_at?: string | null },
+): Promise<SessionLoadResult> {
+  let userResponse: { user: { id: string; email?: string | null; created_at?: string | null } | null } = {
+    user: currentUser ?? null,
+  };
+  let error: Error | null = null;
+
+  if (!currentUser) {
+    const response = await supabase.auth.getUser();
+    userResponse = response.data;
+    error = response.error;
+  }
 
   if (error || !userResponse.user) {
     setSession(null);
-    return null;
+    return {
+      session: null,
+      issue: null,
+    };
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -62,24 +130,38 @@ async function loadSupabaseSession(
     .maybeSingle();
 
   if (profileError || !profile) {
-    await supabase.auth.signOut();
+    setAuthIssue("missing-profile");
     setSession(null);
-    return null;
+
+    await supabase.auth.signOut().catch(() => undefined);
+
+    return {
+      session: null,
+      issue: "missing-profile",
+    };
   }
 
   if (!profile.active) {
-    await supabase.auth.signOut();
+    setAuthIssue("inactive");
     setSession(null);
-    return null;
+
+    await supabase.auth.signOut().catch(() => undefined);
+
+    return {
+      session: null,
+      issue: "inactive",
+    };
   }
 
-  const nextSession = toAppSession(
-    userResponse.user,
-    profile,
-  );
+  const nextSession = toAppSession(userResponse.user, profile);
 
+  setAuthIssue(null);
   setSession(nextSession);
-  return nextSession;
+
+  return {
+    session: nextSession,
+    issue: null,
+  };
 }
 
 export function AuthProvider({
@@ -89,16 +171,34 @@ export function AuthProvider({
 }>) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [storedPreviewRole, setStoredPreviewRole] = useState<UserRole | null>(
+    () => readRolePreviewFromStorage(),
+  );
+  const [authIssue, setAuthIssue] = useState<AuthBlockReason | null>(null);
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    let mounted = true;
+    if (!hydrated) {
+      return;
+    }
 
-    void loadSupabaseSession(supabase, (nextSession) => {
+    writeRolePreviewToStorage(storedPreviewRole);
+  }, [hydrated, storedPreviewRole]);
+
+  useEffect(() => {
+    let mounted = true;
+    const safeSetSession = (nextSession: AuthSession | null) => {
       if (mounted) {
         setSession(nextSession);
       }
-    }).finally(() => {
+    };
+    const safeSetAuthIssue = (issue: AuthBlockReason | null) => {
+      if (mounted) {
+        setAuthIssue(issue);
+      }
+    };
+
+    void loadSupabaseSession(supabase, safeSetSession, safeSetAuthIssue).finally(() => {
       if (mounted) {
         setHydrated(true);
       }
@@ -108,7 +208,7 @@ export function AuthProvider({
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async () => {
       if (!mounted) return;
-      await loadSupabaseSession(supabase, setSession);
+      await loadSupabaseSession(supabase, safeSetSession, safeSetAuthIssue);
     });
 
     return () => {
@@ -117,18 +217,64 @@ export function AuthProvider({
     };
   }, [supabase]);
 
+  const realRole = session?.role ?? null;
+  const effectiveRole =
+    session && session.role === "admin" && storedPreviewRole
+      ? storedPreviewRole
+      : session?.role ?? "viewer";
+  const isRolePreviewActive =
+    Boolean(
+      session && session.role === "admin" && storedPreviewRole && storedPreviewRole !== session.role,
+    );
+
+  const permissions = useMemo(
+    () =>
+      resolvePermissions({
+        realRole: session?.role ?? "viewer",
+        effectiveRole,
+        isRolePreviewActive,
+      }),
+    [effectiveRole, isRolePreviewActive, session?.role],
+  );
+
   const refreshSession = useCallback(async () => {
-    return loadSupabaseSession(supabase, setSession);
+    const result = await loadSupabaseSession(supabase, setSession, setAuthIssue);
+    return result.session;
   }, [supabase]);
+
+  const clearRolePreview = useCallback(() => {
+    setStoredPreviewRole(null);
+  }, []);
+
+  const setRolePreview = useCallback(
+    (role: UserRole | null) => {
+      if (!session || session.role !== "admin") {
+        setStoredPreviewRole(null);
+        return;
+      }
+
+      if (!role || role === "admin") {
+        setStoredPreviewRole(null);
+        return;
+      }
+
+      setStoredPreviewRole(role);
+    },
+    [session],
+  );
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setAuthIssue(null);
+    setStoredPreviewRole(null);
   }, [supabase]);
 
   const signIn = useCallback(
     async ({ email, password }: SignInInput) => {
-      const { error } = await supabase.auth.signInWithPassword({
+      setAuthIssue(null);
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -137,18 +283,27 @@ export function AuthProvider({
         throw error;
       }
 
-      const nextSession = await loadSupabaseSession(supabase, setSession);
+      const result = await loadSupabaseSession(
+        supabase,
+        setSession,
+        setAuthIssue,
+        data.user
+          ? {
+              id: data.user.id,
+              email: data.user.email,
+              created_at: data.user.created_at,
+            }
+          : undefined,
+      );
 
-      if (!nextSession) {
-        throw new Error("Unable to load your account profile. Please contact an admin.");
+      if (!result.session) {
+        throw new Error(getAuthBlockMessage(result.issue ?? "missing-profile"));
       }
 
-      return nextSession;
+      return result.session;
     },
     [supabase],
   );
-
-  const permissions = session ? getPermissions(session.role) : getPermissions("viewer");
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -156,11 +311,32 @@ export function AuthProvider({
       hydrated,
       permissions,
       isAuthenticated: Boolean(session),
+      realRole,
+      effectiveRole,
+      previewRole: storedPreviewRole,
+      isRolePreviewActive,
+      authIssue,
       signIn,
       signOut,
       refreshSession,
+      setRolePreview,
+      clearRolePreview,
     }),
-    [hydrated, permissions, refreshSession, session, signIn, signOut],
+    [
+      authIssue,
+      clearRolePreview,
+      effectiveRole,
+      hydrated,
+      isRolePreviewActive,
+      permissions,
+      storedPreviewRole,
+      realRole,
+      refreshSession,
+      session,
+      setRolePreview,
+      signIn,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

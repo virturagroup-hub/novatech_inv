@@ -24,7 +24,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 
 ## Auth and User-Management Rules
 
-- Supabase Auth is the source of truth for login.
+- Supabase Auth is the source of truth for login and logout.
+- Login must use email/password sign-in, not demo credentials or browser-local auth.
 - Public signups stay disabled.
 - Admins create users from `/admin/users`.
 - User creation must stay server-side only.
@@ -34,7 +35,20 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Managers may view the roster if allowed, but they must not create admin users.
 - Technician and viewer users must not access `/admin/users`.
 - If `profiles.must_change_password` is true, the app must redirect to `/change-password`.
+- If `profiles.active` is false or a profile row is missing, block access and surface a clear login message.
 - The change-password flow must clear `must_change_password` after a successful password update.
+
+## Role Preview Rules
+
+- Admin-only role preview lives in Settings or another admin area.
+- Role preview is UI-only and must not change `public.profiles.role`.
+- Store the preview role in client state, localStorage, or another safe client-side mechanism.
+- Always derive `realRole` from `public.profiles.role`.
+- Use `effectiveRole` only for client-side permission simulation.
+- Server routes and server actions must verify the real role from Supabase/profile server-side.
+- `canManageUsers` and `canPreviewRoles` must require the real admin role, not a previewed role.
+- Show a persistent banner whenever role preview is active.
+- Provide an obvious `Return to Admin` action that clears the preview state.
 
 ## UI Rules
 
@@ -57,6 +71,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
   - `canViewActivity`
   - `canViewUsers`
   - `canManageUsers`
+  - `canPreviewRoles`
 - Admin and manager users are elevated.
 - Viewer users are read-only.
 - Technician users can view, look up, adjust stock if allowed, and print labels if allowed.
