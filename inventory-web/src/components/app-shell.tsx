@@ -14,6 +14,7 @@ import {
   Menu,
   PackageSearch,
   Printer,
+  Users,
   Settings2,
   ShieldCheck,
   LogOut,
@@ -47,6 +48,7 @@ const primaryNav = [
 ];
 
 const secondaryNav = [
+  { href: "/admin/users", label: "Users", icon: Users },
   { href: "/locations", label: "Locations", icon: MapPinned },
   { href: "/models", label: "Models", icon: Boxes },
   { href: "/import-export", label: "Reports / Exports", icon: ArrowUpRight },
@@ -119,22 +121,56 @@ export function AppShell({
   const router = useRouter();
   const { summary, resetDemoData } = useInventory();
   const { session, hydrated, isAuthenticated, permissions, signOut } = useAuth();
-  const isPublicRoute = pathname === "/login" || pathname.startsWith("/print");
+  const isPublicRoute =
+    pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/print");
   const isLogoutRoute = pathname === "/logout";
+  const visibleSecondaryNav = permissions.canViewUsers
+    ? secondaryNav
+    : secondaryNav.filter((item) => item.href !== "/admin/users");
 
   useEffect(() => {
     if (!hydrated) return;
 
     if (isLogoutRoute) {
-      signOut();
-      router.replace("/login");
+      void signOut().finally(() => router.replace("/login"));
       return;
     }
 
     if (!isAuthenticated && !isPublicRoute) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      return;
     }
-  }, [hydrated, isAuthenticated, isLogoutRoute, isPublicRoute, pathname, router, signOut]);
+
+    if (session?.active === false) {
+      void signOut().finally(() => router.replace("/login?reason=inactive"));
+      return;
+    }
+
+    if (isAuthenticated && session?.mustChangePassword && pathname !== "/change-password") {
+      router.replace("/change-password");
+      return;
+    }
+
+    if (isAuthenticated && pathname === "/login") {
+      router.replace(session?.mustChangePassword ? "/change-password" : "/");
+      return;
+    }
+
+    if (pathname.startsWith("/admin/users") && !permissions.canViewUsers) {
+      router.replace("/");
+    }
+  }, [
+    hydrated,
+    isAuthenticated,
+    isLogoutRoute,
+    isPublicRoute,
+    pathname,
+    permissions.canViewUsers,
+    router,
+    session?.active,
+    session?.mustChangePassword,
+    signOut,
+  ]);
 
   if (!hydrated && !isPublicRoute) {
     return (
@@ -213,7 +249,7 @@ export function AppShell({
           <Separator className="my-6 bg-white/10" />
 
           <div className="space-y-2">
-            {secondaryNav.map((item) => (
+            {visibleSecondaryNav.map((item) => (
               <AppLink
                 key={item.href}
                 href={item.href}
@@ -348,7 +384,7 @@ export function AppShell({
                     </div>
                     <Separator className="my-4 bg-white/10" />
                     <div className="space-y-2">
-                      {secondaryNav.map((item) => (
+                      {visibleSecondaryNav.map((item) => (
                         <AppLink
                           key={item.href}
                           href={item.href}
@@ -450,7 +486,7 @@ export function AppShell({
                     </SheetDescription>
                   </SheetHeader>
                   <div className="grid gap-2 px-4 pb-4">
-                    {secondaryNav.map((item) => (
+                    {visibleSecondaryNav.map((item) => (
                       <AppLink
                         key={item.href}
                         href={item.href}

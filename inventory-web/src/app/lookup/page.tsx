@@ -1,5 +1,7 @@
 import { LookupPage } from "@/components/pages/lookup-page";
+import { requireAppSession } from "@/lib/supabase/route-guards";
 
-export default function Page() {
+export default async function Page() {
+  await requireAppSession();
   return <LookupPage />;
 }

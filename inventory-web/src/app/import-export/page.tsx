@@ -1,5 +1,7 @@
 import { ImportExportPage } from "@/components/pages/import-export-page";
+import { requireAppSession } from "@/lib/supabase/route-guards";
 
-export default function Page() {
+export default async function Page() {
+  await requireAppSession();
   return <ImportExportPage />;
 }

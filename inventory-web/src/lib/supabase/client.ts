@@ -2,13 +2,13 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 
-import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
+import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 
 let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
   if (!browserClient) {
-    browserClient = createBrowserClient(getSupabaseUrl(), getSupabaseAnonKey());
+    browserClient = createBrowserClient(getSupabaseUrl(), getSupabasePublishableKey());
   }
 
   return browserClient;

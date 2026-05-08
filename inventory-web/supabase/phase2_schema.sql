@@ -4,13 +4,6 @@ create extension if not exists pgcrypto;
 
 do $$
 begin
-  create type public.inventory_role as enum ('admin', 'manager', 'technician', 'viewer');
-exception
-  when duplicate_object then null;
-end $$;
-
-do $$
-begin
   create type public.record_status as enum ('active', 'inactive');
 exception
   when duplicate_object then null;
@@ -26,6 +19,17 @@ begin
 end;
 $$;
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  full_name text,
+  role text not null default 'viewer' check (role in ('admin', 'manager', 'technician', 'viewer')),
+  active boolean not null default true,
+  must_change_password boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.is_elevated_user()
 returns boolean
 language sql
@@ -38,7 +42,7 @@ as $$
     from public.profiles
     where id = auth.uid()
       and role in ('admin', 'manager')
-      and is_active = true
+      and active = true
   );
 $$;
 
@@ -54,18 +58,9 @@ as $$
     from public.profiles
     where id = auth.uid()
       and role in ('admin', 'manager', 'technician')
-      and is_active = true
+      and active = true
   );
 $$;
-
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  role public.inventory_role not null default 'viewer',
-  is_active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
 
 create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
@@ -148,8 +143,15 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, role)
-  values (new.id, null, 'viewer')
+  insert into public.profiles (id, email, full_name, role, active, must_change_password)
+  values (
+    new.id,
+    new.email,
+    nullif(trim(coalesce(new.raw_user_meta_data ->> 'full_name', '')), ''),
+    'viewer',
+    true,
+    true
+  )
   on conflict (id) do nothing;
   return new;
 end;
@@ -171,12 +173,6 @@ create policy "Profiles: self read"
 on public.profiles
 for select
 using (id = auth.uid() or public.is_elevated_user());
-
-create policy "Profiles: self update"
-on public.profiles
-for update
-using (id = auth.uid() or public.is_elevated_user())
-with check (id = auth.uid() or public.is_elevated_user());
 
 create policy "Locations: authenticated read"
 on public.locations
