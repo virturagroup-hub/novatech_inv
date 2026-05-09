@@ -70,7 +70,7 @@ export function ActivityPage() {
       <PageHero
         eyebrow="Activity log"
         title="Audit trail for the current inventory source."
-        description="This activity feed stays useful in demo mode and is ready to map fully to Supabase transactions when live data is connected."
+        description="Review recent imports, stock changes, label actions, and system updates from the active workspace."
         actions={
           <>
             <Link
@@ -212,9 +212,9 @@ export function ActivityPage() {
 
       <Card className="border-white/10 bg-white/5">
         <CardHeader>
-          <CardTitle className="text-white">Migration note</CardTitle>
+          <CardTitle className="text-white">Audit trail notes</CardTitle>
           <CardDescription className="text-slate-400">
-            The current trail can come from demo state or Supabase transactions, but the event shape is already ready for a database table.
+            The activity feed is sourced from the current workspace state and live transaction history.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-300">
@@ -222,7 +222,7 @@ export function ActivityPage() {
             {summary.totalUnits} total units are being tracked in the active inventory source.
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-            When Supabase is connected later, this screen can swap to a true audit table without changing the UI.
+            Imports, adjustments, and label events stay visible here for quick review by elevated users.
           </div>
         </CardContent>
       </Card>

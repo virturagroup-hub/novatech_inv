@@ -52,7 +52,7 @@ export function DashboardPage() {
       <PageHero
         eyebrow="Inventory command center"
         title="Keep the parts room moving without guessing."
-        description="Track parts, bins, model compatibility, and reorder pressure from one responsive dashboard. When Supabase is configured, the app reads live inventory data instead of the demo seed."
+        description="Track parts, bins, model compatibility, and reorder pressure from one responsive dashboard."
         actions={
           <>
             <Link
@@ -374,6 +374,18 @@ export function DashboardPage() {
                   Reports & Exports
                 </Link>
               )}
+              {permissions.canAccessSettings && (
+                <Link
+                  href="/admin/health"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <Gauge className="mr-2 h-4 w-4" />
+                  Health dashboard
+                </Link>
+              )}
               <Link
                 href="/locations"
                 className={cn(
@@ -389,21 +401,32 @@ export function DashboardPage() {
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-white">Phase 2 ready</CardTitle>
+              <CardTitle className="text-white">Workspace health</CardTitle>
               <CardDescription className="text-slate-400">
-                The current app can read live inventory from Supabase without changing the dashboard layout.
+                Live inventory, warnings, and logs stay easy to review without changing the dashboard layout.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-300">
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                Demo data is shown only when Supabase is not configured or demo mode is explicitly enabled.
+                The active workspace reads from Supabase when it is configured, otherwise it stays local.
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
                 Inventory, bins, and models already use stable ids instead of fragile name-only references.
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                Supabase can slot into the repository layer later without rewriting the dashboard UI.
+                Admins can open the health dashboard for site checks, database counts, alerts, and logs.
               </div>
+              {permissions.canAccessSettings && (
+                <Link
+                  href="/admin/health"
+                  className={cn(
+                    buttonVariants({ variant: "default", size: "default" }),
+                    "w-full bg-amber-400 text-slate-950 hover:bg-amber-300",
+                  )}
+                >
+                  Open health dashboard
+                </Link>
+              )}
             </CardContent>
           </Card>
         </div>

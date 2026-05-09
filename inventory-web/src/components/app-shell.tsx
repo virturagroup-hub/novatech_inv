@@ -11,11 +11,11 @@ import {
   Home,
   LayoutGrid,
   MapPinned,
+  Gauge,
   PackageSearch,
   Printer,
   Users,
   Settings2,
-  ShieldCheck,
   LogOut,
 } from "lucide-react";
 
@@ -111,8 +111,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const { summary, resetDemoData, canResetDemoData, refreshInventory, isSupabaseMode } =
-    useInventory();
+  const { summary, refreshInventory, isSupabaseMode } = useInventory();
   const {
     session,
     hydrated,
@@ -140,6 +139,7 @@ export function AppShell({
 
   const secondaryNav = [
     { href: "/admin/users", label: "Users", icon: Users, visible: effectiveRole === "admin" },
+    { href: "/admin/health", label: "Health", icon: Gauge, visible: permissions.canAccessSettings },
     { href: "/locations", label: "Locations", icon: MapPinned, visible: permissions.canViewLocations },
     { href: "/models", label: "Models", icon: Boxes, visible: permissions.canViewModels },
     {
@@ -401,43 +401,39 @@ export function AppShell({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-white">Workspace tools</p>
-                <p className="text-xs text-slate-400">
-                  Demo reset is only shown when the app is in explicit local demo mode.
-                </p>
+                <p className="text-xs text-slate-400">Quick access to common inventory tasks.</p>
               </div>
               <Badge className="border-emerald-400/30 bg-emerald-400/15 text-emerald-100">
                 Ready
               </Badge>
             </div>
-            <Link
-              href="/inventory/new"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "default" }),
-                "mt-4 h-11 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+            <div className="mt-4 grid gap-2">
+              <Link
+                href="/inventory/new"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "default" }),
+                  "h-11 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                <PackageSearch className="mr-2 h-4 w-4" />
+                Add a part
+              </Link>
+              {permissions.canAccessSettings && (
+                <Link
+                  href="/admin/health"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "h-11 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <Gauge className="mr-2 h-4 w-4" />
+                  Health dashboard
+                </Link>
               )}
-            >
-              <PackageSearch className="mr-2 h-4 w-4" />
-              Add a part
-            </Link>
+            </div>
           </div>
 
           <div className="mt-auto pt-6 space-y-2">
-            {canResetDemoData && permissions.canAccessSettings && (
-              <Button
-                variant="outline"
-                className="h-10 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                onClick={() => {
-                  if (
-                      window.confirm("Reset the explicit local demo inventory back to the seeded demo dataset?")
-                    ) {
-                      resetDemoData();
-                    }
-                }}
-              >
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Reset demo data
-              </Button>
-            )}
             <Button
               variant="outline"
               className="h-10 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
@@ -534,10 +530,10 @@ export function AppShell({
                   <span className="leading-none">More</span>
                 </SheetTrigger>
                 <SheetContent side="bottom" className="border-white/10 bg-slate-950 text-white">
-                  <SheetHeader className="p-4">
+                    <SheetHeader className="p-4">
                     <SheetTitle className="text-white">More sections</SheetTitle>
                     <SheetDescription className="text-slate-400">
-                      Open locations, models, reports, activity, and settings.
+                      Open locations, models, reports, activity, health, and settings.
                     </SheetDescription>
                   </SheetHeader>
                   <div className="grid gap-2 px-4 pb-4">
@@ -552,24 +548,6 @@ export function AppShell({
                         onNavigate={() => setMoreMenuOpen(false)}
                       />
                     ))}
-                    {canResetDemoData && permissions.canAccessSettings && (
-                      <Button
-                        variant="outline"
-                        className="mt-2 h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Reset the explicit local demo inventory back to the seeded demo dataset?",
-                            )
-                          ) {
-                            resetDemoData();
-                          }
-                        }}
-                      >
-                        <ShieldCheck className="mr-2 h-4 w-4" />
-                        Reset demo data
-                      </Button>
-                    )}
                     <Button
                       variant="outline"
                       className="mt-2 h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"

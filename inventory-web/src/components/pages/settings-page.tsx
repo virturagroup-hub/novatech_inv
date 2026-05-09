@@ -9,7 +9,6 @@ import {
   Database,
   MapPin,
   Plus,
-  RotateCcw,
   Save,
   Settings2,
   Trash2,
@@ -31,6 +30,25 @@ import { cn } from "@/lib/utils";
 import { getRoleLabel } from "@/lib/auth";
 import { getBinSummary, countCompatiblePartsForModel } from "@/lib/inventory-utils";
 import type { Bin, BinDraft, DeviceModel, ModelDraft } from "@/lib/inventory-types";
+
+function formatStorageMode(value: string) {
+  switch (value) {
+    case "supabase":
+      return "Supabase";
+    case "browser-local":
+    default:
+      return "Local workspace";
+  }
+}
+
+function formatSyncMode(value: string) {
+  switch (value) {
+    case "supabase":
+      return "Live sync";
+    default:
+      return "Local sync";
+  }
+}
 
 function emptyBinDraft(): BinDraft {
   return {
@@ -103,8 +121,6 @@ export function SettingsPage() {
     saveModel,
     deleteModel,
     updateSettings,
-    resetDemoData,
-    canResetDemoData,
   } = useInventory();
 
   const [lowStockThreshold, setLowStockThreshold] = useState(String(settings.lowStockThreshold));
@@ -242,10 +258,19 @@ export function SettingsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Admin settings"
-        title="Fine-tune locations, models, and inventory behavior."
-        description="The app now reads from Supabase when configured, while demo reset remains available only in explicit local mode."
+        title="Fine-tune workspace settings, locations, and models."
+        description="Use this page to manage default inventory behavior, storage records, and role preview."
         actions={
           <>
+            <Link
+              href="/admin/health"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "default" }),
+                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              Health dashboard
+            </Link>
             <Link
               href="/import-export"
               className={cn(
@@ -386,17 +411,17 @@ export function SettingsPage() {
           <TabsTrigger value="models" className="data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950">
             Models
           </TabsTrigger>
-          <TabsTrigger value="data" className="data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950">
-            Data
+          <TabsTrigger value="system" className="data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950">
+            System
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="workspace" className="space-y-6">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-white">Local inventory settings</CardTitle>
+              <CardTitle className="text-white">Workspace defaults</CardTitle>
               <CardDescription className="text-slate-400">
-                These values shape badges, tag defaults, and future migration behavior.
+                These values shape low-stock badges, tag defaults, and the default experience for the team.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -422,19 +447,27 @@ export function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-slate-200">Theme</Label>
-                <Input value={settings.theme} readOnly className="border-white/10 bg-slate-950/70 text-white" />
+                <Input
+                  value={settings.theme === "dark" ? "Dark" : settings.theme}
+                  readOnly
+                  className="border-white/10 bg-slate-950/70 text-white"
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-slate-200">Storage mode</Label>
                 <Input
-                  value={settings.storageMode}
+                  value={formatStorageMode(settings.storageMode)}
                   readOnly
                   className="border-white/10 bg-slate-950/70 text-white"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-slate-200">Sync mode</Label>
-                <Input value={settings.syncMode} readOnly className="border-white/10 bg-slate-950/70 text-white" />
+                <Input
+                  value={formatSyncMode(settings.syncMode)}
+                  readOnly
+                  className="border-white/10 bg-slate-950/70 text-white"
+                />
               </div>
               <div className="flex items-end">
                 <Button className="w-full bg-amber-400 text-slate-950 hover:bg-amber-300" onClick={handleSettingsSave}>
@@ -782,63 +815,19 @@ export function SettingsPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="data" className="space-y-6">
-          {canResetDemoData ? (
-            <Card className="border-white/10 bg-white/5">
-              <CardHeader>
-                <CardTitle className="text-white">Reset and recover</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Use these controls when you want to go back to the seeded demo dataset in explicit local mode.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
-                  Resetting the demo store is safe for development, but it will overwrite any local demo changes.
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    className="bg-amber-400 text-slate-950 hover:bg-amber-300"
-                    onClick={() => {
-                      if (window.confirm("Reset the explicit local demo data back to the seeded demo dataset?")) {
-                        resetDemoData();
-                      }
-                    }}
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Reset demo data
-                  </Button>
-                  <Link
-                    href="/activity"
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "default" }),
-                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                    )}
-                  >
-                    View activity
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-white/10 bg-white/5">
-              <CardContent className="p-4 text-sm text-slate-300">
-                Demo reset is hidden in Supabase mode so real data cannot be overwritten by accident.
-              </CardContent>
-            </Card>
-          )}
-
+        <TabsContent value="system" className="space-y-6">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-white">Current state</CardTitle>
+              <CardTitle className="text-white">Workspace status</CardTitle>
               <CardDescription className="text-slate-400">
-                These values make the app easy to migrate later without changing the UI shape.
+                Use this section to review the active workspace mode and jump to the health dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[
-                { label: "Storage mode", value: settings.storageMode },
-                { label: "Sync mode", value: settings.syncMode },
-                { label: "Theme", value: settings.theme },
+                { label: "Storage mode", value: formatStorageMode(settings.storageMode) },
+                { label: "Sync mode", value: formatSyncMode(settings.syncMode) },
+                { label: "Theme", value: settings.theme === "dark" ? "Dark" : settings.theme },
                 { label: "Coverage", value: `${summary.coverage}%` },
               ].map((item) => (
                 <div key={item.label} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
@@ -846,6 +835,35 @@ export function SettingsPage() {
                   <p className="mt-2 text-sm font-semibold text-white">{item.value}</p>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">Admin health</CardTitle>
+              <CardDescription className="text-slate-400">
+                Review site checks, database status, warnings, and recent logs in one place.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Link
+                href="/admin/health"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "default" }),
+                  "bg-amber-400 text-slate-950 hover:bg-amber-300",
+                )}
+              >
+                Open health dashboard
+              </Link>
+              <Link
+                href="/activity"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "default" }),
+                  "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                View activity
+              </Link>
             </CardContent>
           </Card>
         </TabsContent>

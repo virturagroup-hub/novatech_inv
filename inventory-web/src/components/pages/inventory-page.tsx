@@ -137,7 +137,7 @@ export function InventoryPage() {
         <StatCard
           label="Parts"
           value={parts.length}
-          hint={isSupabaseMode ? "Tracked in Supabase" : "Tracked in local demo mode"}
+          hint={isSupabaseMode ? "Tracked in Supabase" : "Tracked locally"}
           icon={<PackageSearch className="h-5 w-5" />}
         />
         <StatCard

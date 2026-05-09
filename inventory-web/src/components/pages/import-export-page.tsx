@@ -121,9 +121,9 @@ export function ImportExportPage() {
       disabled: !permissions.canExportReports,
       onClick: () => downloadCsv("green-nventory-locations.csv", serializeLocationsCsv(exportState)),
     },
-    {
+      {
       title: "Export Activity Report",
-      description: "Keep a lightweight audit trail of what happened in the current inventory source.",
+      description: "Keep a lightweight audit trail of what happened in the active workspace.",
       icon: <Clock3 className="h-5 w-5" />,
       actionLabel: "Download CSV",
       disabled: !permissions.canExportReports,
@@ -247,7 +247,7 @@ export function ImportExportPage() {
       <PageHero
         eyebrow="Reports & Exports"
         title="Clean action cards for the jobs managers and technicians use most."
-        description="Export reports, open the print workflow, and import real CSV data into Supabase when elevated users need it."
+        description="Export reports, open the print workflow, and import CSV data into the live workspace."
         actions={
           <>
             <Link
@@ -286,11 +286,11 @@ export function ImportExportPage() {
         ))}
         <StatCard
           label="Data source"
-          value={dataSource === "supabase" ? "Supabase" : "Demo"}
+          value={dataSource === "supabase" ? "Supabase" : "Local workspace"}
           hint={
             dataSource === "supabase"
               ? "Reads from live tables when Supabase is configured."
-              : "Uses seeded data only when demo mode is enabled."
+              : "Uses browser-local workspace data."
           }
           icon={<Upload className="h-5 w-5" />}
         />
@@ -604,7 +604,7 @@ export function ImportExportPage() {
             <CardHeader>
               <CardTitle className="text-white">What exports include</CardTitle>
               <CardDescription className="text-slate-400">
-                You can hand these files to spreadsheets or save them for the next phase of the migration.
+                You can hand these files to spreadsheets or save them for records and review.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-300">
@@ -615,7 +615,7 @@ export function ImportExportPage() {
                 Bin exports keep aisle, row, column, and manufacturer metadata.
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                Activity exports preserve the event trail so the next database can ingest it later.
+                Activity exports preserve the event trail for audits and historical review.
               </div>
             </CardContent>
           </Card>

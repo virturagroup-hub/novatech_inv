@@ -498,8 +498,8 @@ export const seedActivity: ActivityEntry[] = [
     tone: "success",
     entityType: "system",
     entityId: "seed",
-    title: "Demo dataset loaded",
-    detail: "Typed mock inventory seed was loaded for explicit local demo mode.",
+    title: "Workspace seed loaded",
+    detail: "Typed mock inventory seed was loaded into the local workspace.",
     occurredAt: "2026-04-02T15:00:00.000Z",
   },
   {
