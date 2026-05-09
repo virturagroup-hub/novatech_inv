@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   countCompatiblePartsForModel,
@@ -149,7 +150,7 @@ export function LookupPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
             <CardTitle className="text-white">Parts</CardTitle>
@@ -158,7 +159,10 @@ export function LookupPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {partMatches.map((part) => {
+            {partMatches.length > 0 ? (
+              <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                <div className="space-y-3 p-3 pr-4">
+                  {partMatches.map((part) => {
               const stockStatus = getPartStockStatus(part);
               const compatibleModels = getCompatibleModels(part);
 
@@ -217,7 +221,7 @@ export function LookupPage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                  <Link
+                    <Link
                       href={`/inventory/${part.id}`}
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }),
@@ -228,10 +232,11 @@ export function LookupPage() {
                     </Link>
                   </div>
                 </div>
-              );
-            })}
-
-            {partMatches.length === 0 && (
+            );
+                  })}
+                </div>
+              </ScrollArea>
+            ) : (
               <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                 No parts matched the current search.
               </div>
@@ -248,31 +253,35 @@ export function LookupPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {binMatches.map((bin) => (
-                <div key={bin.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">
-                        {bin.code} · {bin.name}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400">{bin.description}</p>
-                    </div>
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      {bin.aisle}-{bin.row}-{bin.column}
-                    </Badge>
+              {binMatches.length > 0 ? (
+                <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {binMatches.map((bin) => (
+                      <div key={bin.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {bin.code} · {bin.name}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-400">{bin.description}</p>
+                          </div>
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {bin.aisle}-{bin.row}-{bin.column}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {bin.manufacturer || "General"}
+                          </Badge>
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {parts.filter((part) => part.binId === bin.id).length} parts
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      {bin.manufacturer || "General"}
-                    </Badge>
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      {parts.filter((part) => part.binId === bin.id).length} parts
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-
-              {binMatches.length === 0 && (
+                </ScrollArea>
+              ) : (
                 <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                   No bins matched the current search.
                 </div>
@@ -288,7 +297,10 @@ export function LookupPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {modelMatches.map((model) => {
+              {modelMatches.length > 0 ? (
+                <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {modelMatches.map((model) => {
                 const compatibleCount = countCompatiblePartsForModel(parts, model.id);
                 return (
                   <div key={model.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
@@ -315,9 +327,10 @@ export function LookupPage() {
                     {model.notes && <p className="mt-2 text-xs text-slate-400">{model.notes}</p>}
                   </div>
                 );
-              })}
-
-              {modelMatches.length === 0 && (
+                    })}
+                  </div>
+                </ScrollArea>
+              ) : (
                 <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                   No models matched the current search.
                 </div>

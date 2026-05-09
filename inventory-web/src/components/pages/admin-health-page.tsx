@@ -18,6 +18,7 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatRelative } from "@/lib/inventory-utils";
 
@@ -187,7 +188,7 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
             <CardTitle className="text-white">Site status</CardTitle>
@@ -235,7 +236,7 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
             <CardTitle className="text-white">Warnings & alerts</CardTitle>
@@ -245,25 +246,29 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             {report.alerts.length > 0 ? (
-              report.alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-white">{alert.title}</p>
-                      <p className="text-xs leading-5 text-slate-400">{alert.detail}</p>
+              <ScrollArea className="h-[clamp(16rem,55vh,28rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                <div className="space-y-3 p-3 pr-4">
+                  {report.alerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-white">{alert.title}</p>
+                          <p className="text-xs leading-5 text-slate-400">{alert.detail}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge className={alertClassName(alert.severity)}>{severityLabel(alert.severity)}</Badge>
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {alert.scope}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <Badge className={alertClassName(alert.severity)}>{severityLabel(alert.severity)}</Badge>
-                      <Badge className="border-white/10 bg-white/5 text-slate-200">
-                        {alert.scope}
-                      </Badge>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))
+              </ScrollArea>
             ) : (
               <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                 No active alerts at the moment.
@@ -281,21 +286,25 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             {report.logs.length > 0 ? (
-              report.logs.map((log) => (
-                <div key={log.id} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <Badge className={logClassName(log.severity)}>{severityLabel(log.severity)}</Badge>
-                    <span className="font-mono text-[11px] text-slate-500">
-                      {formatRelative(log.occurredAt)}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-white">{log.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">{log.detail}</p>
-                  <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                    {formatDateTime(log.occurredAt)}
-                  </p>
+              <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                <div className="space-y-3 p-3 pr-4">
+                  {report.logs.map((log) => (
+                    <div key={log.id} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <Badge className={logClassName(log.severity)}>{severityLabel(log.severity)}</Badge>
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {formatRelative(log.occurredAt)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-white">{log.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{log.detail}</p>
+                      <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                        {formatDateTime(log.occurredAt)}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))
+              </ScrollArea>
             ) : (
               <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                 No log entries yet.

@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { buildPartPrintHref } from "@/lib/labels";
 import {
@@ -164,7 +165,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <div className="space-y-6">
           <Card className="border-white/10 bg-white/5">
             <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
@@ -280,36 +281,40 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {relatedActivity.slice(0, 6).map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <Badge
-                      className={cn(
-                        "border",
-                        entry.tone === "danger"
-                          ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
-                          : entry.tone === "warning"
-                            ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                            : entry.tone === "success"
-                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                              : "border-sky-400/20 bg-sky-400/10 text-sky-200",
-                      )}
-                    >
-                      {entry.action}
-                    </Badge>
-                    <span className="font-mono text-[11px] text-slate-500">
-                      {formatRelative(entry.occurredAt)}
-                    </span>
+              {relatedActivity.length > 0 ? (
+                <ScrollArea className="h-[clamp(18rem,55vh,30rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {relatedActivity.slice(0, 6).map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <Badge
+                            className={cn(
+                              "border",
+                              entry.tone === "danger"
+                                ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                                : entry.tone === "warning"
+                                  ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                                  : entry.tone === "success"
+                                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                    : "border-sky-400/20 bg-sky-400/10 text-sky-200",
+                            )}
+                          >
+                            {entry.action}
+                          </Badge>
+                          <span className="font-mono text-[11px] text-slate-500">
+                            {formatRelative(entry.occurredAt)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-white">{entry.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">{entry.detail}</p>
+                      </div>
+                    ))}
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-white">{entry.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">{entry.detail}</p>
-                </div>
-              ))}
-
-              {relatedActivity.length === 0 && (
+                </ScrollArea>
+              ) : (
                 <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                   No activity has been logged for this part yet.
                 </div>
@@ -332,19 +337,23 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                   This part is marked universal and should apply across the fleet.
                 </div>
               ) : compatibleModels.length > 0 ? (
-                compatibleModels.map((model) => (
-                  <div
-                    key={model.id}
-                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
-                  >
-                    <p className="text-sm font-semibold text-white">
-                      {model.manufacturer} {model.name}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {model.series} · {model.status}
-                    </p>
+                <ScrollArea className="h-[clamp(14rem,42vh,24rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {compatibleModels.map((model) => (
+                      <div
+                        key={model.id}
+                        className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
+                      >
+                        <p className="text-sm font-semibold text-white">
+                          {model.manufacturer} {model.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {model.series} · {model.status}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))
+                </ScrollArea>
               ) : (
                 <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
                   No compatible models are assigned yet. This record will stay flagged until

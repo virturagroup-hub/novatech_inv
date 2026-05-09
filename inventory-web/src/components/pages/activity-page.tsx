@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatRelative, getActivityColor } from "@/lib/inventory-utils";
@@ -164,45 +165,49 @@ export function ActivityPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {filteredActivity.map((entry) => {
-            const activityTone = getActivityColor(entry.action);
+          {filteredActivity.length > 0 ? (
+            <ScrollArea className="h-[clamp(24rem,65vh,42rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+              <div className="space-y-3 p-3 pr-4">
+                {filteredActivity.map((entry) => {
+                  const activityTone = getActivityColor(entry.action);
 
-            return (
-              <div key={entry.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={cn(
-                        "border",
-                        activityTone === "danger"
-                          ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
-                          : activityTone === "warning"
-                            ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                            : activityTone === "success"
-                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                              : "border-sky-400/20 bg-sky-400/10 text-sky-200",
-                      )}
-                    >
-                      {entry.action}
-                    </Badge>
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      {entry.entityType}
-                    </Badge>
-                  </div>
-                  <span className="font-mono text-[11px] text-slate-500">
-                    {formatRelative(entry.occurredAt)}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm font-semibold text-white">{entry.title}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-400">{entry.detail}</p>
-                <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                  {formatDateTime(entry.occurredAt)}
-                </p>
+                  return (
+                    <div key={entry.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            className={cn(
+                              "border",
+                              activityTone === "danger"
+                                ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                                : activityTone === "warning"
+                                  ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                                  : activityTone === "success"
+                                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                    : "border-sky-400/20 bg-sky-400/10 text-sky-200",
+                            )}
+                          >
+                            {entry.action}
+                          </Badge>
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {entry.entityType}
+                          </Badge>
+                        </div>
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {formatRelative(entry.occurredAt)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-white">{entry.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{entry.detail}</p>
+                      <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                        {formatDateTime(entry.occurredAt)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-
-          {filteredActivity.length === 0 && (
+            </ScrollArea>
+          ) : (
             <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
               No activity matched the current filters.
             </div>

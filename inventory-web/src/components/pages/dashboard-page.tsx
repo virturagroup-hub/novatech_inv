@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   formatCompactDate,
   getBinSummary,
@@ -110,7 +111,7 @@ export function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.5fr_0.95fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[1.5fr_0.95fr]">
         <div className="space-y-6">
           <Card className="border-white/10 bg-white/5">
             <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
@@ -125,7 +126,9 @@ export function DashboardPage() {
               </Badge>
             </CardHeader>
             <CardContent className="space-y-3">
-              {summary.lowStockTable.map((part) => {
+              <ScrollArea className="h-[clamp(18rem,55vh,30rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                <div className="space-y-3 p-3 pr-4">
+                  {summary.lowStockTable.map((part) => {
                 const binLabel = getPartLocationLabel(part, bins);
                 const stockStatus = getPartStockStatus(part);
                 const compatCount = getCompatibleModels(part).length;
@@ -194,10 +197,12 @@ export function DashboardPage() {
                   No low-stock items at the moment.
                 </div>
               )}
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 lg:grid-cols-2">
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
                 <CardTitle className="text-white">Location health</CardTitle>
@@ -206,39 +211,43 @@ export function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {topBins.map(({ bin, parts: binParts, totalUnits, lowStockCount }) => (
-                  <div
-                    key={bin.id}
-                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {bin.code} · {bin.name}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {bin.manufacturer || "General"} · {bin.description}
-                        </p>
+                <ScrollArea className="h-[clamp(16rem,50vh,28rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {topBins.map(({ bin, parts: binParts, totalUnits, lowStockCount }) => (
+                      <div
+                        key={bin.id}
+                        className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {bin.code} · {bin.name}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {bin.manufacturer || "General"} · {bin.description}
+                            </p>
+                          </div>
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {binParts.length} parts
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <div className="h-2 flex-1 rounded-full bg-white/5">
+                            <div
+                              className="h-2 rounded-full bg-amber-400/80"
+                              style={{
+                                width: `${Math.min(100, Math.max(12, totalUnits * 2.5))}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-400">
+                            {lowStockCount} low
+                          </span>
+                        </div>
                       </div>
-                      <Badge className="border-white/10 bg-white/5 text-slate-200">
-                        {binParts.length} parts
-                      </Badge>
-                    </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="h-2 flex-1 rounded-full bg-white/5">
-                        <div
-                          className="h-2 rounded-full bg-amber-400/80"
-                          style={{
-                            width: `${Math.min(100, Math.max(12, totalUnits * 2.5))}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs text-slate-400">
-                        {lowStockCount} low
-                      </span>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </ScrollArea>
               </CardContent>
             </Card>
 
@@ -250,25 +259,29 @@ export function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {manufacturerTotals.map((item) => (
-                  <div key={item.label} className="space-y-2 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{item.label}</p>
-                        <p className="text-xs text-slate-400">
-                          {item.parts} parts · {item.attention} need review
-                        </p>
+                <ScrollArea className="h-[clamp(16rem,50vh,28rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {manufacturerTotals.map((item) => (
+                      <div key={item.label} className="space-y-2 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{item.label}</p>
+                            <p className="text-xs text-slate-400">
+                              {item.parts} parts · {item.attention} need review
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-200">{item.units} units</p>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/5">
+                          <div
+                            className="h-2 rounded-full bg-sky-400/80"
+                            style={{ width: `${Math.min(100, (item.units / Math.max(summary.totalUnits, 1)) * 100)}%` }}
+                          />
+                        </div>
                       </div>
-                      <p className="text-sm font-semibold text-slate-200">{item.units} units</p>
-                    </div>
-                    <div className="h-2 rounded-full bg-white/5">
-                      <div
-                        className="h-2 rounded-full bg-sky-400/80"
-                        style={{ width: `${Math.min(100, (item.units / Math.max(summary.totalUnits, 1)) * 100)}%` }}
-                      />
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
@@ -284,38 +297,42 @@ export function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {summary.recentActivity.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <Badge
-                        className={cn(
-                          "border",
-                          entry.tone === "danger"
-                            ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
-                            : entry.tone === "warning"
-                              ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                              : entry.tone === "success"
-                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                                : "border-sky-400/20 bg-sky-400/10 text-sky-200",
-                        )}
+                <ScrollArea className="h-[clamp(18rem,55vh,30rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {summary.recentActivity.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-2xl border border-white/10 bg-slate-950/50 p-3"
                       >
-                        {entry.action}
-                      </Badge>
-                      <span className="font-mono text-[11px] text-slate-500">
-                        {formatCompactDate(entry.occurredAt)}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-white">
-                      {entry.title}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-400">
-                      {entry.detail}
-                    </p>
+                        <div className="flex items-center justify-between gap-3">
+                          <Badge
+                            className={cn(
+                              "border",
+                              entry.tone === "danger"
+                                ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                                : entry.tone === "warning"
+                                  ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                                  : entry.tone === "success"
+                                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                    : "border-sky-400/20 bg-sky-400/10 text-sky-200",
+                            )}
+                          >
+                            {entry.action}
+                          </Badge>
+                          <span className="font-mono text-[11px] text-slate-500">
+                            {formatCompactDate(entry.occurredAt)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-white">
+                          {entry.title}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">
+                          {entry.detail}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </ScrollArea>
               </CardContent>
             </Card>
           ) : (

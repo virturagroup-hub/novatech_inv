@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { getRoleLabel } from "@/lib/auth";
 import { mergeAdminUsers, type AdminUserRecord } from "@/lib/admin-users";
 import type { ProfileRow } from "@/lib/supabase/types";
@@ -212,11 +213,15 @@ export function AdminUsersPage({ users, authUsers, currentUserId }: Readonly<Adm
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {filteredUsers.map((user) => (
-            <UserRow key={user.id} user={user} currentUserId={currentUserId} />
-          ))}
-
-          {filteredUsers.length === 0 && (
+          {filteredUsers.length > 0 ? (
+            <ScrollArea className="h-[clamp(24rem,60vh,42rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+              <div className="space-y-3 p-3 pr-4">
+                {filteredUsers.map((user) => (
+                  <UserRow key={user.id} user={user} currentUserId={currentUserId} />
+                ))}
+              </div>
+            </ScrollArea>
+          ) : (
             <div className="rounded-3xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
               No users matched the current search.
             </div>

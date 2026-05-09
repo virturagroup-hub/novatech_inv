@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { getBinStatusLabel, getBinSummary, getPartStockStatus } from "@/lib/inventory-utils";
 import { buildBinPrintHref } from "@/lib/labels";
@@ -133,7 +134,7 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="border-white/10 bg-white/5">
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -215,30 +216,34 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-                {summary.parts.length > 0 ? (
-                  [...summary.parts]
+            {summary.parts.length > 0 ? (
+              <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                <div className="space-y-3 p-3 pr-4">
+                  {[...summary.parts]
                     .sort((left, right) => left.partNumber.localeCompare(right.partNumber))
                     .map((part) => (
-                  <Link
-                    key={part.id}
-                    href={`/inventory/${part.id}`}
-                    className="block rounded-3xl border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/10"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
-                        <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="border-white/10 bg-white/5 text-slate-200">Qty {part.quantityOnHand}</Badge>
-                        <Badge className="border-white/10 bg-white/5 text-slate-200">{getPartStockStatus(part)}</Badge>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-xs text-slate-400">
-                      {part.universal ? "Universal part" : "Model-specific part"}
-                    </p>
-                  </Link>
-                ))
+                      <Link
+                        key={part.id}
+                        href={`/inventory/${part.id}`}
+                        className="block rounded-3xl border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/10"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                            <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge className="border-white/10 bg-white/5 text-slate-200">Qty {part.quantityOnHand}</Badge>
+                            <Badge className="border-white/10 bg-white/5 text-slate-200">{getPartStockStatus(part)}</Badge>
+                          </div>
+                        </div>
+                        <p className="mt-3 text-xs text-slate-400">
+                          {part.universal ? "Universal part" : "Model-specific part"}
+                        </p>
+                      </Link>
+                    ))}
+                </div>
+              </ScrollArea>
             ) : (
               <div className="rounded-3xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
                 No parts are assigned to this location yet.

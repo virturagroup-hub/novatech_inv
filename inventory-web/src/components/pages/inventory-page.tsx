@@ -28,6 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { categories, manufacturers, type Bin, type InventorySortKey, type Part, type PartFilters } from "@/lib/inventory-types";
@@ -389,65 +390,69 @@ export function InventoryPage() {
 
       <Card className="border-white/10 bg-white/5">
         <CardContent className="p-0">
-          <div className="hidden overflow-hidden rounded-[inherit] lg:block">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/10 hover:bg-white/5">
-                  <TableHead className="text-slate-400">Part</TableHead>
-                  <TableHead className="text-slate-400">Location</TableHead>
-                  <TableHead className="text-slate-400">Qty</TableHead>
-                  <TableHead className="text-slate-400">Compatibility</TableHead>
-                  <TableHead className="text-slate-400">Updated</TableHead>
-                  <TableHead className="text-right text-slate-400">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredParts.map((part) => (
-                  <InventoryTableRow
-                    key={part.id}
-                    part={part}
-                    bins={bins}
-                    canAdjustStock={permissions.canAdjustStock}
-                    canManageParts={permissions.canManageParts}
-                    onDelete={() => {
-                      if (
-                        window.confirm(
-                          `Delete ${part.partNumber}? This will remove the part from the inventory.`,
-                        )
-                      ) {
-                        deletePart(part.id);
-                        toast.success("Part removed");
-                      }
-                    }}
-                    onAdjust={(delta) => adjustPart(part.id, delta)}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+          <div className="hidden lg:block">
+            <ScrollArea className="h-[clamp(24rem,62vh,44rem)] rounded-[inherit]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-white/5">
+                    <TableHead className="text-slate-400">Part</TableHead>
+                    <TableHead className="text-slate-400">Location</TableHead>
+                    <TableHead className="text-slate-400">Qty</TableHead>
+                    <TableHead className="text-slate-400">Compatibility</TableHead>
+                    <TableHead className="text-slate-400">Updated</TableHead>
+                    <TableHead className="text-right text-slate-400">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredParts.map((part) => (
+                    <InventoryTableRow
+                      key={part.id}
+                      part={part}
+                      bins={bins}
+                      canAdjustStock={permissions.canAdjustStock}
+                      canManageParts={permissions.canManageParts}
+                      onDelete={() => {
+                        if (
+                          window.confirm(
+                            `Delete ${part.partNumber}? This will remove the part from the inventory.`,
+                          )
+                        ) {
+                          deletePart(part.id);
+                          toast.success("Part removed");
+                        }
+                      }}
+                      onAdjust={(delta) => adjustPart(part.id, delta)}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           </div>
 
-          <div className="space-y-3 p-3 lg:hidden">
-            {filteredParts.map((part) => (
-              <InventoryMobileCard
-                key={part.id}
-                part={part}
-                bins={bins}
-                canAdjustStock={permissions.canAdjustStock}
-                canManageParts={permissions.canManageParts}
-                onDelete={() => {
-                  if (
-                    window.confirm(
-                      `Delete ${part.partNumber}? This will remove the part from the inventory.`,
-                    )
-                  ) {
-                    deletePart(part.id);
-                    toast.success("Part removed");
-                  }
-                }}
-                onAdjust={(delta) => adjustPart(part.id, delta)}
-              />
-            ))}
-          </div>
+          <ScrollArea className="lg:hidden h-[clamp(24rem,65vh,44rem)]">
+            <div className="space-y-3 p-3">
+              {filteredParts.map((part) => (
+                <InventoryMobileCard
+                  key={part.id}
+                  part={part}
+                  bins={bins}
+                  canAdjustStock={permissions.canAdjustStock}
+                  canManageParts={permissions.canManageParts}
+                  onDelete={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${part.partNumber}? This will remove the part from the inventory.`,
+                      )
+                    ) {
+                      deletePart(part.id);
+                      toast.success("Part removed");
+                    }
+                  }}
+                  onAdjust={(delta) => adjustPart(part.id, delta)}
+                />
+              ))}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 

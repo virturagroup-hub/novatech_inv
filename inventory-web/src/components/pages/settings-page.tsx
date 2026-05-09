@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -480,7 +481,7 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="locations" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
                 <CardTitle className="text-white">Edit bin</CardTitle>
@@ -598,68 +599,72 @@ export function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {sortedBins.map((bin) => {
-                  const summaryForBin = getBinSummary(bin, parts);
-                  const active = selectedBinId === bin.id;
+                <ScrollArea className="h-[clamp(20rem,60vh,34rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {sortedBins.map((bin) => {
+                      const summaryForBin = getBinSummary(bin, parts);
+                      const active = selectedBinId === bin.id;
 
-                  return (
-                    <div
-                      key={bin.id}
-                      onClick={() => setSelectedBinId(bin.id)}
-                      className={cn(
-                        "flex w-full cursor-pointer items-start justify-between gap-3 rounded-3xl border px-4 py-3 text-left transition-colors",
-                        active
-                          ? "border-amber-400/30 bg-amber-400/10"
-                          : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-white">
-                          {bin.code} · {bin.name}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">{bin.description}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge className="border-white/10 bg-white/5 text-slate-200">{bin.aisle}-{bin.row}-{bin.column}</Badge>
-                          <Badge className="border-white/10 bg-white/5 text-slate-200">{summaryForBin.parts.length} parts</Badge>
-                          <Badge className="border-white/10 bg-white/5 text-slate-200">{summaryForBin.lowStockCount} low</Badge>
+                      return (
+                        <div
+                          key={bin.id}
+                          onClick={() => setSelectedBinId(bin.id)}
+                          className={cn(
+                            "flex w-full cursor-pointer items-start justify-between gap-3 rounded-3xl border px-4 py-3 text-left transition-colors",
+                            active
+                              ? "border-amber-400/30 bg-amber-400/10"
+                              : "border-white/10 bg-slate-950/50 hover:bg-white/10",
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-white">
+                              {bin.code} · {bin.name}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-400">{bin.description}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge className="border-white/10 bg-white/5 text-slate-200">{bin.aisle}-{bin.row}-{bin.column}</Badge>
+                              <Badge className="border-white/10 bg-white/5 text-slate-200">{summaryForBin.parts.length} parts</Badge>
+                              <Badge className="border-white/10 bg-white/5 text-slate-200">{summaryForBin.lowStockCount} low</Badge>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-slate-300 hover:bg-white/10 hover:text-white"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedBinId(bin.id);
+                              }}
+                            >
+                              <Settings2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-slate-300 hover:bg-white/10 hover:text-white"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (window.confirm(`Delete ${bin.code}? Parts assigned to it will become unassigned.`)) {
+                                  deleteBin(bin.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-slate-300 hover:bg-white/10 hover:text-white"
-                    onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedBinId(bin.id);
-                          }}
-                        >
-                          <Settings2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-slate-300 hover:bg-white/10 hover:text-white"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (window.confirm(`Delete ${bin.code}? Parts assigned to it will become unassigned.`)) {
-                              deleteBin(bin.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
         <TabsContent value="models" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
                 <CardTitle className="text-white">Edit model</CardTitle>
@@ -756,60 +761,64 @@ export function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {sortedModels.map((model) => {
-                  const compatibleCount = countCompatiblePartsForModel(parts, model.id);
-                  const active = selectedModelId === model.id;
+                <ScrollArea className="h-[clamp(20rem,60vh,34rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+                  <div className="space-y-3 p-3 pr-4">
+                    {sortedModels.map((model) => {
+                      const compatibleCount = countCompatiblePartsForModel(parts, model.id);
+                      const active = selectedModelId === model.id;
 
-                  return (
-                    <div
-                      key={model.id}
-                      onClick={() => setSelectedModelId(model.id)}
-                      className={cn(
-                        "flex w-full cursor-pointer items-start justify-between gap-3 rounded-3xl border px-4 py-3 text-left transition-colors",
-                        active
-                          ? "border-amber-400/30 bg-amber-400/10"
-                          : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-white">
-                          {model.manufacturer} {model.name}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">{model.series}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge className="border-white/10 bg-white/5 text-slate-200">{model.status}</Badge>
-                          <Badge className="border-white/10 bg-white/5 text-slate-200">{compatibleCount} parts</Badge>
+                      return (
+                        <div
+                          key={model.id}
+                          onClick={() => setSelectedModelId(model.id)}
+                          className={cn(
+                            "flex w-full cursor-pointer items-start justify-between gap-3 rounded-3xl border px-4 py-3 text-left transition-colors",
+                            active
+                              ? "border-amber-400/30 bg-amber-400/10"
+                              : "border-white/10 bg-slate-950/50 hover:bg-white/10",
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-white">
+                              {model.manufacturer} {model.name}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-400">{model.series}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge className="border-white/10 bg-white/5 text-slate-200">{model.status}</Badge>
+                              <Badge className="border-white/10 bg-white/5 text-slate-200">{compatibleCount} parts</Badge>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-slate-300 hover:bg-white/10 hover:text-white"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedModelId(model.id);
+                              }}
+                            >
+                              <Settings2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-slate-300 hover:bg-white/10 hover:text-white"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (window.confirm(`Delete ${model.manufacturer} ${model.name}?`)) {
+                                  deleteModel(model.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-slate-300 hover:bg-white/10 hover:text-white"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedModelId(model.id);
-                          }}
-                        >
-                          <Settings2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-slate-300 hover:bg-white/10 hover:text-white"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (window.confirm(`Delete ${model.manufacturer} ${model.name}?`)) {
-                              deleteModel(model.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>

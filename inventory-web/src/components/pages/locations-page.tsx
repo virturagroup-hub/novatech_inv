@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { getBinStatusLabel, getBinSummary } from "@/lib/inventory-utils";
 
@@ -148,7 +149,10 @@ export function LocationsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {filteredBins.map((bin) => {
+          {filteredBins.length > 0 ? (
+            <ScrollArea className="h-[clamp(24rem,60vh,42rem)] rounded-3xl border border-white/10 bg-slate-950/50">
+              <div className="space-y-3 p-3 pr-4">
+                {filteredBins.map((bin) => {
             const summary = getBinSummary(bin, parts);
             const partCount = summary.parts.length;
             const linked = partCount > 0;
@@ -253,8 +257,9 @@ export function LocationsPage() {
               </div>
             );
           })}
-
-          {filteredBins.length === 0 && (
+              </div>
+            </ScrollArea>
+          ) : (
             <div className="rounded-3xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
               No locations matched the current search.
             </div>
