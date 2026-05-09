@@ -107,6 +107,7 @@ export function PartEditorPage({
   const part = mode === "edit" && partId ? getPartById(partId) : undefined;
   const [form, setForm] = useState<PartFormState>(() => formFromPart(part, defaultBinId));
   const [modelSearch, setModelSearch] = useState("");
+  const [modelManufacturerFilter, setModelManufacturerFilter] = useState("all");
   const [binSearch, setBinSearch] = useState("");
 
   useEffect(() => {
@@ -120,12 +121,23 @@ export function PartEditorPage({
         `${left.manufacturer} ${left.name}`.localeCompare(`${right.manufacturer} ${right.name}`),
       )
       .filter((model) => {
+        if (modelManufacturerFilter !== "all" && model.manufacturer !== modelManufacturerFilter) {
+          return false;
+        }
         if (!search) return true;
         return `${model.manufacturer} ${model.name} ${model.series} ${model.status} ${model.notes ?? ""}`
           .toLowerCase()
           .includes(search);
       });
-  }, [modelSearch, models]);
+  }, [modelManufacturerFilter, modelSearch, models]);
+
+  const modelManufacturerOptions = useMemo(
+    () =>
+      [...new Set(models.map((model) => model.manufacturer))]
+        .sort((left, right) => left.localeCompare(right))
+        .map((manufacturer) => ({ value: manufacturer, label: manufacturer })),
+    [models],
+  );
 
   const availableBins = useMemo(() => {
     const search = binSearch.trim().toLowerCase();
@@ -210,7 +222,7 @@ export function PartEditorPage({
               <div>
                 <h1 className="text-2xl font-semibold text-white">Part not found</h1>
                 <p className="text-sm text-slate-400">
-                  This part does not exist in the current local dataset.
+                  This part does not exist in the current inventory source.
                 </p>
               </div>
             </div>
@@ -567,7 +579,7 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">4. Compatible models</CardTitle>
               <CardDescription className="text-slate-400">
-                Searchable model picker with the selected devices pinned to the top.
+                Filter by manufacturer or search models, with the selected devices pinned to the top.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -624,6 +636,42 @@ export function PartEditorPage({
                 </div>
               </div>
 
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Filter manufacturer</Label>
+                  <Select
+                    value={modelManufacturerFilter}
+                    onValueChange={(value) => setModelManufacturerFilter(value ?? "all")}
+                  >
+                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                      <SelectValue placeholder="All manufacturers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All manufacturers</SelectItem>
+                      {modelManufacturerOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  {modelManufacturerFilter !== "all" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 w-full border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                      onClick={() => setModelManufacturerFilter("all")}
+                    >
+                      Clear manufacturer filter
+                    </Button>
+                  ) : (
+                    <div className="hidden h-12 w-full md:block" />
+                  )}
+                </div>
+              </div>
+
               <ScrollArea className="h-[28rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
                 <div className="space-y-2">
                   {availableModels.map((model) => {
@@ -675,6 +723,11 @@ export function PartEditorPage({
                       </label>
                     );
                   })}
+                  {availableModels.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
+                      No models matched the current search or manufacturer filter.
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
