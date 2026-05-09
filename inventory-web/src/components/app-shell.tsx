@@ -109,7 +109,8 @@ export function AppShell({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
-  const { summary, resetDemoData, canResetDemoData } = useInventory();
+  const { summary, resetDemoData, canResetDemoData, refreshInventory, isSupabaseMode } =
+    useInventory();
   const {
     session,
     hydrated,
@@ -254,6 +255,17 @@ export function AppShell({
     session?.mustChangePassword,
     signOut,
   ]);
+
+  useEffect(() => {
+    if (!hydrated || !isAuthenticated || session?.mustChangePassword || !isSupabaseMode) {
+      return;
+    }
+
+    // On fresh devices or browsers, the auth session can become available a moment
+    // before the server-side snapshot route can read it. Refresh once auth is ready
+    // so live Supabase data wins over any stale empty state.
+    void refreshInventory();
+  }, [hydrated, isAuthenticated, isSupabaseMode, refreshInventory, session?.mustChangePassword]);
 
   if (!hydrated && !isPublicRoute) {
     return (
