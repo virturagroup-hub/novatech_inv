@@ -22,12 +22,12 @@ The app is now a modern Next.js App Router project inside `inventory-web` with:
 - TypeScript
 - Tailwind CSS
 - shadcn/ui-style components
-- a typed Phase 1 local inventory store
+- a typed local demo inventory store with a Supabase-backed live mode
 - responsive desktop and Android-first layouts
 - PWA basics for Android installability
 - Vercel-ready routes and metadata
 
-The Phase 1 implementation now includes:
+The initial implementation now includes:
 
 - dashboard
 - inventory table
@@ -71,7 +71,7 @@ The Phase 1 implementation now includes:
 - The reports page now uses simple action cards.
 - Printing now uses a dedicated `/print` route with print-only CSS.
 - PWA metadata, icons, and theme color were kept in sync with the new brand.
-- Supabase-ready client helpers, table types, and schema docs were added without replacing the Phase 1 store.
+- Supabase-ready client helpers, table types, CSV import routes, snapshot routes, and schema docs were added without silently mixing demo data with live inventory.
 - The Supabase helper layer now includes a middleware session-refresh path and publishable-key support.
 - The Next/Turbopack root was pinned to the `inventory-web` project directory so dev no longer resolves Tailwind from the parent folder.
 - The Supabase middleware was hardened to fail closed on missing or invalid env vars, and a diagnostic env-presence route was added for safe Vercel troubleshooting.
@@ -79,14 +79,12 @@ The Phase 1 implementation now includes:
 
 ## What Remains For Phase 2
 
-- Replace browser-local persistence with Supabase/Postgres.
-- Move inventory CRUD into real Supabase tables.
-- Move audit logging into the `inventory_transactions` table.
-- Wire server-side data fetching and mutation into the new Supabase helpers.
-- Expand validation and import processing on the server.
+- Move the remaining local demo-only settings persistence into Supabase or a separate preference table if desired.
+- Expand validation, row mapping, and error reporting for larger CSV imports.
+- Move any remaining browser-only mutation flows into direct Supabase writes where they still exist.
 - Add barcode scanning if the crew wants faster on-floor lookup later.
 - Consider moving the role preview banner into a dedicated reusable shell component if the UI needs more advanced preview states later.
 
 ## Guiding Principle
 
-Phase 2 should swap the data layer without rewriting the UI or the workflows that are already working well in Phase 1.
+Phase 2 should finish the Supabase data layer without rewriting the UI or the workflows that are already working well in the current build.

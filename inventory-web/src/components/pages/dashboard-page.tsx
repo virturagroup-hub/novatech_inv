@@ -52,7 +52,7 @@ export function DashboardPage() {
       <PageHero
         eyebrow="Inventory command center"
         title="Keep the parts room moving without guessing."
-        description="Track parts, bins, model compatibility, and reorder pressure from one responsive dashboard. The current build uses typed mock data and browser-local persistence so the workflows are ready for a Phase 2 Supabase handoff."
+        description="Track parts, bins, model compatibility, and reorder pressure from one responsive dashboard. When Supabase is configured, the app reads live inventory data instead of the demo seed."
         actions={
           <>
             <Link
@@ -279,8 +279,8 @@ export function DashboardPage() {
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
                 <CardTitle className="text-white">Recent activity</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Local audit trail from this Phase 1 browser store.
+              <CardDescription className="text-slate-400">
+                  Audit trail entries from the current inventory source.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -391,12 +391,12 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle className="text-white">Phase 2 ready</CardTitle>
               <CardDescription className="text-slate-400">
-                The current mock store is typed, local-first, and ready to map onto Supabase tables.
+                The current app can read live inventory from Supabase without changing the dashboard layout.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-300">
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                Browser-local persistence keeps the Phase 1 workflows usable across refreshes.
+                Demo data is shown only when Supabase is not configured or demo mode is explicitly enabled.
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
                 Inventory, bins, and models already use stable ids instead of fragile name-only references.

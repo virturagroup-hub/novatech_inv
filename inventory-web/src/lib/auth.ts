@@ -23,6 +23,7 @@ export interface PermissionSet {
   canViewReports: boolean;
   canPrintLabels: boolean;
   canExportReports: boolean;
+  canImportCsv: boolean;
   canViewActivity: boolean;
   canManageUsers: boolean;
   canAccessSettings: boolean;
@@ -89,6 +90,7 @@ function getBasePermissions(role: UserRole) {
         canViewReports: true,
         canPrintLabels: true,
         canExportReports: true,
+        canImportCsv: true,
         canViewActivity: true,
       };
     case "manager":
@@ -103,6 +105,7 @@ function getBasePermissions(role: UserRole) {
         canViewReports: true,
         canPrintLabels: true,
         canExportReports: true,
+        canImportCsv: true,
         canViewActivity: true,
       };
     case "technician":
@@ -117,6 +120,7 @@ function getBasePermissions(role: UserRole) {
         canViewReports: false,
         canPrintLabels: false,
         canExportReports: false,
+        canImportCsv: false,
         canViewActivity: false,
       };
     case "viewer":
@@ -132,6 +136,7 @@ function getBasePermissions(role: UserRole) {
         canViewReports: false,
         canPrintLabels: false,
         canExportReports: false,
+        canImportCsv: false,
         canViewActivity: false,
       };
   }
@@ -195,6 +200,10 @@ export function canPrintLabels(role: UserRole) {
 
 export function canExportReports(role: UserRole) {
   return getBasePermissions(role).canExportReports;
+}
+
+export function canImportCsv(role: UserRole) {
+  return getBasePermissions(role).canImportCsv;
 }
 
 export function canViewActivity(role: UserRole) {

@@ -52,7 +52,7 @@ const defaultFilters: PartFilters = {
 
 export function InventoryPage() {
   const { permissions } = useAuth();
-  const { parts, bins, models, summary, deletePart, adjustPart } = useInventory();
+  const { parts, bins, models, summary, deletePart, adjustPart, isSupabaseMode } = useInventory();
   const [filters, setFilters] = useState<PartFilters>(defaultFilters);
   const [sortKey, setSortKey] = useState<InventorySortKey>("updatedAt");
 
@@ -137,7 +137,7 @@ export function InventoryPage() {
         <StatCard
           label="Parts"
           value={parts.length}
-          hint="Tracked in the browser store"
+          hint={isSupabaseMode ? "Tracked in Supabase" : "Tracked in local demo mode"}
           icon={<PackageSearch className="h-5 w-5" />}
         />
         <StatCard
@@ -403,15 +403,15 @@ export function InventoryPage() {
               </TableHeader>
               <TableBody>
                 {filteredParts.map((part) => (
-                <InventoryTableRow
-                  key={part.id}
-                  part={part}
-                  bins={bins}
-                  canAdjustStock={permissions.canAdjustStock}
-                  canManageParts={permissions.canManageParts}
-                  onDelete={() => {
-                    if (
-                      window.confirm(
+                  <InventoryTableRow
+                    key={part.id}
+                    part={part}
+                    bins={bins}
+                    canAdjustStock={permissions.canAdjustStock}
+                    canManageParts={permissions.canManageParts}
+                    onDelete={() => {
+                      if (
+                        window.confirm(
                           `Delete ${part.partNumber}? This will remove the part from the inventory.`,
                         )
                       ) {
@@ -428,15 +428,15 @@ export function InventoryPage() {
 
           <div className="space-y-3 p-3 lg:hidden">
             {filteredParts.map((part) => (
-                <InventoryMobileCard
-                  key={part.id}
-                  part={part}
-                  bins={bins}
-                  canAdjustStock={permissions.canAdjustStock}
-                  canManageParts={permissions.canManageParts}
-                  onDelete={() => {
-                    if (
-                      window.confirm(
+              <InventoryMobileCard
+                key={part.id}
+                part={part}
+                bins={bins}
+                canAdjustStock={permissions.canAdjustStock}
+                canManageParts={permissions.canManageParts}
+                onDelete={() => {
+                  if (
+                    window.confirm(
                       `Delete ${part.partNumber}? This will remove the part from the inventory.`,
                     )
                   ) {
@@ -456,17 +456,45 @@ export function InventoryPage() {
           <CardContent className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
             <PackageSearch className="h-12 w-12 text-slate-500" />
             <div className="space-y-1">
-              <h3 className="text-base font-semibold text-white">No matching parts</h3>
+              <h3 className="text-base font-semibold text-white">
+                {parts.length === 0 ? "No parts found yet" : "No matching parts"}
+              </h3>
               <p className="max-w-xl text-sm text-slate-400">
-                Try a different search or clear the filters to bring the inventory back into view.
+                {parts.length === 0
+                  ? "Import a CSV or add your first part."
+                  : "Try a different search or clear the filters to bring the inventory back into view."}
               </p>
             </div>
-            <Button
-              className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
-              onClick={() => setFilters(defaultFilters)}
-            >
-              Clear filters
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                onClick={() => setFilters(defaultFilters)}
+              >
+                {parts.length === 0 ? "Refresh view" : "Clear filters"}
+              </Button>
+              {parts.length === 0 && permissions.canImportCsv && (
+                <Link
+                  href="/import-export"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  Import CSV
+                </Link>
+              )}
+              {parts.length === 0 && permissions.canManageParts && (
+                <Link
+                  href="/inventory/new"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  Add first part
+                </Link>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

@@ -18,7 +18,7 @@ export interface PartRow {
   part_name: string;
   manufacturer: string;
   category: Category;
-  bin_id: string | null;
+  location_id: string | null;
   quantity_on_hand: number;
   reorder_point: number;
   reorder_target: number;
@@ -31,6 +31,7 @@ export interface PartRow {
 export interface LocationRow {
   id: string;
   location_code: string;
+  name: string;
   area: string;
   shelf: number;
   bin: number;

@@ -99,6 +99,7 @@ $$;
 create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
   location_code text not null unique,
+  name text not null default '',
   area text not null,
   shelf integer not null default 1,
   bin integer not null default 1,
@@ -108,6 +109,28 @@ create table if not exists public.locations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'locations'
+      and column_name = 'name'
+  ) then
+    execute 'alter table public.locations add column name text';
+  end if;
+
+  execute $stmt$
+    update public.locations
+    set name = coalesce(nullif(trim(name), ''), nullif(trim(description), ''), location_code)
+    where name is null or trim(name) = ''
+  $stmt$;
+
+  execute $stmt$alter table public.locations alter column name set default ''$stmt$;
+  execute 'alter table public.locations alter column name set not null';
+end $$;
 
 create table if not exists public.models (
   id uuid primary key default gen_random_uuid(),

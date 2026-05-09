@@ -106,8 +106,8 @@ export interface ActivityEntry {
 export interface InventorySettings {
   lowStockThreshold: number;
   defaultPrintCopies: number;
-  storageMode: "browser-local";
-  syncMode: "mock-phase-1";
+  storageMode: "browser-local" | "supabase";
+  syncMode: "mock-phase-1" | "supabase";
   theme: "dark";
   updatedAt: string;
 }

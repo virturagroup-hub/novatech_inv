@@ -4,11 +4,11 @@ Green printer and copier parts.
 
 Green NVentory is Novatech’s internal inventory web app for reusable and green printer/copier parts. It is built for desktop, tablet, and Android Chrome, with PWA basics so staff can install it on phones when helpful.
 
-The current application is a hybrid Phase 1/Phase 2 setup:
+The current application uses Supabase for live inventory data when configured, with an explicit local demo mode available only for development or intentional testing:
 
-- inventory and workflow state still use typed local mock data
+- live inventory state reads from Supabase when the public env vars are configured and a user is signed in
 - authentication and user management use real Supabase Auth
-- the app is ready for Supabase/Postgres when you want to move the inventory data off the browser store
+- demo seed data is only shown when Supabase is unavailable or `NEXT_PUBLIC_ENABLE_DEMO_DATA=true`
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ The current application is a hybrid Phase 1/Phase 2 setup:
 - Location/bin tracking
 - Compatible printer/copier model management
 - Printable part tags and bin tags
-- CSV import/export
+- CSV import/export with a server-side Supabase import path
 - Activity log placeholder
 - Mobile-friendly lookup and edit flows
 - List-first admin screens for users, locations, and models
@@ -92,7 +92,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 - `NEXT_PUBLIC_APP_URL` is used to build absolute QR-code links for printed labels. Set it to your production domain in Vercel and to `http://localhost:3000` for local development.
 - Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
 
-If you deploy to Vercel, add the public Supabase vars and `NEXT_PUBLIC_APP_URL` to both **Preview** and **Production** environments. If either one is missing, middleware falls back to a safe no-op instead of refreshing sessions.
+If you deploy to Vercel, add the public Supabase vars and `NEXT_PUBLIC_APP_URL` to both **Preview** and **Production** environments. If any required public env var is missing, the app stays in safe demo/no-data mode instead of silently mixing demo records with real data.
 
 ### Required Supabase Settings
 
@@ -294,6 +294,6 @@ The app includes:
 - `src/lib` - Typed inventory models, seed data, reducers, helpers, and Supabase utilities
 - `supabase/phase2_schema.sql` - Phase 2 schema and RLS starter kit
 
-## Resetting Phase 1 Data
+## Resetting Demo Data
 
-If you need a clean local reset, use the `Reset demo data` action in the desktop shell or mobile menu.
+If you need a clean reset in explicit local demo mode, use the `Reset demo data` action in the desktop shell or mobile menu.

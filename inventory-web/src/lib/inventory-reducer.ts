@@ -433,7 +433,7 @@ export function inventoryReducer(
           entityType: "inventory",
           entityId: "import",
           title: "CSV imported",
-          detail: `${action.rows.length} part row${action.rows.length === 1 ? "" : "s"} were imported into the browser store.`,
+          detail: `${action.rows.length} part row${action.rows.length === 1 ? "" : "s"} were imported into the current inventory source.`,
         }),
       );
     }
@@ -454,7 +454,7 @@ export function inventoryReducer(
           entityType: "system",
           entityId: "settings",
           title: "Settings saved",
-          detail: "Local inventory settings were updated in the browser store.",
+          detail: "Local inventory settings were updated in the current inventory source.",
         }),
       );
 

@@ -104,6 +104,7 @@ export function SettingsPage() {
     deleteModel,
     updateSettings,
     resetDemoData,
+    canResetDemoData,
   } = useInventory();
 
   const [lowStockThreshold, setLowStockThreshold] = useState(String(settings.lowStockThreshold));
@@ -241,8 +242,8 @@ export function SettingsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Admin settings"
-        title="Fine-tune locations, models, and local inventory behavior."
-        description="The current app is browser-local, but these controls mirror the structure we will need when we connect Supabase in Phase 2."
+        title="Fine-tune locations, models, and inventory behavior."
+        description="The app now reads from Supabase when configured, while demo reset remains available only in explicit local mode."
         actions={
           <>
             <Link
@@ -782,41 +783,49 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="data" className="space-y-6">
-          <Card className="border-white/10 bg-white/5">
-            <CardHeader>
-              <CardTitle className="text-white">Reset and recover</CardTitle>
-              <CardDescription className="text-slate-400">
-                Use these controls when you want to go back to the seeded Phase 1 dataset.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
-                Resetting the demo store is safe for development, but it will overwrite any local browser changes.
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  className="bg-amber-400 text-slate-950 hover:bg-amber-300"
-                  onClick={() => {
-                    if (window.confirm("Reset the local browser store back to the demo seed data?")) {
-                      resetDemoData();
-                    }
-                  }}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reset demo data
-                </Button>
-                <Link
-                  href="/activity"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "default" }),
-                    "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  View activity
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+          {canResetDemoData ? (
+            <Card className="border-white/10 bg-white/5">
+              <CardHeader>
+                <CardTitle className="text-white">Reset and recover</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Use these controls when you want to go back to the seeded demo dataset in explicit local mode.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
+                  Resetting the demo store is safe for development, but it will overwrite any local demo changes.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    className="bg-amber-400 text-slate-950 hover:bg-amber-300"
+                    onClick={() => {
+                      if (window.confirm("Reset the explicit local demo data back to the seeded demo dataset?")) {
+                        resetDemoData();
+                      }
+                    }}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset demo data
+                  </Button>
+                  <Link
+                    href="/activity"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "default" }),
+                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    View activity
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-white/10 bg-white/5">
+              <CardContent className="p-4 text-sm text-slate-300">
+                Demo reset is hidden in Supabase mode so real data cannot be overwritten by accident.
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>

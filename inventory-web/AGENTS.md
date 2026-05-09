@@ -16,7 +16,8 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 
 ## Data Rules
 
-- Treat the browser-local store as Phase 1 only.
+- Treat the browser-local store as explicit demo mode only.
+- In Supabase mode, imports and inventory mutations must write to Supabase and not silently fall back to local-only state.
 - Do not connect Supabase unless the app is already stable and the migration is explicitly in scope.
 - Keep inventory, bin, model, profile, and transaction shapes typed and reusable.
 - Update the seed data and migration notes when the structure changes.
@@ -110,7 +111,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - `src/components/inventory-provider.tsx` - Client store and action API
 - `src/lib/auth.ts` - User roles and permission helpers
 - `src/lib/inventory-types.ts` - Shared domain types
-- `src/lib/inventory-seed.ts` - Phase 1 seed records
+- `src/lib/inventory-seed.ts` - explicit demo seed records
 - `src/lib/inventory-reducer.ts` - Store mutations and activity entries
 - `src/lib/inventory-utils.ts` - Filtering, summaries, and CSV helpers
 - `src/lib/supabase` - Supabase client, auth, session, and type helpers

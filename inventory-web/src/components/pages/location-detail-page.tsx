@@ -36,7 +36,7 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
         <PageHero
           eyebrow="Location detail"
           title="That location is not in the current inventory."
-          description="The local browser store did not find a matching location. Go back to the location list or scan another label."
+          description="The current inventory source did not find a matching location. Go back to the location list or scan another label."
           actions={
             <>
               <Link
@@ -203,18 +203,6 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
                   Manage locations
                 </Link>
               )}
-              {permissions.canPrintLabels && (
-                <Link
-                  href={buildBinPrintHref({ binId: bin.id })}
-                  className={cn(
-                    buttonVariants({ variant: "default", size: "default" }),
-                    "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
-                  )}
-                >
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print bin label
-                </Link>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -227,10 +215,10 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {summary.parts.length > 0 ? (
-              [...summary.parts]
-                .sort((left, right) => left.partNumber.localeCompare(right.partNumber))
-                .map((part) => (
+                {summary.parts.length > 0 ? (
+                  [...summary.parts]
+                    .sort((left, right) => left.partNumber.localeCompare(right.partNumber))
+                    .map((part) => (
                   <Link
                     key={part.id}
                     href={`/inventory/${part.id}`}
@@ -242,12 +230,8 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
                         <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Badge className="border-white/10 bg-white/5 text-slate-200">
-                          Qty {part.quantityOnHand}
-                        </Badge>
-                        <Badge className="border-white/10 bg-white/5 text-slate-200">
-                          {getPartStockStatus(part)}
-                        </Badge>
+                        <Badge className="border-white/10 bg-white/5 text-slate-200">Qty {part.quantityOnHand}</Badge>
+                        <Badge className="border-white/10 bg-white/5 text-slate-200">{getPartStockStatus(part)}</Badge>
                       </div>
                     </div>
                     <p className="mt-3 text-xs text-slate-400">

@@ -69,8 +69,8 @@ export function ActivityPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Activity log"
-        title="Audit trail for the local inventory store."
-        description="This is the Phase 1 placeholder log that will later become a proper audit table in Supabase. For now, it is still useful for showing what changed and when."
+        title="Audit trail for the current inventory source."
+        description="This activity feed stays useful in demo mode and is ready to map fully to Supabase transactions when live data is connected."
         actions={
           <>
             <Link
@@ -214,12 +214,12 @@ export function ActivityPage() {
         <CardHeader>
           <CardTitle className="text-white">Migration note</CardTitle>
           <CardDescription className="text-slate-400">
-            The current trail is still browser-local, but the event shape is already ready for a database table.
+            The current trail can come from demo state or Supabase transactions, but the event shape is already ready for a database table.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-300">
           <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-            {summary.totalUnits} total units are being tracked in the active Phase 1 dataset.
+            {summary.totalUnits} total units are being tracked in the active inventory source.
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
             When Supabase is connected later, this screen can swap to a true audit table without changing the UI.

@@ -13,7 +13,6 @@ import {
   Printer,
   PlusCircle,
   ScanSearch,
-  Tag,
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -47,7 +46,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
         <PageHero
           eyebrow="Part detail"
           title="That part is not in the current inventory."
-          description="The local Phase 1 store did not find a matching part record. Go back to the table or search the lookup screen."
+          description="The current inventory source did not find a matching part record. Go back to the table or search the lookup screen."
           actions={
             <>
               <Link
@@ -172,7 +171,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               <div>
                 <CardTitle className="text-white">Inventory details</CardTitle>
                 <CardDescription className="text-slate-400">
-                  The current browser-local record for this part.
+                  The current record for this part from the active inventory source.
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -363,18 +362,6 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2">
-              {permissions.canPrintLabels && (
-                <Link
-                  href={buildPartPrintHref({ partIds: [part.id] })}
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "default" }),
-                    "h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <Tag className="mr-2 h-4 w-4" />
-                  Print a tag
-                </Link>
-              )}
               {permissions.canManageParts && (
                 <Link
                   href={`/inventory/${part.id}/edit`}
@@ -404,7 +391,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Delete ${part.partNumber}? This removes the part from the browser store.`,
+                        `Delete ${part.partNumber}? This removes the part from the current inventory source.`,
                       )
                     ) {
                       deletePart(part.id);

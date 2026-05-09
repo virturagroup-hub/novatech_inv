@@ -1,8 +1,17 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
-import { createSeedState, inventoryStorageKey } from "@/lib/inventory-seed";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useState,
+} from "react";
+
+import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createEmptyState, createSeedState, inventoryStorageKey } from "@/lib/inventory-seed";
 import { inventoryReducer, type PartImportRow } from "@/lib/inventory-reducer";
 import type {
   Bin,
@@ -23,8 +32,13 @@ import {
   requiresAttention,
 } from "@/lib/inventory-utils";
 
+type InventoryDataSource = "demo" | "supabase";
+
 type InventoryContextValue = InventoryState & {
   hydrated: boolean;
+  dataSource: InventoryDataSource;
+  isSupabaseMode: boolean;
+  canResetDemoData: boolean;
   summary: ReturnType<typeof getDashboardSummary>;
   getPartById: (partId: string) => Part | undefined;
   getBinById: (binId: string) => Bin | null;
@@ -45,9 +59,22 @@ type InventoryContextValue = InventoryState & {
   importParts: (rows: PartImportRow[]) => void;
   updateSettings: (settings: Partial<InventorySettings>) => void;
   resetDemoData: () => void;
+  refreshInventory: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
+
+function isSupabaseConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()),
+  );
+}
+
+function isDemoDataExplicitlyEnabled() {
+  return process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "true";
+}
 
 function safeParseState(raw: string | null): InventoryState | null {
   if (!raw) return null;
@@ -71,26 +98,123 @@ function safeParseState(raw: string | null): InventoryState | null {
   return null;
 }
 
+function normalizeText(value: string) {
+  return value.trim();
+}
+
+async function readSnapshotFromServer() {
+  const response = await fetch("/api/inventory/snapshot", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { message?: string }
+      | null;
+    throw new Error(payload?.message ?? "Failed to load inventory snapshot.");
+  }
+
+  const payload = (await response.json()) as { data?: InventoryState };
+  if (!payload.data) {
+    throw new Error("Inventory snapshot response did not include data.");
+  }
+
+  return payload.data;
+}
+
 export function InventoryProvider({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [state, dispatch] = useReducer(inventoryReducer, createSeedState());
+  const supabaseConfigured = isSupabaseConfigured();
+  const demoModeEnabled = isDemoDataExplicitlyEnabled();
+  const isSupabaseMode = supabaseConfigured && !demoModeEnabled;
+  const dataSource: InventoryDataSource = isSupabaseMode ? "supabase" : "demo";
+  const [state, dispatch] = useReducer(
+    inventoryReducer,
+    isSupabaseMode ? createEmptyState("supabase") : createSeedState(),
+  );
   const [hydrated, setHydrated] = useState(false);
+  const [browserSupabase] = useState(() =>
+    isSupabaseMode ? createBrowserSupabaseClient() : null,
+  );
 
-  useEffect(() => {
-    const stored = safeParseState(window.localStorage.getItem(inventoryStorageKey));
-    if (stored) {
-      dispatch({ type: "hydrate", state: stored });
+  const refreshInventory = useCallback(async () => {
+    if (!isSupabaseMode) return;
+
+    try {
+      const snapshot = await readSnapshotFromServer();
+      dispatch({ type: "hydrate", state: snapshot });
+    } catch (error) {
+      console.warn(
+        error instanceof Error ? error.message : "Failed to refresh Supabase inventory state.",
+      );
+      dispatch({ type: "hydrate", state: createEmptyState("supabase") });
     }
-    setHydrated(true);
-  }, []);
+  }, [isSupabaseMode]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    let active = true;
+
+    const bootstrap = async () => {
+      if (!isSupabaseMode) {
+        const stored = safeParseState(window.localStorage.getItem(inventoryStorageKey));
+        if (stored && active) {
+          dispatch({ type: "hydrate", state: stored });
+        }
+        if (active) setHydrated(true);
+        return;
+      }
+
+      try {
+        const snapshot = await readSnapshotFromServer();
+        if (active) {
+          dispatch({ type: "hydrate", state: snapshot });
+        }
+      } catch (error) {
+        console.warn(
+          error instanceof Error ? error.message : "Failed to bootstrap Supabase inventory state.",
+        );
+        if (active) {
+          dispatch({ type: "hydrate", state: createEmptyState("supabase") });
+        }
+      } finally {
+        if (active) setHydrated(true);
+      }
+    };
+
+    void bootstrap();
+
+    return () => {
+      active = false;
+    };
+  }, [isSupabaseMode]);
+
+  useEffect(() => {
+    if (!hydrated || isSupabaseMode) return;
     window.localStorage.setItem(inventoryStorageKey, JSON.stringify(state));
-  }, [state, hydrated]);
+  }, [hydrated, isSupabaseMode, state]);
+
+  const syncRemote = useCallback(
+    (task: () => Promise<void>) => {
+      if (!browserSupabase) return;
+
+      void (async () => {
+        try {
+          await task();
+        } catch (error) {
+          console.error(
+            error instanceof Error ? error.message : "Failed to sync inventory change to Supabase.",
+          );
+        } finally {
+          await refreshInventory();
+        }
+      })();
+    },
+    [browserSupabase, refreshInventory],
+  );
 
   const value = useMemo<InventoryContextValue>(() => {
     const summary = getDashboardSummary(state);
@@ -98,44 +222,248 @@ export function InventoryProvider({
     return {
       ...state,
       hydrated,
+      dataSource,
+      isSupabaseMode,
+      canResetDemoData: dataSource === "demo",
       summary,
-      getPartById: (partId: string) =>
-        state.parts.find((part) => part.id === partId),
+      getPartById: (partId: string) => state.parts.find((part) => part.id === partId),
       getBinById: (binId: string) => getBinById(state.bins, binId),
-      getModelById: (modelId: string) =>
-        state.models.find((model) => model.id === modelId),
+      getModelById: (modelId: string) => state.models.find((model) => model.id === modelId),
       getPartLocationLabel: (part: Part) => getPartLocationLabel(part, state.bins),
       getCompatibleModels: (part: Part) => getCompatibleModels(part, state.models),
       getPartStockStatus: (part: Part) => getPartStockStatus(part),
       requiresAttention: (part: Part) => requiresAttention(part),
-      addPart: (draft: PartDraft) => dispatch({ type: "upsertPart", part: draft }),
-      deletePart: (partId: string) => dispatch({ type: "deletePart", partId }),
-      adjustPart: (partId: string, delta: number) =>
-        dispatch({ type: "adjustPart", partId, delta }),
-      saveBin: (draft: BinDraft) => dispatch({ type: "upsertBin", bin: draft }),
-      deleteBin: (binId: string) => dispatch({ type: "deleteBin", binId }),
-      setBinStatus: (binId: string, status: "active" | "inactive") =>
-        dispatch({ type: "setBinStatus", binId, status }),
-      saveModel: (draft: ModelDraft) =>
-        dispatch({
-          type: "upsertModel",
-          model: {
-            id: draft.id,
-            manufacturer: draft.manufacturer,
-            name: draft.name,
-            series: draft.series,
-            status: draft.status,
-            notes: draft.notes,
-          },
-        }),
-      deleteModel: (modelId: string) => dispatch({ type: "deleteModel", modelId }),
-      setModelStatus: (modelId: string, status: "active" | "inactive") =>
-        dispatch({ type: "setModelStatus", modelId, status }),
+      addPart: (draft: PartDraft) => {
+        const partDraft: PartDraft = {
+          ...draft,
+          id: draft.id ?? crypto.randomUUID(),
+          partNumber: normalizeText(draft.partNumber).toUpperCase(),
+          partName: normalizeText(draft.partName),
+          manufacturer: normalizeText(draft.manufacturer),
+          notes: normalizeText(draft.notes),
+        };
+
+        dispatch({ type: "upsertPart", part: partDraft });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error: partError } = await browserSupabase.from("parts").upsert(
+            [
+              {
+                id: partDraft.id,
+                part_number: partDraft.partNumber,
+                part_name: partDraft.partName,
+                manufacturer: partDraft.manufacturer,
+                category: partDraft.category,
+                location_id: partDraft.binId,
+                quantity_on_hand: Math.max(0, Number(partDraft.quantityOnHand) || 0),
+                reorder_point: Math.max(0, Number(partDraft.reorderPoint) || 0),
+                reorder_target: Math.max(0, Number(partDraft.reorderTarget) || 0),
+                universal: partDraft.universal,
+                notes: partDraft.notes,
+              },
+            ],
+            { onConflict: "id" },
+          );
+
+          if (partError) throw partError;
+
+          const { error: deleteLinksError } = await browserSupabase
+            .from("part_model_links")
+            .delete()
+            .eq("part_id", partDraft.id);
+
+          if (deleteLinksError) throw deleteLinksError;
+
+          if (partDraft.compatibleModelIds.length > 0) {
+            const { error: linkError } = await browserSupabase.from("part_model_links").insert(
+              partDraft.compatibleModelIds.map((modelId) => ({
+                part_id: partDraft.id!,
+                model_id: modelId,
+              })),
+            );
+
+            if (linkError) throw linkError;
+          }
+        });
+      },
+      deletePart: (partId: string) => {
+        dispatch({ type: "deletePart", partId });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase.from("parts").delete().eq("id", partId);
+          if (error) throw error;
+        });
+      },
+      adjustPart: (partId: string, delta: number) => {
+        const part = state.parts.find((item) => item.id === partId);
+        if (!part) return;
+
+        dispatch({ type: "adjustPart", partId, delta });
+
+        if (!browserSupabase) return;
+
+        const nextQuantity = Math.max(0, part.quantityOnHand + delta);
+        syncRemote(async () => {
+          const { error: updateError } = await browserSupabase
+            .from("parts")
+            .update({
+              quantity_on_hand: nextQuantity,
+            })
+            .eq("id", partId);
+
+          if (updateError) throw updateError;
+
+          const { error: transactionError } = await browserSupabase.from("inventory_transactions").insert(
+            [
+              {
+                part_id: partId,
+                transaction_type: "adjustment",
+                delta,
+                note: delta >= 0 ? "Manual stock increase" : "Manual stock decrease",
+                created_by: null,
+              },
+            ],
+          );
+
+          if (transactionError) throw transactionError;
+        });
+      },
+      saveBin: (draft: BinDraft) => {
+        const binDraft: BinDraft = {
+          ...draft,
+          id: draft.id ?? crypto.randomUUID(),
+          code: normalizeText(draft.code).toUpperCase(),
+          name: normalizeText(draft.name),
+          description: normalizeText(draft.description),
+          aisle: normalizeText(draft.aisle).toUpperCase(),
+          notes: normalizeText(draft.notes),
+        };
+
+        dispatch({ type: "upsertBin", bin: binDraft });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase.from("locations").upsert(
+            [
+              {
+                id: binDraft.id,
+                location_code: binDraft.code,
+                name: binDraft.name,
+                area: binDraft.aisle,
+                shelf: Number(binDraft.row) || 1,
+                bin: Number(binDraft.column) || 1,
+                description: binDraft.description,
+                status: binDraft.status,
+                notes: binDraft.notes || null,
+              },
+            ],
+            { onConflict: "id" },
+          );
+
+          if (error) throw error;
+        });
+      },
+      deleteBin: (binId: string) => {
+        dispatch({ type: "deleteBin", binId });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase.from("locations").delete().eq("id", binId);
+          if (error) throw error;
+        });
+      },
+      setBinStatus: (binId: string, status: "active" | "inactive") => {
+        dispatch({ type: "setBinStatus", binId, status });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase
+            .from("locations")
+            .update({ status })
+            .eq("id", binId);
+
+          if (error) throw error;
+        });
+      },
+      saveModel: (draft: ModelDraft) => {
+        const modelDraft: ModelDraft = {
+          ...draft,
+          id: draft.id ?? crypto.randomUUID(),
+          manufacturer: normalizeText(draft.manufacturer),
+          name: normalizeText(draft.name),
+          series: normalizeText(draft.series),
+          notes: normalizeText(draft.notes),
+        };
+
+        dispatch({ type: "upsertModel", model: modelDraft });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase.from("models").upsert(
+            [
+              {
+                id: modelDraft.id,
+                manufacturer: modelDraft.manufacturer,
+                model_name: modelDraft.name,
+                series: modelDraft.series,
+                status: modelDraft.status,
+                notes: modelDraft.notes || null,
+              },
+            ],
+            { onConflict: "id" },
+          );
+
+          if (error) throw error;
+        });
+      },
+      deleteModel: (modelId: string) => {
+        dispatch({ type: "deleteModel", modelId });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase.from("models").delete().eq("id", modelId);
+          if (error) throw error;
+        });
+      },
+      setModelStatus: (modelId: string, status: "active" | "inactive") => {
+        dispatch({ type: "setModelStatus", modelId, status });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase
+            .from("models")
+            .update({ status })
+            .eq("id", modelId);
+
+          if (error) throw error;
+        });
+      },
       importParts: (rows) => dispatch({ type: "importParts", rows }),
-      updateSettings: (settings) => dispatch({ type: "updateSettings", settings }),
-      resetDemoData: () => dispatch({ type: "reset" }),
+      updateSettings: (settings) =>
+        dispatch({
+          type: "updateSettings",
+          settings,
+        }),
+      resetDemoData: () => {
+        if (isSupabaseMode) {
+          return;
+        }
+
+        dispatch({ type: "reset" });
+      },
+      refreshInventory,
     };
-  }, [hydrated, state]);
+  }, [browserSupabase, dataSource, hydrated, isSupabaseMode, refreshInventory, state, syncRemote]);
 
   return (
     <InventoryContext.Provider value={value}>

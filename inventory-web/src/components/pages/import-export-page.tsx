@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import Papa from "papaparse";
 import {
   AlertTriangle,
   Clock3,
@@ -27,20 +26,14 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { categories } from "@/lib/inventory-types";
+import { parseInventoryCsv, type InventoryCsvPreview, type InventoryCsvRow } from "@/lib/inventory-csv";
 import {
   serializeActivityCsv,
   serializeLowStockCsv,
   serializeLocationsCsv,
   serializePartsCsv,
 } from "@/lib/inventory-utils";
-import { type PartImportRow } from "@/lib/inventory-reducer";
-
-type ImportPreviewState = {
-  rows: PartImportRow[];
-  rawText: string;
-  error: string;
-};
+import type { InventoryImportSummary } from "@/lib/inventory-import-types";
 
 type ReportCard =
   | {
@@ -72,86 +65,21 @@ function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-function normalizeHeader(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
-}
-
-function readValue(row: Record<string, unknown>, aliases: string[]) {
-  const normalized = new Map(
-    Object.entries(row).map(([key, value]) => [normalizeHeader(key), value]),
-  );
-  for (const alias of aliases) {
-    const value = normalized.get(normalizeHeader(alias));
-    if (value !== undefined && value !== null && String(value).trim()) {
-      return String(value).trim();
-    }
-  }
-  return "";
-}
-
-function parseImportRows(text: string): PartImportRow[] {
-  const result = Papa.parse<Record<string, unknown>>(text, {
-    header: true,
-    skipEmptyLines: true,
-  });
-
-  if (result.errors.length > 0) {
-    throw new Error(result.errors[0].message);
-  }
-
-  const rows = result.data
-    .map((row) => {
-      const partNumber = readValue(row, ["part number", "partnumber", "part_number"]);
-      const partName = readValue(row, ["part name", "partname", "part_name"]);
-      if (!partNumber || !partName) return null;
-
-      const compatibleModelNames = readValue(row, [
-        "compatible models",
-        "compatible model names",
-        "model names",
-        "models",
-      ])
-        .split(/[,;|]/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-      const categoryValue = readValue(row, ["category"]);
-      const category = categories.find(
-        (item) => item.toLowerCase() === categoryValue.toLowerCase(),
-      ) ?? "Other";
-
-      return {
-        partNumber,
-        partName,
-        manufacturer: readValue(row, ["manufacturer"]),
-        category,
-        quantityOnHand: Number(readValue(row, ["quantity on hand", "quantity", "qty"])) || 0,
-        reorderPoint: Number(readValue(row, ["reorder point", "reorder"])) || 0,
-        reorderTarget: Number(readValue(row, ["reorder target", "target"])) || 0,
-        binCode: readValue(row, ["bin code", "bin", "location"]),
-        compatibleModelNames,
-        universal: ["yes", "true", "1", "y"].includes(
-          readValue(row, ["universal"]).toLowerCase(),
-        ),
-        notes: readValue(row, ["notes", "note"]),
-      } satisfies PartImportRow;
-    })
-    .filter(Boolean) as PartImportRow[];
-
-  if (rows.length === 0) {
-    throw new Error("No valid part rows were found in the CSV.");
-  }
-
-  return rows;
-}
-
 export function ImportExportPage() {
   const { permissions } = useAuth();
-  const { activity, bins, models, parts, settings, importParts } = useInventory();
-  const [preview, setPreview] = useState<ImportPreviewState>({
+  const { activity, bins, models, parts, settings, refreshInventory, dataSource } = useInventory();
+  const [preview, setPreview] = useState<InventoryCsvPreview>({
     rows: [],
-    rawText: "",
-    error: "",
+    totalRows: 0,
+    readyRows: 0,
+    skippedRows: 0,
+    warningCount: 0,
+    errorCount: 0,
   });
+  const [rawText, setRawText] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [importResult, setImportResult] = useState<InventoryImportSummary | null>(null);
   const [busy, setBusy] = useState(false);
 
   const exportSummary = useMemo(
@@ -195,7 +123,7 @@ export function ImportExportPage() {
     },
     {
       title: "Export Activity Report",
-      description: "Keep a lightweight audit trail of what happened in the browser store.",
+      description: "Keep a lightweight audit trail of what happened in the current inventory source.",
       icon: <Clock3 className="h-5 w-5" />,
       actionLabel: "Download CSV",
       disabled: !permissions.canExportReports,
@@ -221,48 +149,94 @@ export function ImportExportPage() {
 
   const parseCurrentText = () => {
     try {
-      const rows = parseImportRows(preview.rawText);
-      setPreview((current) => ({ ...current, rows, error: "" }));
-      toast.success(`Parsed ${rows.length} part row${rows.length === 1 ? "" : "s"}.`);
+      const parsed = parseInventoryCsv(rawText);
+      setPreview(parsed);
+      setPreviewError("");
+      setImportResult(null);
+      toast.success(`Parsed ${parsed.readyRows} ready row${parsed.readyRows === 1 ? "" : "s"}.`);
     } catch (error) {
-      setPreview((current) => ({
-        ...current,
+      setPreview({
         rows: [],
-        error: error instanceof Error ? error.message : "Failed to parse CSV.",
-      }));
+        totalRows: 0,
+        readyRows: 0,
+        skippedRows: 0,
+        warningCount: 0,
+        errorCount: 0,
+      });
+      setPreviewError(error instanceof Error ? error.message : "Failed to parse CSV.");
       toast.error(error instanceof Error ? error.message : "Failed to parse CSV.");
     }
   };
 
   const handleFileChange = async (file: File | null) => {
     if (!file) return;
+    setSourceName(file.name);
     const text = await file.text();
-    setPreview((current) => ({ ...current, rawText: text }));
+    setRawText(text);
     try {
-      const rows = parseImportRows(text);
-      setPreview({ rawText: text, rows, error: "" });
-      toast.success(`Parsed ${rows.length} part row${rows.length === 1 ? "" : "s"}.`);
+      const parsed = parseInventoryCsv(text);
+      setPreview(parsed);
+      setPreviewError("");
+      setImportResult(null);
+      toast.success(`Parsed ${parsed.readyRows} ready row${parsed.readyRows === 1 ? "" : "s"}.`);
     } catch (error) {
       setPreview({
-        rawText: text,
         rows: [],
-        error: error instanceof Error ? error.message : "Failed to parse CSV.",
+        totalRows: 0,
+        readyRows: 0,
+        skippedRows: 0,
+        warningCount: 0,
+        errorCount: 0,
       });
+      setPreviewError(error instanceof Error ? error.message : "Failed to parse CSV.");
       toast.error(error instanceof Error ? error.message : "Failed to parse CSV.");
     }
   };
 
-  const runImport = () => {
-    if (preview.rows.length === 0) {
+  const runImport = async () => {
+    if (!permissions.canImportCsv) {
+      toast.error("Your current role cannot import CSV files.");
+      return;
+    }
+
+    if (!rawText.trim()) {
       toast.error("Parse a CSV file or paste CSV text before importing.");
       return;
     }
 
     setBusy(true);
     try {
-      importParts(preview.rows);
-      toast.success(`Imported ${preview.rows.length} part row${preview.rows.length === 1 ? "" : "s"}.`);
-      setPreview({ rows: [], rawText: "", error: "" });
+      const response = await fetch("/api/inventory/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          csvText: rawText,
+          sourceName: sourceName || undefined,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; summary?: InventoryImportSummary; message?: string }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.summary) {
+        throw new Error(payload?.message ?? "The CSV import failed.");
+      }
+
+      setImportResult(payload.summary);
+      setPreviewError("");
+      toast.success(
+        `Imported ${payload.summary.partsCreated + payload.summary.partsUpdated} part row${
+          payload.summary.partsCreated + payload.summary.partsUpdated === 1 ? "" : "s"
+        } into Supabase.`,
+      );
+      await refreshInventory();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The CSV import failed.";
+      setPreviewError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -273,7 +247,7 @@ export function ImportExportPage() {
       <PageHero
         eyebrow="Reports & Exports"
         title="Clean action cards for the jobs managers and technicians use most."
-        description="Export reports, open the print workflow, and still keep the CSV import tool nearby for Phase 1 browser data."
+        description="Export reports, open the print workflow, and import real CSV data into Supabase when elevated users need it."
         actions={
           <>
             <Link
@@ -306,10 +280,20 @@ export function ImportExportPage() {
             key={metric.label}
             label={metric.label}
             value={metric.value}
-            hint="Included in the local dataset"
+            hint="Current inventory totals"
             icon={<Files className="h-5 w-5" />}
           />
         ))}
+        <StatCard
+          label="Data source"
+          value={dataSource === "supabase" ? "Supabase" : "Demo"}
+          hint={
+            dataSource === "supabase"
+              ? "Reads from live tables when Supabase is configured."
+              : "Uses seeded data only when demo mode is enabled."
+          }
+          icon={<Upload className="h-5 w-5" />}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -359,7 +343,7 @@ export function ImportExportPage() {
               {card.disabled && (
                 <p className="mt-3 text-xs text-slate-400">
                   {card.title.includes("Print")
-                    ? "Printing is available to elevated users and technicians."
+                    ? "Printing is available to admins and managers only."
                     : "Exports are available to admins and managers."}
                 </p>
               )}
@@ -368,10 +352,10 @@ export function ImportExportPage() {
         ))}
       </div>
 
-      {!permissions.canManageParts && (
+      {!permissions.canImportCsv && (
         <Card className="border-white/10 bg-white/5">
           <CardContent className="p-4 text-sm text-slate-300">
-            CSV import is available to elevated inventory editors. Viewers and technicians can still use the reports above.
+            CSV import is available to admins and managers only.
           </CardContent>
         </Card>
       )}
@@ -392,7 +376,7 @@ export function ImportExportPage() {
               <CardHeader>
                 <CardTitle className="text-white">Import part rows</CardTitle>
                 <CardDescription className="text-slate-400">
-                  Paste CSV text or pick a file. The parser matches part number, name, bin code, and compatible model names.
+                  Paste CSV text or pick a file. The parser matches common part, location, quantity, and compatibility columns.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -403,17 +387,15 @@ export function ImportExportPage() {
                   onChange={(event) => handleFileChange(event.target.files?.[0] ?? null)}
                 />
                 <Textarea
-                  value={preview.rawText}
-                  onChange={(event) =>
-                    setPreview((current) => ({ ...current, rawText: event.target.value }))
-                  }
+                  value={rawText}
+                  onChange={(event) => setRawText(event.target.value)}
                   placeholder="Paste a CSV export here if you do not want to upload a file."
                   className="min-h-72 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
                 />
 
-                {preview.error && (
+                {previewError && (
                   <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-100">
-                    {preview.error}
+                    {previewError}
                   </div>
                 )}
 
@@ -429,15 +411,28 @@ export function ImportExportPage() {
                   <Button
                     className="bg-amber-400 text-slate-950 hover:bg-amber-300"
                     onClick={runImport}
-                    disabled={busy || preview.rows.length === 0}
+                    disabled={busy || !permissions.canImportCsv || !rawText.trim()}
                   >
                     <Upload className="mr-2 h-4 w-4" />
-                    Import {preview.rows.length || ""}
+                    Import {preview.readyRows || ""}
                   </Button>
                   <Button
                     variant="outline"
                     className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                    onClick={() => setPreview({ rows: [], rawText: "", error: "" })}
+                    onClick={() => {
+                      setRawText("");
+                      setSourceName("");
+                      setPreview({
+                        rows: [],
+                        totalRows: 0,
+                        readyRows: 0,
+                        skippedRows: 0,
+                        warningCount: 0,
+                        errorCount: 0,
+                      });
+                      setPreviewError("");
+                      setImportResult(null);
+                    }}
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
                     Clear
@@ -450,12 +445,12 @@ export function ImportExportPage() {
               <CardHeader>
                 <CardTitle className="text-white">Import rules</CardTitle>
                 <CardDescription className="text-slate-400">
-                The parser does a few helpful matches before writing anything into the store.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-slate-300">
+                  The parser does a few helpful matches before writing anything into Supabase.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-slate-300">
                 <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                  Bin codes are matched against the current storage map. Unknown bins fall back to unassigned.
+                  Bin codes are matched against the current location map. Unknown bins create new locations when needed.
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
                   Compatible model names may be separated by commas, semicolons, or pipes.
@@ -464,11 +459,54 @@ export function ImportExportPage() {
                   Universal rows stay universal even if no compatible models are listed.
                 </div>
                 <Badge className="border-white/10 bg-white/5 text-slate-200">
-                  {preview.rows.length} parsed rows
+                  {preview.readyRows} ready rows
                 </Badge>
               </CardContent>
             </Card>
           </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {[
+              { label: "Total rows", value: preview.totalRows },
+              { label: "Ready rows", value: preview.readyRows },
+              { label: "Skipped rows", value: preview.skippedRows },
+              { label: "Warnings", value: preview.warningCount },
+              { label: "Errors", value: preview.errorCount },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{metric.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{metric.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {importResult && (
+            <Card className="border-white/10 bg-white/5">
+              <CardHeader>
+                <CardTitle className="text-white">Import results</CardTitle>
+                <CardDescription className="text-slate-400">
+                  These counts reflect what was actually written to Supabase.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "Parts created", value: importResult.partsCreated },
+                  { label: "Parts updated", value: importResult.partsUpdated },
+                  { label: "Locations created", value: importResult.locationsCreated },
+                  { label: "Locations updated", value: importResult.locationsUpdated },
+                  { label: "Models created", value: importResult.modelsCreated },
+                  { label: "Models updated", value: importResult.modelsUpdated },
+                  { label: "Links created", value: importResult.linksCreated },
+                  { label: "Transactions", value: importResult.transactionsCreated },
+                ].map((metric) => (
+                  <div key={metric.label} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{metric.label}</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{metric.value}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
@@ -478,33 +516,45 @@ export function ImportExportPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-auto p-0">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1100px] text-sm">
                 <thead className="bg-slate-950/60 text-left text-slate-400">
                   <tr>
+                    <th className="px-4 py-3 font-medium">Row</th>
                     <th className="px-4 py-3 font-medium">Part number</th>
                     <th className="px-4 py-3 font-medium">Name</th>
                     <th className="px-4 py-3 font-medium">Manufacturer</th>
-                    <th className="px-4 py-3 font-medium">Bin</th>
+                    <th className="px-4 py-3 font-medium">Location</th>
                     <th className="px-4 py-3 font-medium">Qty</th>
                     <th className="px-4 py-3 font-medium">Compatibility</th>
+                    <th className="px-4 py-3 font-medium">Warnings</th>
+                    <th className="px-4 py-3 font-medium">Errors</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.rows.slice(0, 8).map((row) => (
+                  {preview.rows.slice(0, 8).map((row: InventoryCsvRow) => (
                     <tr key={row.partNumber} className="border-t border-white/10">
+                      <td className="px-4 py-3 text-slate-400">{row.rowIndex}</td>
                       <td className="px-4 py-3 font-mono text-white">{row.partNumber}</td>
                       <td className="px-4 py-3 text-slate-200">{row.partName}</td>
                       <td className="px-4 py-3 text-slate-300">{row.manufacturer}</td>
-                      <td className="px-4 py-3 text-slate-300">{row.binCode || "Unassigned"}</td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {row.locationCode || "Unassigned"}
+                      </td>
                       <td className="px-4 py-3 text-slate-300">{row.quantityOnHand}</td>
                       <td className="px-4 py-3 text-slate-300">
                         {row.universal ? "Universal" : row.compatibleModelNames.join(", ") || "None"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {row.warnings.length > 0 ? row.warnings.join(" • ") : "None"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {row.errors.length > 0 ? row.errors.join(" • ") : "None"}
                       </td>
                     </tr>
                   ))}
                   {preview.rows.length === 0 && (
                     <tr>
-                      <td className="px-4 py-10 text-center text-slate-400" colSpan={6}>
+                      <td className="px-4 py-10 text-center text-slate-400" colSpan={9}>
                         No parsed rows yet.
                       </td>
                     </tr>
@@ -516,7 +566,7 @@ export function ImportExportPage() {
         </TabsContent>
 
         <TabsContent value="guide" className="space-y-6">
-          <Card className="border-white/10 bg-white/5">
+            <Card className="border-white/10 bg-white/5">
             <CardHeader>
               <CardTitle className="text-white">Suggested columns</CardTitle>
               <CardDescription className="text-slate-400">
@@ -527,13 +577,19 @@ export function ImportExportPage() {
               {[
                 "Part Number",
                 "Part Name",
+                "Description",
                 "Manufacturer",
                 "Category",
+                "Quantity",
                 "Quantity On Hand",
-                "Reorder Point",
-                "Reorder Target",
-                "Bin Code",
+                "Qty",
+                "Storage Bin",
+                "Location",
+                "Area",
+                "Shelf",
+                "Bin",
                 "Compatible Models",
+                "Models",
                 "Universal",
                 "Notes",
               ].map((column) => (

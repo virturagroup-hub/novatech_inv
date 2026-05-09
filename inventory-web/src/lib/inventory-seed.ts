@@ -499,7 +499,7 @@ export const seedActivity: ActivityEntry[] = [
     entityType: "system",
     entityId: "seed",
     title: "Demo dataset loaded",
-    detail: "Typed mock inventory seed was loaded for Phase 1 development.",
+    detail: "Typed mock inventory seed was loaded for explicit local demo mode.",
     occurredAt: "2026-04-02T15:00:00.000Z",
   },
   {
@@ -532,6 +532,29 @@ export const seedSettings: InventorySettings = {
   theme: "dark",
   updatedAt: "2026-05-06T15:15:00.000Z",
 };
+
+export function createDefaultSettings(storageMode: InventorySettings["storageMode"] = "browser-local"): InventorySettings {
+  return {
+    lowStockThreshold: 5,
+    defaultPrintCopies: 1,
+    storageMode,
+    syncMode: storageMode === "supabase" ? "supabase" : "mock-phase-1",
+    theme: "dark",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function createEmptyState(
+  storageMode: InventorySettings["storageMode"] = "browser-local",
+): InventoryState {
+  return {
+    bins: [],
+    models: [],
+    parts: [],
+    activity: [],
+    settings: createDefaultSettings(storageMode),
+  };
+}
 
 export function createSeedState(): InventoryState {
   return {

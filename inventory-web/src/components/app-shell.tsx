@@ -109,7 +109,7 @@ export function AppShell({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
-  const { summary, resetDemoData } = useInventory();
+  const { summary, resetDemoData, canResetDemoData } = useInventory();
   const {
     session,
     hydrated,
@@ -388,7 +388,7 @@ export function AppShell({
               <div>
                 <p className="text-sm font-medium text-white">Workspace tools</p>
                 <p className="text-xs text-slate-400">
-                  Local data stays in the browser until Supabase is connected.
+                  Demo reset is only shown when the app is in explicit local demo mode.
                 </p>
               </div>
               <Badge className="border-emerald-400/30 bg-emerald-400/15 text-emerald-100">
@@ -408,18 +408,16 @@ export function AppShell({
           </div>
 
           <div className="mt-auto pt-6 space-y-2">
-            {permissions.canManageParts && (
+            {canResetDemoData && permissions.canAccessSettings && (
               <Button
                 variant="outline"
                 className="h-10 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 onClick={() => {
                   if (
-                    window.confirm(
-                      "Reset the browser-local demo inventory back to the Phase 1 seed data?",
-                    )
-                  ) {
-                    resetDemoData();
-                  }
+                      window.confirm("Reset the explicit local demo inventory back to the seeded demo dataset?")
+                    ) {
+                      resetDemoData();
+                    }
                 }}
               >
                 <ShieldCheck className="mr-2 h-4 w-4" />
@@ -483,15 +481,15 @@ export function AppShell({
                         />
                       ))}
                     </div>
-                    <div className="mt-4 space-y-2">
-                      {permissions.canManageParts && (
+              <div className="mt-4 space-y-2">
+                      {canResetDemoData && permissions.canAccessSettings && (
                         <Button
                           variant="outline"
                           className="h-11 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                           onClick={() => {
                             if (
                               window.confirm(
-                                "Reset the browser-local demo inventory back to the Phase 1 seed data?",
+                                "Reset the explicit local demo inventory back to the seeded demo dataset?",
                               )
                             ) {
                               resetDemoData();
@@ -614,14 +612,14 @@ export function AppShell({
                         mobile
                       />
                     ))}
-                    {permissions.canManageParts && (
+                    {canResetDemoData && permissions.canAccessSettings && (
                       <Button
                         variant="outline"
                         className="mt-2 h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                         onClick={() => {
                           if (
                             window.confirm(
-                              "Reset the browser-local demo inventory back to the Phase 1 seed data?",
+                              "Reset the explicit local demo inventory back to the seeded demo dataset?",
                             )
                           ) {
                             resetDemoData();
