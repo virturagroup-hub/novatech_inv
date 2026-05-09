@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowUpRight,
@@ -11,7 +11,6 @@ import {
   Home,
   LayoutGrid,
   MapPinned,
-  Menu,
   PackageSearch,
   Printer,
   Users,
@@ -31,7 +30,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useInventory } from "@/components/inventory-provider";
@@ -57,18 +55,21 @@ function AppLink({
   icon: Icon,
   pathname,
   mobile = false,
+  onNavigate,
 }: {
   href: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
   pathname: string;
   mobile?: boolean;
+  onNavigate?: () => void;
 }) {
   const active = isActiveRoute(pathname, href);
 
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         "group flex items-center gap-3 rounded-2xl border border-transparent transition-all",
         mobile ? "min-h-12 px-4 py-3 text-sm" : "min-h-11 px-3 py-2 text-sm",
@@ -109,6 +110,7 @@ export function AppShell({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const { summary, resetDemoData, canResetDemoData, refreshInventory, isSupabaseMode } =
     useInventory();
   const {
@@ -300,9 +302,9 @@ export function AppShell({
 
   return (
     <div className="relative min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.10),_transparent_30%),linear-gradient(180deg,#030712_0%,#020617_100%)]">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.06)_1px,transparent_1px)] bg-[size:48px_48px] opacity-15" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.06)_1px,transparent_1px)] bg-[size:48px_48px] opacity-15" />
 
-      <div className="relative mx-auto min-h-screen w-full max-w-[1920px] lg:grid lg:grid-cols-[312px_minmax(0,1fr)]">
+      <div className="relative z-10 mx-auto min-h-screen w-full max-w-[1920px] lg:grid lg:grid-cols-[312px_minmax(0,1fr)]">
         <aside className="hidden border-r border-white/10 bg-slate-950/75 px-5 py-6 backdrop-blur-xl lg:flex lg:flex-col">
           <div className="flex items-start justify-between gap-3">
             <BrandLockup />
@@ -453,81 +455,6 @@ export function AppShell({
         <div className="flex min-w-0 flex-col">
           <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/90 backdrop-blur-xl lg:hidden">
             <div className="flex items-center gap-3 px-4 py-3">
-              <Sheet>
-                <SheetTrigger
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-100 transition-colors hover:bg-white/10 hover:text-white"
-                  aria-label="Open navigation menu"
-                >
-                  <Menu className="h-4 w-4" />
-                </SheetTrigger>
-                <SheetContent side="left" className="border-white/10 bg-slate-950 text-white">
-                  <SheetHeader className="p-4">
-                    <SheetTitle className="text-white">{APP_NAME}</SheetTitle>
-                    <SheetDescription className="text-slate-400">
-                      {APP_SUBTITLE}. Quick access to inventory, labels, and admin tools.
-                    </SheetDescription>
-                  </SheetHeader>
-                  <ScrollArea className="h-[calc(100vh-8rem)] px-4 pb-4">
-                    <div className="space-y-2">
-                      {primaryNav.map((item) => (
-                        <AppLink
-                          key={item.href}
-                          href={item.href}
-                          label={item.label}
-                          icon={item.icon}
-                          pathname={pathname}
-                          mobile
-                        />
-                      ))}
-                    </div>
-                    <Separator className="my-4 bg-white/10" />
-                    <div className="space-y-2">
-                      {secondaryNav.map((item) => (
-                        <AppLink
-                          key={item.href}
-                          href={item.href}
-                          label={item.label}
-                          icon={item.icon}
-                          pathname={pathname}
-                          mobile
-                        />
-                      ))}
-                    </div>
-              <div className="mt-4 space-y-2">
-                      {canResetDemoData && permissions.canAccessSettings && (
-                        <Button
-                          variant="outline"
-                          className="h-11 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "Reset the explicit local demo inventory back to the seeded demo dataset?",
-                              )
-                            ) {
-                              resetDemoData();
-                            }
-                          }}
-                        >
-                          <ShieldCheck className="mr-2 h-4 w-4" />
-                          Reset demo data
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        className="h-11 w-full justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                        onClick={() => {
-                          signOut();
-                          router.replace("/login");
-                        }}
-                      >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Logout
-                      </Button>
-                    </div>
-                  </ScrollArea>
-                </SheetContent>
-              </Sheet>
-
               <div className="min-w-0 flex-1">
                 <BrandLockup compact />
               </div>
@@ -598,7 +525,7 @@ export function AppShell({
                 );
               })}
 
-              <Sheet>
+              <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
                 <SheetTrigger
                   className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
                   aria-label="Open more navigation items"
@@ -622,6 +549,7 @@ export function AppShell({
                         icon={item.icon}
                         pathname={pathname}
                         mobile
+                        onNavigate={() => setMoreMenuOpen(false)}
                       />
                     ))}
                     {canResetDemoData && permissions.canAccessSettings && (
