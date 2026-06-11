@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  Filter,
   MapPin,
   PackageSearch,
   Printer,
@@ -22,12 +23,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { Bin, Part } from "@/lib/inventory-types";
+import { categories, type Bin, type Part } from "@/lib/inventory-types";
 import { buildBinPrintHref, buildPartPrintHref, normalizePrintCopies, parseIdList, type LabelMode } from "@/lib/labels";
-import { getPartLocationLabel } from "@/lib/inventory-utils";
+import { filterParts, getPartLocationLabel } from "@/lib/inventory-utils";
 
 type BuilderMode = "part" | "bin";
+
+const MAX_VISIBLE_PARTS = 12;
 
 function formatPartLocation(part: Part, bins: Bin[]) {
   const location = getPartLocationLabel(part, bins);
@@ -80,7 +85,7 @@ export function TagsPage({
   };
 }>) {
   const { permissions } = useAuth();
-  const { bins, getPartById, parts, settings } = useInventory();
+  const { bins, getPartById, models, parts, settings } = useInventory();
 
   const initialPartIds = parseIdList(searchParams.partIds ?? searchParams.partId);
   const initialMode: BuilderMode =
@@ -99,6 +104,10 @@ export function TagsPage({
   const [includeZero, setIncludeZero] = useState(searchParams.includeZero === "1");
   const [selectedPartIds, setSelectedPartIds] = useState<string[]>(initialPartIds);
   const [selectedBinId, setSelectedBinId] = useState(searchParams.binId ?? "");
+  const [manufacturerFilter, setManufacturerFilter] = useState("all");
+  const [modelFilter, setModelFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
 
   useEffect(() => {
     if (searchParams.binId || searchParams.mode === "bin") {
@@ -118,18 +127,57 @@ export function TagsPage({
   const normalizedQuery = query.trim().toLowerCase();
   const normalizedCopies = normalizePrintCopies(copies, settings.defaultPrintCopies);
 
-  const partMatches = useMemo(() => {
-    return [...parts]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .filter((part) => {
-        if (mode !== "part") return false;
-        if (!normalizedQuery) return true;
+  const manufacturerOptions = useMemo(
+    () =>
+      Array.from(new Set(parts.map((part) => part.manufacturer)))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right)),
+    [parts],
+  );
 
-        return `${part.partNumber} ${part.partName} ${part.manufacturer} ${part.notes} ${formatPartLocation(part, bins)}`
-          .toLowerCase()
-          .includes(normalizedQuery);
-      });
-  }, [bins, mode, normalizedQuery, parts]);
+  const modelOptions = useMemo(
+    () =>
+      [...models].sort((left, right) =>
+        `${left.manufacturer} ${left.name}`.localeCompare(`${right.manufacturer} ${right.name}`),
+      ),
+    [models],
+  );
+
+  const locationOptions = useMemo(
+    () => [...bins].sort((left, right) => left.code.localeCompare(right.code)),
+    [bins],
+  );
+
+  const partMatches = useMemo(() => {
+    if (mode !== "part") return [];
+
+    const filteredParts = filterParts(parts, bins, models, {
+      query: query.trim(),
+      manufacturer: manufacturerFilter === "all" ? "" : manufacturerFilter,
+      category: categoryFilter === "all" ? "" : categoryFilter,
+      binId:
+        locationFilter === "all" || locationFilter === "unassigned" ? "" : locationFilter,
+      modelId: modelFilter === "all" ? "" : modelFilter,
+      status: "all",
+    });
+
+    const locationScopedParts =
+      locationFilter === "unassigned"
+        ? filteredParts.filter((part) => part.binId === null)
+        : filteredParts;
+
+    return [...locationScopedParts].sort(
+      (left, right) => right.updatedAt.localeCompare(left.updatedAt),
+    );
+  }, [bins, categoryFilter, locationFilter, manufacturerFilter, modelFilter, models, mode, parts, query]);
+
+  const visiblePartMatches = partMatches.slice(0, MAX_VISIBLE_PARTS);
+  const hasActiveFilters =
+    Boolean(query.trim()) ||
+    manufacturerFilter !== "all" ||
+    modelFilter !== "all" ||
+    categoryFilter !== "all" ||
+    locationFilter !== "all";
 
   const binMatches = useMemo(() => {
     return [...bins]
@@ -155,6 +203,29 @@ export function TagsPage({
   );
 
   const selectedBin = selectedBinId ? bins.find((bin) => bin.id === selectedBinId) ?? null : null;
+
+  const clearFilters = () => {
+    setQuery("");
+    setManufacturerFilter("all");
+    setModelFilter("all");
+    setCategoryFilter("all");
+    setLocationFilter("all");
+  };
+
+  const selectAllFilteredParts = () => {
+    if (partMatches.length === 0) return;
+
+    setMode("part");
+    setSelectedBinId("");
+    setSelectedPartIds((current) =>
+      Array.from(new Set([...current, ...partMatches.map((part) => part.id)])),
+    );
+  };
+
+  const deselectAll = () => {
+    setSelectedPartIds([]);
+    setSelectedBinId("");
+  };
 
   const estimatedLabelCount = summarizeLabelCount(
     mode,
@@ -269,7 +340,7 @@ export function TagsPage({
           <CardHeader>
             <CardTitle className="text-white">Label builder</CardTitle>
             <CardDescription className="text-slate-400">
-              Search, select, and choose how the labels should repeat on the page.
+              Search, filter, select, and choose how the labels should repeat on the page.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -397,17 +468,132 @@ export function TagsPage({
               </div>
             )}
 
+            {mode === "part" && (
+              <div className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Filters</p>
+                    <p className="text-sm text-slate-300">
+                      Narrow the part list by manufacturer, compatible model, category, or location.
+                    </p>
+                  </div>
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    {partMatches.length} match{partMatches.length === 1 ? "" : "es"}
+                  </Badge>
+                </div>
+
+                <div className="grid gap-3 xl:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Manufacturer</Label>
+                    <Select
+                      value={manufacturerFilter}
+                      onValueChange={(value) => setManufacturerFilter(value ?? "all")}
+                    >
+                      <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue placeholder="All manufacturers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All manufacturers</SelectItem>
+                        {manufacturerOptions.map((manufacturer) => (
+                          <SelectItem key={manufacturer} value={manufacturer}>
+                            {manufacturer}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Compatible model</Label>
+                    <Select
+                      value={modelFilter}
+                      onValueChange={(value) => setModelFilter(value ?? "all")}
+                    >
+                      <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue placeholder="All models" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All models</SelectItem>
+                        {modelOptions.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.manufacturer} {model.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Category</Label>
+                    <Select
+                      value={categoryFilter}
+                      onValueChange={(value) => setCategoryFilter(value ?? "all")}
+                    >
+                      <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue placeholder="All categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All categories</SelectItem>
+                        {categories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Location</Label>
+                    <Select
+                      value={locationFilter}
+                      onValueChange={(value) => setLocationFilter(value ?? "all")}
+                    >
+                      <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue placeholder="Any location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any location</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {locationOptions.map((bin) => (
+                          <SelectItem key={bin.id} value={bin.id}>
+                            {bin.code} · {bin.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
+              {mode === "part" && (
+                <Button
+                  variant="outline"
+                  className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                  onClick={selectAllFilteredParts}
+                  disabled={partMatches.length === 0}
+                >
+                  Select all filtered
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                onClick={() => {
-                  setQuery("");
-                  setSelectedPartIds([]);
-                  setSelectedBinId("");
-                }}
+                onClick={deselectAll}
+                disabled={mode === "part" ? selectedPartIds.length === 0 : !selectedBin}
               >
-                Clear selection
+                Deselect all
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                onClick={clearFilters}
+                disabled={!hasActiveFilters}
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                Clear filters
               </Button>
               <Link
                 href={selectedPrintHref}
@@ -428,7 +614,7 @@ export function TagsPage({
 
             <div className="grid gap-3 sm:grid-cols-2">
               {mode === "part"
-                ? partMatches.slice(0, 12).map((part) => {
+                ? visiblePartMatches.map((part) => {
                     const selected = selectedPartIds.includes(part.id);
 
                     return (
@@ -496,6 +682,11 @@ export function TagsPage({
               {mode === "part"
                 ? `${partMatches.length} part tag${partMatches.length === 1 ? "" : "s"} found.`
                 : `${binMatches.length} bin label${binMatches.length === 1 ? "" : "s"} found.`}
+              {mode === "part" && partMatches.length > MAX_VISIBLE_PARTS ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Showing first {MAX_VISIBLE_PARTS} of {partMatches.length} matching parts.
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>

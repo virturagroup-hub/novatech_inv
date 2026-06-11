@@ -262,9 +262,9 @@ export function PrintPage({
               return (
                 <section
                   key={sheetIndex}
-                  className="print-sheet overflow-hidden rounded-[0.75rem] border border-slate-300 bg-white p-2 shadow-lg shadow-slate-200/60 print:break-after-page print:rounded-none print:border-0 print:shadow-none"
+                  className="print-sheet overflow-hidden rounded-[0.75rem] border border-slate-300 bg-white p-2 shadow-lg shadow-slate-200/60 print:break-after-page print:rounded-none print:border-0 print:p-0 print:shadow-none"
                 >
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 print:gap-1">
                     {Array.from({ length: LABELS_PER_SHEET }, (_, slotIndex) => {
                       const label = pageLabels[slotIndex];
 
@@ -293,7 +293,7 @@ export function PrintPage({
       <style jsx global>{`
         @page {
           size: letter;
-          margin: 0.25in;
+          margin: 0.2in;
         }
 
         @media print {
@@ -329,19 +329,19 @@ function PartLabelCard({
   const qrValue = buildAbsoluteAppUrl(`/inventory/${part.id}`);
 
   return (
-    <div className="flex min-h-[2.55in] flex-col justify-between rounded-xl border border-slate-300 bg-white p-3 text-slate-950 print:border-slate-300">
+    <div className="flex h-[2.35in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
       <div className="flex justify-center">
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={128}
-          className="rounded-xl bg-white p-1"
+          size={112}
+          className="rounded-lg bg-white p-1"
         />
       </div>
-      <div className="mt-3 space-y-1 text-center">
-        <p className="font-mono text-[15px] font-semibold leading-5">{part.partNumber}</p>
-        <p className="text-sm font-medium leading-5">{part.partName}</p>
-        <p className="text-xs leading-5 text-slate-700">{locationText}</p>
+      <div className="mt-2 space-y-0.5 text-center">
+        <p className="font-mono text-[14px] font-semibold leading-4">{part.partNumber}</p>
+        <p className="text-xs font-medium leading-4">{part.partName}</p>
+        <p className="text-[11px] leading-4 text-slate-700">{locationText}</p>
       </div>
     </div>
   );
@@ -356,20 +356,20 @@ function BinLabelCard({
   const locationText = getBinLocationText(bin);
 
   return (
-    <div className="flex min-h-[2.55in] flex-col justify-between rounded-xl border border-slate-300 bg-white p-3 text-slate-950 print:border-slate-300">
+    <div className="flex h-[2.35in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
       <div className="flex justify-center">
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={128}
-          className="rounded-xl bg-white p-1"
+          size={112}
+          className="rounded-lg bg-white p-1"
         />
       </div>
-      <div className="mt-3 space-y-1 text-center">
-        <p className="font-mono text-[15px] font-semibold leading-5">{bin.code}</p>
-        <p className="text-sm font-medium leading-5">{locationText}</p>
+      <div className="mt-2 space-y-0.5 text-center">
+        <p className="font-mono text-[14px] font-semibold leading-4">{bin.code}</p>
+        <p className="text-xs font-medium leading-4">{locationText}</p>
         {bin.description ? (
-          <p className="text-xs leading-5 text-slate-700">{bin.description}</p>
+          <p className="text-[11px] leading-4 text-slate-700">{bin.description}</p>
         ) : null}
       </div>
     </div>
@@ -380,7 +380,7 @@ function EmptyLabelSlot() {
   return (
     <div
       aria-hidden="true"
-      className="min-h-[2.55in] rounded-xl border border-dashed border-slate-200 bg-slate-50/40 print:border-0 print:bg-transparent"
+      className="h-[2.35in] rounded-lg border border-dashed border-slate-200 bg-slate-50/40 print:border-0 print:bg-transparent"
     />
   );
 }

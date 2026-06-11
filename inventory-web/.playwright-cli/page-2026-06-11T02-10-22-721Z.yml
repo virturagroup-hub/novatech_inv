@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - generic [ref=e7]:
+            - paragraph [ref=e8]: Printable labels
+            - generic [ref=e9]: Green NVentory
+            - generic [ref=e10]: Clean scan labels that open the inventory record after the QR code is scanned.
+          - button "Print now" [disabled]:
+            - img
+            - text: Print now
+        - generic [ref=e11]:
+          - generic [ref=e12]: No selection
+          - generic [ref=e13]: 0 labels queued
+        - generic [ref=e14]: Your current role can preview labels, but printing is restricted.
+      - generic [ref=e15]:
+        - link "Back to labels" [ref=e16] [cursor=pointer]:
+          - /url: /tags
+          - img
+          - text: Back to labels
+        - link "Parts" [ref=e17] [cursor=pointer]:
+          - /url: /inventory
+          - img
+          - text: Parts
+        - link "Locations" [ref=e18] [cursor=pointer]:
+          - /url: /locations
+          - img
+          - text: Locations
+    - generic [ref=e20]:
+      - img [ref=e21]
+      - generic [ref=e24]:
+        - heading "Choose a part or bin label" [level=2] [ref=e25]
+        - paragraph [ref=e26]: Open the label builder, select one or more parts, then print the clean scan labels.
+      - generic [ref=e27]:
+        - link "Label builder" [ref=e28] [cursor=pointer]:
+          - /url: /tags
+        - link "Parts" [ref=e29] [cursor=pointer]:
+          - /url: /inventory
+        - link "Locations" [ref=e30] [cursor=pointer]:
+          - /url: /locations
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
