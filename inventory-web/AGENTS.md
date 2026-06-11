@@ -21,7 +21,7 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Do not connect Supabase unless the app is already stable and the migration is explicitly in scope.
 - Keep inventory, bin, model, profile, and transaction shapes typed and reusable.
 - Update the seed data and migration notes when the structure changes.
-- Use `profiles.role`, `profiles.active`, and `profiles.must_change_password` as the source of truth once Supabase is live.
+- Use `profiles.role`, `profiles.active`, and `auth.users.app_metadata.must_change_password` as the source of truth once Supabase is live.
 
 ## Auth and User-Management Rules
 
@@ -37,9 +37,9 @@ This repository is the Green NVentory rebuild for Novatech's green and reusable 
 - Technician and viewer users must not access `/admin/users`.
 - Prefer deactivate/archive over hard delete unless the delete flow is explicitly safe and blocks the last admin.
 - Self-demotion, self-deactivation, and last-admin removal must be blocked or require a deliberate confirmation flow.
-- If `profiles.must_change_password` is true, the app must redirect to `/change-password`.
+- If `auth.users.app_metadata.must_change_password` is true, the app must redirect to `/change-password`.
 - If `profiles.active` is false or a profile row is missing, block access and surface a clear login message.
-- The change-password flow must clear `must_change_password` after a successful password update.
+- The change-password flow must clear `must_change_password` in Supabase Auth after a successful password update.
 - The login flow must be real Supabase email/password auth with a sanitized internal `next` parameter only.
 - QR code URLs should be built from `NEXT_PUBLIC_APP_URL` when present, with browser-origin fallback in client code.
 - Part labels should only show QR code, part number, part name, and location/bin. Bin labels should only show QR code, location code, area/shelf/bin, and short description if space allows.

@@ -21,6 +21,7 @@ import {
 } from "@/lib/auth";
 import { profileDisplayName } from "@/lib/profile-display";
 import type { ProfileRow } from "@/lib/supabase/types";
+import { hasMustChangePasswordFlag } from "@/lib/supabase/auth-metadata";
 
 type SignInInput = {
   email: string;
@@ -74,17 +75,22 @@ function writeRolePreviewToStorage(role: UserRole | null) {
 }
 
 function toAppSession(
-  user: { id: string; email?: string | null; created_at?: string | null },
+  user: {
+    id: string;
+    email?: string | null;
+    created_at?: string | null;
+    app_metadata?: Record<string, unknown> | null;
+  },
   profile: ProfileRow,
 ): AuthSession {
   return {
     id: user.id,
-    displayName: profileDisplayName(profile),
-    email: profile.email,
+    displayName: profileDisplayName(profile, user.email ?? ""),
+    email: user.email ?? "",
     role: profile.role,
     lastSignedInAt: user.created_at ?? new Date().toISOString(),
     active: profile.active,
-    mustChangePassword: profile.must_change_password,
+    mustChangePassword: hasMustChangePasswordFlag(user.app_metadata),
   };
 }
 
@@ -102,9 +108,23 @@ async function loadSupabaseSession(
   supabase: ReturnType<typeof createClient>,
   setSession: (session: AuthSession | null) => void,
   setAuthIssue: (issue: AuthBlockReason | null) => void,
-  currentUser?: { id: string; email?: string | null; created_at?: string | null },
+  currentUser?: {
+    id: string;
+    email?: string | null;
+    created_at?: string | null;
+    app_metadata?: Record<string, unknown> | null;
+  },
 ): Promise<SessionLoadResult> {
-  let userResponse: { user: { id: string; email?: string | null; created_at?: string | null } | null } = {
+  let userResponse: {
+    user:
+      | {
+          id: string;
+          email?: string | null;
+          created_at?: string | null;
+          app_metadata?: Record<string, unknown> | null;
+        }
+      | null;
+  } = {
     user: currentUser ?? null,
   };
   let error: Error | null = null;
@@ -125,7 +145,7 @@ async function loadSupabaseSession(
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id, full_name, role, active, created_at, updated_at")
     .eq("id", userResponse.user.id)
     .maybeSingle();
 
@@ -312,6 +332,7 @@ export function AuthProvider({
               id: data.user.id,
               email: data.user.email,
               created_at: data.user.created_at,
+              app_metadata: data.user.app_metadata,
             }
           : undefined,
       );

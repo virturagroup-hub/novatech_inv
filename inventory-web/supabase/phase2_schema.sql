@@ -21,11 +21,9 @@ $$;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  email text not null unique,
   full_name text,
   role text not null default 'viewer' check (role in ('admin', 'manager', 'technician', 'viewer')),
   active boolean not null default true,
-  must_change_password boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -204,13 +202,11 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, full_name, role, active, must_change_password)
+  insert into public.profiles (id, full_name, role, active)
   values (
     new.id,
-    new.email,
     nullif(trim(coalesce(new.raw_user_meta_data ->> 'full_name', '')), ''),
     'viewer',
-    true,
     true
   )
   on conflict (id) do nothing;

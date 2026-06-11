@@ -71,7 +71,7 @@ Authentication uses Supabase Email Auth. Public signups are disabled, so users d
 - The app signs in with Supabase Auth `signInWithPassword`.
 - Temporary passwords are still supported, but only as the password value for admin-created users.
 - The email address is always the username.
-- If `profiles.must_change_password` is true, users are redirected to `/change-password`.
+- If Supabase Auth `app_metadata.must_change_password` is true, users are redirected to `/change-password`.
 - If `profiles.active` is false, the account is blocked until an admin reactivates it.
 - If a user has an auth account but no matching profile row, the app blocks access and tells them to contact an admin.
 
@@ -131,12 +131,11 @@ update public.profiles
 set
   role = 'admin',
   full_name = 'Your Name',
-  active = true,
-  must_change_password = false
+  active = true
 where id = '<auth-user-uuid>';
 ```
 
-Set `must_change_password = true` instead if you want that first admin to go through the password-change flow the first time they sign in.
+The first-login password-change requirement now lives in Supabase Auth `app_metadata`, not in `profiles`. The admin create and reset flows set that flag automatically.
 
 The app also has a profile trigger, so newly created auth users should get a matching profile row automatically. If you need to repair a missing profile, insert or update the row manually.
 
@@ -161,7 +160,7 @@ When an admin creates a user:
 1. The admin enters name, email, role, and a temporary password.
 2. Supabase Auth creates the account with `email_confirm: true`.
 3. The app writes or updates the matching profile row.
-4. The new profile is marked `must_change_password = true`.
+4. The new user's Supabase Auth `app_metadata` is marked `must_change_password = true`.
 
 ## Role Model
 
@@ -186,7 +185,7 @@ The app uses `realRole` for server checks and `effectiveRole` only for UI previe
 
 ## First Login Password Change
 
-If `profiles.must_change_password` is true after sign-in, the app redirects the user to `/change-password`.
+If Supabase Auth `app_metadata.must_change_password` is true after sign-in, the app redirects the user to `/change-password`.
 
 That page:
 
@@ -194,10 +193,10 @@ That page:
 - asks for a new password and confirmation
 - validates that the passwords match
 - uses Supabase client auth to update the password
-- clears `must_change_password` in the profile row
+- clears `must_change_password` in the user's Supabase Auth `app_metadata`
 - sends the user back to the scanned route when one was provided, otherwise the dashboard
 
-Password resets from the admin edit screen follow the same pattern: the server updates the Supabase Auth password, marks `must_change_password = true`, and shows the temporary password only once.
+Password resets from the admin edit screen follow the same pattern: the server updates the Supabase Auth password, marks `must_change_password = true` in `app_metadata`, and shows the temporary password only once.
 
 Users can log out from the password change screen if they need to stop and come back later.
 
@@ -233,8 +232,8 @@ To verify the auth flow locally:
 1. Start the dev server with `npm run dev`.
 2. Open `http://localhost:3000/login`.
 3. Sign in with your real Supabase email and password.
-4. If your profile is active and `must_change_password` is false, you should land on the dashboard.
-5. If `must_change_password` is true, you should be sent to `/change-password`.
+4. If your profile is active and the Supabase Auth password-change flag is false, you should land on the dashboard.
+5. If the Supabase Auth password-change flag is true, you should be sent to `/change-password`.
 6. Open Settings and use **View as Role** to preview technician, viewer, or manager behavior.
 7. Use **Return to Admin** to restore the real admin UI.
 8. Open a part or location page in a private browser session to confirm the login redirect returns you to the scanned route.

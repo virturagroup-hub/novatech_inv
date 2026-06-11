@@ -2,12 +2,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { profileDisplayName } from "@/lib/profile-display";
 import type { AuthBlockReason } from "@/lib/auth";
+import { hasMustChangePasswordFlag } from "./auth-metadata";
 import { createClient } from "./server";
 import type { ProfileRow } from "./types";
 
 export type ServerAuthContext = {
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
+  userEmail: string | null;
+  mustChangePassword: boolean;
   profile: ProfileRow;
 };
 
@@ -25,7 +28,7 @@ export type ServerAuthResolution =
 async function fetchProfile(supabase: SupabaseClient, userId: string): Promise<ProfileRow | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id, full_name, role, active, created_at, updated_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -71,6 +74,8 @@ export async function getServerAuthResolution(): Promise<ServerAuthResolution> {
     context: {
       supabase,
       userId: userResult.user.id,
+      userEmail: userResult.user.email ?? null,
+      mustChangePassword: hasMustChangePasswordFlag(userResult.user.app_metadata),
       profile,
     },
   };

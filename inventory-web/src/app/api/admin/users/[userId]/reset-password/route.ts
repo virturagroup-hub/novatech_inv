@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { generateTemporaryPassword } from "@/lib/password";
+import { mergeAppMetadata } from "@/lib/supabase/auth-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerAuthContext } from "@/lib/supabase/session";
 
@@ -54,11 +55,20 @@ export async function POST(
     return NextResponse.json({ error: "That user profile could not be found." }, { status: 404 });
   }
 
+  const { data: authUserData, error: authUserError } = await admin.auth.admin.getUserById(userId);
+
+  if (authUserError || !authUserData.user) {
+    return NextResponse.json({ error: "That auth user could not be found." }, { status: 404 });
+  }
+
   const { error: authError } = await admin.auth.admin.updateUserById(userId, {
     password: temporaryPassword,
     user_metadata: {
       full_name: existingProfile.full_name,
     },
+    app_metadata: mergeAppMetadata(authUserData.user.app_metadata, {
+      must_change_password: true,
+    }),
   });
 
   if (authError) {
@@ -71,7 +81,6 @@ export async function POST(
   const { error: profileError } = await admin
     .from("profiles")
     .update({
-      must_change_password: true,
       active: true,
     })
     .eq("id", userId);
@@ -85,4 +94,3 @@ export async function POST(
 
   return NextResponse.json({ temporaryPassword });
 }
-

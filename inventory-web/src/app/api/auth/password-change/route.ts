@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { mergeAppMetadata } from "@/lib/supabase/auth-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerAuthContext } from "@/lib/supabase/session";
 
@@ -12,12 +13,19 @@ export async function POST() {
 
   const admin = createAdminClient();
 
-  const { error } = await admin
-    .from("profiles")
-    .update({
+  const { data: authUserData, error: authUserError } = await admin.auth.admin.getUserById(
+    context.userId,
+  );
+
+  if (authUserError || !authUserData.user) {
+    return NextResponse.json({ error: "That auth user could not be found." }, { status: 404 });
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(context.userId, {
+    app_metadata: mergeAppMetadata(authUserData.user.app_metadata, {
       must_change_password: false,
-    })
-    .eq("id", context.userId);
+    }),
+  });
 
   if (error) {
     return NextResponse.json(

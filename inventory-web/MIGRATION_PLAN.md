@@ -53,8 +53,8 @@ The initial implementation now includes:
 - Technician users can view, look up, adjust stock, and print labels when allowed.
 - Viewer users remain read-only.
 - Admin-created users are handled server-side through Supabase Auth and the service role key.
-- New users are created with `must_change_password = true` and are redirected to `/change-password` on first login.
-- The change-password flow updates both Supabase Auth and the matching profile row.
+- New users are created with `auth.users.app_metadata.must_change_password = true` and are redirected to `/change-password` on first login.
+- The change-password flow updates Supabase Auth, clears the auth metadata flag, and leaves the matching profile row unchanged.
 - Manager access to users is view-only; admin-only actions stay behind server checks.
 - Login now uses real Supabase email/password auth instead of the old demo/temporary login defaults.
 - The login flow now blocks missing-profile and inactive accounts with clear user-facing messages.

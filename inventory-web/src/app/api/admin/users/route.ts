@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { UserRole } from "@/lib/auth";
+import { mergeAppMetadata } from "@/lib/supabase/auth-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerAuthContext } from "@/lib/supabase/session";
 
@@ -76,16 +77,28 @@ export async function POST(request: Request) {
     );
   }
 
+  const { error: metadataError } = await admin.auth.admin.updateUserById(authData.user.id, {
+    app_metadata: mergeAppMetadata(authData.user.app_metadata, {
+      must_change_password: true,
+    }),
+  });
+
+  if (metadataError) {
+    await admin.auth.admin.deleteUser(authData.user.id).catch(() => undefined);
+    return NextResponse.json(
+      { error: metadataError.message ?? "Unable to update the auth metadata." },
+      { status: 500 },
+    );
+  }
+
   const { data: profileData, error: profileError } = await admin
     .from("profiles")
     .upsert(
       {
         id: authData.user.id,
-        email,
         full_name: fullName,
         role,
         active: true,
-        must_change_password: true,
       },
       { onConflict: "id" },
     )

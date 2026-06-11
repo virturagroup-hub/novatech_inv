@@ -3,11 +3,9 @@ import type { Category } from "@/lib/inventory-types";
 
 export interface ProfileRow {
   id: string;
-  email: string;
   full_name: string | null;
   role: UserRole;
   active: boolean;
-  must_change_password: boolean;
   created_at: string;
   updated_at: string;
 }

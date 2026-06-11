@@ -37,7 +37,7 @@ export async function requireAuthenticatedSession(options?: { nextPath?: string 
 export async function requireAppSession(options?: { nextPath?: string }) {
   const context = await requireAuthenticatedSession(options);
 
-  if (context.profile.must_change_password) {
+  if (context.mustChangePassword) {
     redirect(buildChangePasswordPath(options?.nextPath));
   }
 
@@ -51,7 +51,7 @@ export async function requirePasswordChangeSession(options?: { nextPath?: string
     redirect(loginRedirectPath(resolution.reason, options?.nextPath));
   }
 
-  if (!resolution.context.profile.must_change_password) {
+  if (!resolution.context.mustChangePassword) {
     redirect(sanitizeInternalPath(options?.nextPath));
   }
 
@@ -155,7 +155,7 @@ export async function redirectAuthenticatedUser(options?: { nextPath?: string })
     return;
   }
 
-  if (resolution.context.profile.must_change_password) {
+  if (resolution.context.mustChangePassword) {
     redirect(buildChangePasswordPath(options?.nextPath));
   }
 

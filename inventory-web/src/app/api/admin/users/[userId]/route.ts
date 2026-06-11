@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { UserRole } from "@/lib/auth";
+import { mergeAppMetadata } from "@/lib/supabase/auth-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveAdminCount } from "@/lib/supabase/admin-user-safety";
 import { getServerAuthContext } from "@/lib/supabase/session";
@@ -65,6 +66,12 @@ export async function PATCH(
     return NextResponse.json({ error: "That user profile could not be found." }, { status: 404 });
   }
 
+  const { data: authUserData, error: authUserError } = await admin.auth.admin.getUserById(userId);
+
+  if (authUserError || !authUserData.user) {
+    return NextResponse.json({ error: "That auth user could not be found." }, { status: 404 });
+  }
+
   if (userId === context.userId && (role !== existingProfile.role || active !== existingProfile.active)) {
     return NextResponse.json(
       { error: "You cannot remove your own admin access from this screen." },
@@ -87,6 +94,9 @@ export async function PATCH(
     user_metadata: {
       full_name: fullName,
     },
+    app_metadata: mergeAppMetadata(authUserData.user.app_metadata, {
+      must_change_password: mustChangePassword,
+    }),
   });
 
   if (authError) {
@@ -102,7 +112,6 @@ export async function PATCH(
       full_name: fullName,
       role,
       active,
-      must_change_password: mustChangePassword,
     })
     .eq("id", userId)
     .select("*")
@@ -184,4 +193,3 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
-
