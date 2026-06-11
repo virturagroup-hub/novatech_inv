@@ -53,7 +53,16 @@ const defaultFilters: PartFilters = {
 
 export function InventoryPage() {
   const { permissions } = useAuth();
-  const { parts, bins, models, summary, deletePart, adjustPart, isSupabaseMode } = useInventory();
+  const {
+    parts,
+    bins,
+    models,
+    summary,
+    deletePart,
+    adjustPart,
+    isSupabaseMode,
+    getDisplayPartNumber,
+  } = useInventory();
   const [filters, setFilters] = useState<PartFilters>(defaultFilters);
   const [sortKey, setSortKey] = useState<InventorySortKey>("updatedAt");
 
@@ -408,13 +417,14 @@ export function InventoryPage() {
                     <InventoryTableRow
                       key={part.id}
                       part={part}
+                      displayPartNumber={getDisplayPartNumber(part)}
                       bins={bins}
                       canAdjustStock={permissions.canAdjustStock}
                       canManageParts={permissions.canManageParts}
                       onDelete={() => {
                         if (
                           window.confirm(
-                            `Delete ${part.partNumber}? This will remove the part from the inventory.`,
+                            `Delete ${getDisplayPartNumber(part)}? This will remove the part from the inventory.`,
                           )
                         ) {
                           deletePart(part.id);
@@ -435,13 +445,14 @@ export function InventoryPage() {
                 <InventoryMobileCard
                   key={part.id}
                   part={part}
+                  displayPartNumber={getDisplayPartNumber(part)}
                   bins={bins}
                   canAdjustStock={permissions.canAdjustStock}
                   canManageParts={permissions.canManageParts}
                   onDelete={() => {
                     if (
                       window.confirm(
-                        `Delete ${part.partNumber}? This will remove the part from the inventory.`,
+                        `Delete ${getDisplayPartNumber(part)}? This will remove the part from the inventory.`,
                       )
                     ) {
                       deletePart(part.id);
@@ -509,6 +520,7 @@ export function InventoryPage() {
 
 function InventoryTableRow({
   part,
+  displayPartNumber,
   bins,
   canAdjustStock,
   canManageParts,
@@ -516,6 +528,7 @@ function InventoryTableRow({
   onAdjust,
 }: {
   part: Part;
+  displayPartNumber: string;
   bins: Bin[];
   canAdjustStock: boolean;
   canManageParts: boolean;
@@ -534,7 +547,7 @@ function InventoryTableRow({
             href={`/inventory/${part.id}`}
             className="font-mono text-sm font-semibold text-white hover:text-emerald-300"
           >
-            {part.partNumber}
+            {displayPartNumber}
           </Link>
           <p className="text-sm text-slate-300">{part.partName}</p>
           <div className="flex flex-wrap items-center gap-2">
@@ -631,6 +644,7 @@ function InventoryTableRow({
 
 function InventoryMobileCard({
   part,
+  displayPartNumber,
   bins,
   canAdjustStock,
   canManageParts,
@@ -638,6 +652,7 @@ function InventoryMobileCard({
   onAdjust,
 }: {
   part: Part;
+  displayPartNumber: string;
   bins: Bin[];
   canAdjustStock: boolean;
   canManageParts: boolean;
@@ -652,7 +667,7 @@ function InventoryMobileCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <Link href={`/inventory/${part.id}`} className="font-mono text-sm font-semibold text-white hover:text-emerald-300">
-              {part.partNumber}
+              {displayPartNumber}
             </Link>
             <p className="mt-1 truncate text-sm text-slate-300">{part.partName}</p>
             <p className="mt-1 text-xs text-slate-400">

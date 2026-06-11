@@ -40,6 +40,19 @@ export function getCompatibleModels(part: Part, models: DeviceModel[]) {
     .filter((model): model is DeviceModel => Boolean(model));
 }
 
+export function getDisplayPartNumber(part: Part, models: DeviceModel[]) {
+  if (!part.isNpn) {
+    return part.partNumber;
+  }
+
+  const compatibleModel = getCompatibleModels(part, models)[0];
+  const modelLabel = compatibleModel
+    ? `${compatibleModel.manufacturer} ${compatibleModel.name}`
+    : "Unknown Model";
+
+  return `NPN - ${modelLabel}`;
+}
+
 export function getPartStockStatus(part: Part): "critical" | "low" | "healthy" {
   if (part.quantityOnHand === 0) return "critical";
   if (part.quantityOnHand <= part.reorderPoint) return "low";
@@ -61,10 +74,13 @@ export function getPartLookupBlob(part: Part, bins: Bin[], models: DeviceModel[]
   const modelNames = getCompatibleModels(part, models)
     .map((model) => `${model.manufacturer} ${model.name}`)
     .join(" ");
+  const displayPartNumber = getDisplayPartNumber(part, models);
 
   return normalizeSearch(
     [
       part.partNumber,
+      part.isNpn ? "NPN" : "",
+      displayPartNumber,
       part.partName,
       part.manufacturer,
       part.category,
@@ -84,7 +100,9 @@ export function sortParts(parts: Part[], sortKey: InventorySortKey) {
   return [...parts].sort((left, right) => {
     switch (sortKey) {
       case "partNumber":
-        return left.partNumber.localeCompare(right.partNumber);
+        return (left.partNumber || (left.isNpn ? "NPN" : "")).localeCompare(
+          right.partNumber || (right.isNpn ? "NPN" : ""),
+        );
       case "quantity":
         return left.quantityOnHand - right.quantityOnHand;
       case "location":

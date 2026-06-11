@@ -77,6 +77,7 @@ export interface DeviceModel {
 export interface Part {
   id: string;
   partNumber: string;
+  isNpn?: boolean;
   partName: string;
   manufacturer: string;
   category: Category;
@@ -123,6 +124,7 @@ export interface InventoryState {
 export interface PartDraft {
   id?: string;
   partNumber: string;
+  isNpn?: boolean;
   partName: string;
   manufacturer: string;
   category: Category;

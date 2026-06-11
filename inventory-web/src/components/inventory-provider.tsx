@@ -27,6 +27,7 @@ import {
   getBinById,
   getCompatibleModels,
   getDashboardSummary,
+  getDisplayPartNumber,
   getPartLocationLabel,
   getPartStockStatus,
   requiresAttention,
@@ -44,6 +45,7 @@ type InventoryContextValue = InventoryState & {
   getBinById: (binId: string) => Bin | null;
   getModelById: (modelId: string) => DeviceModel | undefined;
   getPartLocationLabel: (part: Part) => string;
+  getDisplayPartNumber: (part: Part) => string;
   getCompatibleModels: (part: Part) => DeviceModel[];
   getPartStockStatus: (part: Part) => ReturnType<typeof getPartStockStatus>;
   requiresAttention: (part: Part) => boolean;
@@ -230,14 +232,17 @@ export function InventoryProvider({
       getBinById: (binId: string) => getBinById(state.bins, binId),
       getModelById: (modelId: string) => state.models.find((model) => model.id === modelId),
       getPartLocationLabel: (part: Part) => getPartLocationLabel(part, state.bins),
+      getDisplayPartNumber: (part: Part) => getDisplayPartNumber(part, state.models),
       getCompatibleModels: (part: Part) => getCompatibleModels(part, state.models),
       getPartStockStatus: (part: Part) => getPartStockStatus(part),
       requiresAttention: (part: Part) => requiresAttention(part),
       addPart: (draft: PartDraft) => {
+        const isNpn = Boolean(draft.isNpn);
         const partDraft: PartDraft = {
           ...draft,
           id: draft.id ?? crypto.randomUUID(),
-          partNumber: normalizeText(draft.partNumber).toUpperCase(),
+          isNpn,
+          partNumber: isNpn ? "" : normalizeText(draft.partNumber).toUpperCase(),
           partName: normalizeText(draft.partName),
           manufacturer: normalizeText(draft.manufacturer),
           notes: normalizeText(draft.notes),
@@ -252,7 +257,8 @@ export function InventoryProvider({
             [
               {
                 id: partDraft.id,
-                part_number: partDraft.partNumber,
+                part_number: partDraft.isNpn ? null : partDraft.partNumber || null,
+                is_npn: partDraft.isNpn,
                 part_name: partDraft.partName,
                 manufacturer: partDraft.manufacturer,
                 category: partDraft.category,

@@ -36,8 +36,16 @@ import {
 
 export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
   const { permissions } = useAuth();
-  const { activity, bins, deletePart, getBinById, getCompatibleModels, getPartById, adjustPart } =
-    useInventory();
+  const {
+    activity,
+    bins,
+    deletePart,
+    getBinById,
+    getCompatibleModels,
+    getDisplayPartNumber,
+    getPartById,
+    adjustPart,
+  } = useInventory();
 
   const part = getPartById(partId);
 
@@ -80,9 +88,10 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
   const stockStatus = getPartStockStatus(part);
   const locationLabel = getPartLocationLabel(part, bins);
   const compatibleModels = getCompatibleModels(part);
+  const activityPartLabel = part.isNpn ? "NPN" : part.partNumber || "Unknown part";
   const bin = getBinById(part.binId ?? "");
   const relatedActivity = activity.filter(
-    (entry) => entry.entityId === part.id || entry.title.includes(part.partNumber),
+    (entry) => entry.entityId === part.id || entry.title.includes(activityPartLabel),
   );
   const universalOrCompatible = part.universal || compatibleModels.length > 0;
 
@@ -90,7 +99,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Part detail"
-        title={`${part.partNumber} · ${part.partName}`}
+        title={`${getDisplayPartNumber(part)} · ${part.partName}`}
         description={`${part.manufacturer} ${part.category} part. ${locationLabel}. ${
           universalOrCompatible ? "Compatibility is documented." : "Compatibility still needs attention."
         }`}
@@ -277,7 +286,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
             <CardHeader>
               <CardTitle className="text-white">Recent activity for this part</CardTitle>
               <CardDescription className="text-slate-400">
-                Events that mention {part.partNumber} or its current record.
+                Events that mention {activityPartLabel} or its current record.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -400,7 +409,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Delete ${part.partNumber}? This removes the part from the current inventory source.`,
+                        `Delete ${getDisplayPartNumber(part)}? This removes the part from the current inventory source.`,
                       )
                     ) {
                       deletePart(part.id);

@@ -78,7 +78,7 @@ export function PrintPage({
   };
 }>) {
   const { permissions } = useAuth();
-  const { bins, getPartById } = useInventory();
+  const { bins, getDisplayPartNumber, getPartById } = useInventory();
 
   const selectedPartIds = useMemo(
     () => parseIdList(searchParams.partIds ?? searchParams.partId),
@@ -276,6 +276,7 @@ export function PrintPage({
                         <PartLabelCard
                           key={`${sheetIndex}-${slotIndex}`}
                           part={label.part}
+                          displayPartNumber={getDisplayPartNumber(label.part)}
                           bins={bins}
                         />
                       ) : (
@@ -293,7 +294,7 @@ export function PrintPage({
       <style jsx global>{`
         @page {
           size: letter;
-          margin: 0.2in;
+          margin: 0.15in;
         }
 
         @media print {
@@ -319,9 +320,11 @@ export function PrintPage({
 
 function PartLabelCard({
   part,
+  displayPartNumber,
   bins,
 }: Readonly<{
   part: Part;
+  displayPartNumber: string;
   bins: Bin[];
 }>) {
   const bin = getBinById(bins, part.binId);
@@ -329,17 +332,17 @@ function PartLabelCard({
   const qrValue = buildAbsoluteAppUrl(`/inventory/${part.id}`);
 
   return (
-    <div className="flex h-[2.35in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
+    <div className="flex h-[2.25in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
       <div className="flex justify-center">
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={112}
+          size={104}
           className="rounded-lg bg-white p-1"
         />
       </div>
       <div className="mt-2 space-y-0.5 text-center">
-        <p className="font-mono text-[14px] font-semibold leading-4">{part.partNumber}</p>
+        <p className="font-mono text-[14px] font-semibold leading-4">{displayPartNumber}</p>
         <p className="text-xs font-medium leading-4">{part.partName}</p>
         <p className="text-[11px] leading-4 text-slate-700">{locationText}</p>
       </div>
@@ -356,12 +359,12 @@ function BinLabelCard({
   const locationText = getBinLocationText(bin);
 
   return (
-    <div className="flex h-[2.35in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
+    <div className="flex h-[2.25in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
       <div className="flex justify-center">
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={112}
+          size={104}
           className="rounded-lg bg-white p-1"
         />
       </div>
@@ -380,7 +383,7 @@ function EmptyLabelSlot() {
   return (
     <div
       aria-hidden="true"
-      className="h-[2.35in] rounded-lg border border-dashed border-slate-200 bg-slate-50/40 print:border-0 print:bg-transparent"
+      className="h-[2.25in] rounded-lg border border-dashed border-slate-200 bg-slate-50/40 print:border-0 print:bg-transparent"
     />
   );
 }

@@ -27,7 +27,7 @@ import { buildBinPrintHref } from "@/lib/labels";
 
 export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
   const { permissions } = useAuth();
-  const { parts, getBinById } = useInventory();
+  const { parts, getBinById, getDisplayPartNumber } = useInventory();
 
   const bin = getBinById(binId);
 
@@ -220,7 +220,9 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
               <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
                 <div className="space-y-3 p-3 pr-4">
                   {[...summary.parts]
-                    .sort((left, right) => left.partNumber.localeCompare(right.partNumber))
+                    .sort((left, right) =>
+                      getDisplayPartNumber(left).localeCompare(getDisplayPartNumber(right)),
+                    )
                     .map((part) => (
                       <Link
                         key={part.id}
@@ -229,7 +231,9 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                            <p className="font-mono text-sm font-semibold text-white">
+                              {getDisplayPartNumber(part)}
+                            </p>
                             <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
                           </div>
                           <div className="flex flex-wrap gap-2">

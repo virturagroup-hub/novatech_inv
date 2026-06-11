@@ -40,6 +40,7 @@ import {
 
 type PartFormState = {
   partNumber: string;
+  isNpn: boolean;
   partName: string;
   manufacturer: string;
   category: Part["category"];
@@ -56,6 +57,7 @@ function formFromPart(part?: Part | null, defaultBinId?: string | null): PartFor
   if (!part) {
     return {
       partNumber: "",
+      isNpn: false,
       partName: "",
       manufacturer: "Canon",
       category: "Accessory",
@@ -70,7 +72,8 @@ function formFromPart(part?: Part | null, defaultBinId?: string | null): PartFor
   }
 
   return {
-    partNumber: part.partNumber,
+    partNumber: part.isNpn ? "" : part.partNumber,
+    isNpn: Boolean(part.isNpn),
     partName: part.partName,
     manufacturer: part.manufacturer,
     category: part.category,
@@ -99,6 +102,7 @@ export function PartEditorPage({
     addPart,
     bins,
     deletePart,
+    getDisplayPartNumber,
     getCompatibleModels,
     getPartById,
     models,
@@ -153,7 +157,8 @@ export function PartEditorPage({
 
   const previewPart = {
     id: part?.id ?? "",
-    partNumber: form.partNumber,
+    partNumber: form.isNpn ? "" : form.partNumber,
+    isNpn: form.isNpn,
     partName: form.partName,
     manufacturer: form.manufacturer,
     category: form.category,
@@ -172,17 +177,19 @@ export function PartEditorPage({
   const compatibleModels = getCompatibleModels(previewPart);
   const attentionPreview = requiresAttention(previewPart);
   const locationLabel = getPartLocationLabel(previewPart, bins);
+  const displayPartNumber = getDisplayPartNumber(previewPart);
   const canSave = permissions.canManageParts;
 
   const savePart = () => {
-    if (!form.partNumber.trim() || !form.partName.trim()) {
-      toast.error("Part number and part name are required.");
+    if (!form.partName.trim() || (!form.isNpn && !form.partNumber.trim())) {
+      toast.error(form.isNpn ? "Part name is required." : "Part number and part name are required.");
       return;
     }
 
     addPart({
       id: part?.id,
-      partNumber: form.partNumber.trim(),
+      partNumber: form.isNpn ? "" : form.partNumber.trim(),
+      isNpn: form.isNpn,
       partName: form.partName.trim(),
       manufacturer: form.manufacturer.trim(),
       category: form.category,
@@ -201,7 +208,7 @@ export function PartEditorPage({
 
   const deleteCurrentPart = () => {
     if (!part) return;
-    if (!window.confirm(`Delete ${part.partNumber}? This removes the part from the inventory.`)) {
+    if (!window.confirm(`Delete ${getDisplayPartNumber(part)}? This removes the part from the inventory.`)) {
       return;
     }
 
@@ -266,7 +273,9 @@ export function PartEditorPage({
             </Badge>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                {mode === "create" ? "Add a reusable part" : `${editingPart.partNumber} · ${editingPart.partName}`}
+                {mode === "create"
+                  ? "Add a reusable part"
+                  : `${getDisplayPartNumber(editingPart)} · ${editingPart.partName}`}
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
                 Keep stock, shelf location, and printer compatibility in one clear screen.
@@ -320,7 +329,7 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">1. Part identity</CardTitle>
               <CardDescription className="text-slate-400">
-                Give the team a clear part number and a plain-language name.
+                Give the team a clear part number or mark the item as NPN when none exists.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -332,9 +341,28 @@ export function PartEditorPage({
                     onChange={(event) =>
                       setForm((current) => ({ ...current, partNumber: event.target.value }))
                     }
-                    placeholder="FM1-D581"
+                    placeholder={form.isNpn ? "Optional for NPN" : "FM1-D581"}
                     className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
                   />
+                  <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                    <Checkbox
+                      checked={form.isNpn}
+                      onCheckedChange={(next) =>
+                        setForm((current) => ({
+                          ...current,
+                          isNpn: Boolean(next),
+                        }))
+                      }
+                      className="mt-0.5 border-white/20 data-[state=checked]:bg-amber-400 data-[state=checked]:text-slate-950"
+                    />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-white">Mark as NPN</p>
+                      <p className="text-xs leading-5 text-slate-400">
+                        No Part Number items can be saved without a part number. The label will
+                        use the first compatible model, or Unknown Model if none is linked.
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-slate-200">Part name</Label>
@@ -787,7 +815,7 @@ export function PartEditorPage({
               <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Part</p>
                 <p className="mt-2 text-lg font-semibold text-white">
-                  {form.partNumber || "New part"}
+                  {displayPartNumber || "New part"}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">{form.partName || "Part name"}</p>
               </div>

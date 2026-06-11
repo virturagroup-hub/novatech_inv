@@ -57,7 +57,8 @@ function mapModelRow(model: ModelRow): DeviceModel {
 function mapPartRow(part: SnapshotPartRow, links: PartModelLinkRow[]): Part {
   return {
     id: part.id,
-    partNumber: part.part_number,
+    partNumber: part.part_number ?? "",
+    isNpn: part.is_npn,
     partName: part.part_name,
     manufacturer: part.manufacturer,
     category: normalizeCategory(part.category),
@@ -104,7 +105,9 @@ function mapActivityRows(
     .slice(0, 25)
     .map((transaction) => {
       const part = partLookup.get(transaction.part_id);
-      const label = part ? `${part.part_number} · ${part.part_name}` : transaction.part_id;
+      const partLabel = part
+        ? `${part.is_npn ? "NPN" : part.part_number ?? "Unknown part"} · ${part.part_name}`
+        : transaction.part_id;
       const deltaPrefix = transaction.delta >= 0 ? "+" : "";
 
       return {
@@ -115,13 +118,13 @@ function mapActivityRows(
         entityId: transaction.part_id,
         title:
           transaction.transaction_type === "import"
-            ? `Imported ${label}`
+            ? `Imported ${partLabel}`
             : transaction.transaction_type === "reset"
-              ? `Reset ${label}`
-              : `Adjusted ${label}`,
+              ? `Reset ${partLabel}`
+              : `Adjusted ${partLabel}`,
         detail:
           transaction.note ??
-          `${deltaPrefix}${transaction.delta} units ${part ? `for ${part.part_number}` : ""}`.trim(),
+          `${deltaPrefix}${transaction.delta} units ${part ? `for ${part.is_npn ? "NPN" : part.part_number ?? "Unknown part"}` : ""}`.trim(),
         occurredAt: transaction.created_at,
       };
     });
@@ -202,7 +205,7 @@ export async function importInventoryCsvToSupabase(
   const rows = [...uniqueRows.values()];
 
   const [partsResult, locationsResult, modelsResult] = await Promise.all([
-    supabase.from("parts").select("id, part_number"),
+    supabase.from("parts").select("id, part_number, is_npn"),
     supabase.from("locations").select("id, location_code, name"),
     supabase.from("models").select("id, manufacturer, model_name"),
   ]);
@@ -212,10 +215,9 @@ export async function importInventoryCsvToSupabase(
   if (modelsResult.error) throw modelsResult.error;
 
   const partsByNumber = new Map(
-    ((partsResult.data ?? []) as PartRow[]).map((part) => [
-      normalizeLookup(part.part_number),
-      part,
-    ]),
+    ((partsResult.data ?? []) as PartRow[])
+      .filter((part) => Boolean(part.part_number))
+      .map((part) => [normalizeLookup(part.part_number ?? ""), part]),
   );
   const locationsByCode = new Map(
     ((locationsResult.data ?? []) as LocationRow[]).map((location) => [
@@ -337,6 +339,7 @@ export async function importInventoryCsvToSupabase(
 
   const partRows = rows.map((row) => ({
     part_number: row.partNumber,
+    is_npn: false,
     part_name: row.partName,
     manufacturer: row.manufacturer,
     category: row.category,
@@ -354,12 +357,14 @@ export async function importInventoryCsvToSupabase(
   const { data: upsertedParts, error: partsError } = await supabase
     .from("parts")
     .upsert(partRows, { onConflict: "part_number" })
-    .select("id, part_number");
+    .select("id, part_number, is_npn");
 
   if (partsError) throw partsError;
 
   const partIdByNumber = new Map(
-    (upsertedParts ?? []).map((part) => [normalizeLookup(part.part_number), part.id]),
+    ((upsertedParts ?? []) as PartRow[])
+      .filter((part) => Boolean(part.part_number))
+      .map((part) => [normalizeLookup(part.part_number ?? ""), part.id]),
   );
 
   const importLinks: Array<{ part_id: string; model_id: string }> = [];

@@ -85,7 +85,7 @@ export function TagsPage({
   };
 }>) {
   const { permissions } = useAuth();
-  const { bins, getPartById, models, parts, settings } = useInventory();
+  const { bins, getPartById, getDisplayPartNumber, models, parts, settings } = useInventory();
 
   const initialPartIds = parseIdList(searchParams.partIds ?? searchParams.partId);
   const initialMode: BuilderMode =
@@ -389,7 +389,7 @@ export function TagsPage({
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder={
                       mode === "part"
-                        ? "Search part number, name, notes, or location"
+                        ? "Search part number, NPN, name, notes, or location"
                         : "Search location code, aisle, shelf, or description"
                     }
                     className="h-12 border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
@@ -634,7 +634,9 @@ export function TagsPage({
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                            <p className="font-mono text-sm font-semibold text-white">
+                              {getDisplayPartNumber(part)}
+                            </p>
                             <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
                             <p className="mt-2 text-xs text-slate-400">
                               {formatPartLocation(part, bins)}
@@ -713,13 +715,15 @@ export function TagsPage({
                   </div>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                   {selectedParts.slice(0, 6).map((part) => (
                     <div
                       key={part.id}
                       className="rounded-2xl border border-white/10 bg-slate-950/70 p-3"
                     >
-                      <p className="font-mono text-sm font-semibold text-white">{part.partNumber}</p>
+                      <p className="font-mono text-sm font-semibold text-white">
+                        {getDisplayPartNumber(part)}
+                      </p>
                       <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
                       <p className="mt-2 text-xs text-slate-400">{formatPartLocation(part, bins)}</p>
                     </div>

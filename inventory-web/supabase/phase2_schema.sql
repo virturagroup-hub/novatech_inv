@@ -144,7 +144,8 @@ create table if not exists public.models (
 
 create table if not exists public.parts (
   id uuid primary key default gen_random_uuid(),
-  part_number text not null unique,
+  part_number text unique,
+  is_npn boolean not null default false,
   part_name text not null,
   manufacturer text not null,
   category text not null,
@@ -157,6 +158,37 @@ create table if not exists public.parts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'parts'
+      and column_name = 'is_npn'
+  ) then
+    execute 'alter table public.parts add column is_npn boolean not null default false';
+  end if;
+
+  execute $stmt$
+    update public.parts
+    set is_npn = true,
+        part_number = null
+    where upper(coalesce(part_number, '')) = 'NPN'
+  $stmt$;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'parts'
+      and column_name = 'part_number'
+      and is_nullable = 'NO'
+  ) then
+    execute 'alter table public.parts alter column part_number drop not null';
+  end if;
+end $$;
 
 create table if not exists public.part_model_links (
   part_id uuid not null references public.parts(id) on delete cascade,

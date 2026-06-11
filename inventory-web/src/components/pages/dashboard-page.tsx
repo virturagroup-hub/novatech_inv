@@ -35,6 +35,7 @@ export function DashboardPage() {
     bins,
     parts,
     summary,
+    getDisplayPartNumber,
     getCompatibleModels,
   } = useInventory();
 
@@ -142,7 +143,7 @@ export function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-mono text-sm font-semibold text-white">
-                          {part.partNumber}
+                          {getDisplayPartNumber(part)}
                         </p>
                         <Badge
                           className={cn(

@@ -119,17 +119,21 @@ export async function buildAdminHealthReport(supabase: SupabaseClient): Promise<
   const recentPartIds = [...new Set(transactions.map((transaction) => transaction.part_id))];
   const recentPartsResult =
     recentPartIds.length > 0
-      ? await supabase.from("parts").select("id, part_number, part_name").in("id", recentPartIds)
+      ? await supabase.from("parts").select("id, part_number, part_name, is_npn").in("id", recentPartIds)
       : { data: [], error: null };
 
   const recentParts = (recentPartsResult.data ?? []) as Array<{
     id: string;
-    part_number: string;
+    part_number: string | null;
+    is_npn: boolean;
     part_name: string;
   }>;
 
   const recentPartLookup = new Map(
-    recentParts.map((part) => [part.id, `${part.part_number} · ${part.part_name}`]),
+    recentParts.map((part) => [
+      part.id,
+      `${part.is_npn ? "NPN" : part.part_number ?? "Unknown part"} · ${part.part_name}`,
+    ]),
   );
 
   const inactiveLocations = locations.filter((location) => location.status === "inactive").length;

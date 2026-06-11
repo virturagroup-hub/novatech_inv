@@ -85,13 +85,24 @@ function normalizeText(value: string) {
 }
 
 function upsertPartDraft(state: InventoryState, draft: PartDraft) {
-  const existing = state.parts.find(
-    (part) => part.id === draft.id || part.partNumber.toLowerCase() === draft.partNumber.toLowerCase(),
-  );
+  const isNpn = Boolean(draft.isNpn);
+  const normalizedPartNumber = normalizeText(draft.partNumber).toUpperCase();
+  const existing = state.parts.find((part) => {
+    if (part.id === draft.id) {
+      return true;
+    }
+
+    if (isNpn || part.isNpn) {
+      return false;
+    }
+
+    return part.partNumber.toLowerCase() === normalizedPartNumber.toLowerCase();
+  });
   const now = timestamp();
   const part: Part = {
     id: existing?.id ?? draft.id ?? crypto.randomUUID(),
-    partNumber: normalizeText(draft.partNumber).toUpperCase(),
+    partNumber: isNpn ? "" : normalizedPartNumber,
+    isNpn,
     partName: normalizeText(draft.partName),
     manufacturer: normalizeText(draft.manufacturer),
     category: draft.category,
@@ -213,13 +224,14 @@ export function inventoryReducer(
 
     case "upsertPart": {
       const next = upsertPartDraft(state, action.part);
+      const partLabel = action.part.isNpn ? "NPN" : action.part.partNumber || "Unknown part";
       const entry = createActivity({
         action: "updated",
         tone: "info",
         entityType: "part",
-        entityId: action.part.id ?? action.part.partNumber,
+        entityId: action.part.id ?? partLabel,
         title: "Part saved",
-        detail: `${action.part.partNumber} was added or updated in the inventory.`,
+        detail: `${partLabel} was added or updated in the inventory.`,
       });
       return pushActivity(next, entry);
     }
@@ -227,6 +239,7 @@ export function inventoryReducer(
     case "deletePart": {
       const removed = state.parts.find((part) => part.id === action.partId);
       if (!removed) return state;
+      const removedLabel = removed.isNpn ? "NPN" : removed.partNumber || "Unknown part";
 
       const next: InventoryState = {
         ...state,
@@ -241,7 +254,7 @@ export function inventoryReducer(
           entityType: "part",
           entityId: action.partId,
           title: "Part removed",
-          detail: `${removed.partNumber} was removed from the active inventory.`,
+          detail: `${removedLabel} was removed from the active inventory.`,
         }),
       );
     }
@@ -249,6 +262,7 @@ export function inventoryReducer(
     case "adjustPart": {
       const part = state.parts.find((item) => item.id === action.partId);
       if (!part) return state;
+      const partLabel = part.isNpn ? "NPN" : part.partNumber || "Unknown part";
 
       const nextQuantity = Math.max(0, part.quantityOnHand + action.delta);
       const now = timestamp();
@@ -274,7 +288,7 @@ export function inventoryReducer(
           entityType: "inventory",
           entityId: action.partId,
           title: action.delta >= 0 ? "Quantity increased" : "Quantity reduced",
-          detail: `${part.partNumber} moved from ${part.quantityOnHand} to ${nextQuantity}.`,
+          detail: `${partLabel} moved from ${part.quantityOnHand} to ${nextQuantity}.`,
         }),
       );
     }

@@ -28,6 +28,7 @@ type PartEditorSheetProps = {
 
 type PartFormState = {
   partNumber: string;
+  isNpn: boolean;
   partName: string;
   manufacturer: string;
   category: (typeof categories)[number];
@@ -42,6 +43,7 @@ type PartFormState = {
 
 const blankForm: PartFormState = {
   partNumber: "",
+  isNpn: false,
   partName: "",
   manufacturer: "Canon",
   category: "Accessory",
@@ -63,7 +65,8 @@ function formFromPart(part?: Part | null, defaultBinId?: string | null): PartFor
   }
 
   return {
-    partNumber: part.partNumber,
+    partNumber: part.isNpn ? "" : part.partNumber,
+    isNpn: Boolean(part.isNpn),
     partName: part.partName,
     manufacturer: part.manufacturer,
     category: part.category,
@@ -105,7 +108,8 @@ export function PartEditorSheet({
 
   const attentionPreview = requiresAttention({
     id: part?.id ?? "",
-    partNumber: form.partNumber,
+    partNumber: form.isNpn ? "" : form.partNumber,
+    isNpn: form.isNpn,
     partName: form.partName,
     manufacturer: form.manufacturer,
     category: form.category,
@@ -122,14 +126,15 @@ export function PartEditorSheet({
   });
 
   const savePart = () => {
-    if (!form.partNumber.trim() || !form.partName.trim()) {
-      toast.error("Part number and part name are required.");
+    if (!form.partName.trim() || (!form.isNpn && !form.partNumber.trim())) {
+      toast.error(form.isNpn ? "Part name is required." : "Part number and part name are required.");
       return;
     }
 
     addPart({
       id: part?.id,
-      partNumber: form.partNumber.trim(),
+      partNumber: form.isNpn ? "" : form.partNumber.trim(),
+      isNpn: form.isNpn,
       partName: form.partName.trim(),
       manufacturer: form.manufacturer.trim(),
       category: form.category,
@@ -146,7 +151,8 @@ export function PartEditorSheet({
 
   const previewPart = {
     id: part?.id ?? "",
-    partNumber: form.partNumber,
+    partNumber: form.isNpn ? "" : form.partNumber,
+    isNpn: form.isNpn,
     partName: form.partName,
     manufacturer: form.manufacturer,
     category: form.category,
@@ -177,7 +183,7 @@ export function PartEditorSheet({
                 {part ? "Edit part" : "Add part"}
               </SheetTitle>
               <SheetDescription className="text-slate-400">
-                Keep part numbers, locations, and model compatibility in sync.
+                Keep part numbers, NPN status, locations, and model compatibility in sync.
               </SheetDescription>
             </div>
           </div>
@@ -196,9 +202,28 @@ export function PartEditorSheet({
                   onChange={(event) =>
                     setForm((current) => ({ ...current, partNumber: event.target.value }))
                   }
-                  placeholder="FM1-D581"
+                  placeholder={form.isNpn ? "Optional for NPN" : "FM1-D581"}
                   className="border-white/10 bg-white/5 text-white placeholder:text-slate-500"
                 />
+                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <Checkbox
+                    checked={form.isNpn}
+                    onCheckedChange={(next) =>
+                      setForm((current) => ({
+                        ...current,
+                        isNpn: Boolean(next),
+                      }))
+                    }
+                    className="mt-0.5 border-white/20 data-[state=checked]:bg-amber-400 data-[state=checked]:text-slate-950"
+                  />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-white">Mark as NPN</p>
+                    <p className="text-xs leading-5 text-slate-400">
+                      No Part Number items can be saved without a part number. Labels will use the
+                      first compatible model, or Unknown Model if none is linked.
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="partName" className="text-slate-200">

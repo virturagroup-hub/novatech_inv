@@ -12,7 +12,8 @@ export interface ProfileRow {
 
 export interface PartRow {
   id: string;
-  part_number: string;
+  part_number: string | null;
+  is_npn: boolean;
   part_name: string;
   manufacturer: string;
   category: Category;
