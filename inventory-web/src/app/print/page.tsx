@@ -12,7 +12,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Bin, Part } from "@/lib/inventory-types";
-import { buildAbsoluteAppUrl, buildPartDetailPath } from "@/lib/navigation";
+import { buildAbsoluteAppUrl } from "@/lib/navigation";
 import {
   LABELS_PER_SHEET,
   normalizePrintCopies,
@@ -321,6 +321,8 @@ export function PrintPage({
   );
 }
 
+export default PrintPage;
+
 function PartLabelCard({
   part,
   bins,
@@ -330,7 +332,7 @@ function PartLabelCard({
 }>) {
   const bin = getBinById(bins, part.binId);
   const locationText = bin ? `${bin.code} · ${getBinLocationText(bin)}` : "Unassigned";
-  const qrValue = buildAbsoluteAppUrl(buildPartDetailPath(part.id));
+  const qrValue = buildAbsoluteAppUrl(`/inventory/${part.id}`);
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-300 bg-white p-2 text-slate-950 print:border-slate-300">
