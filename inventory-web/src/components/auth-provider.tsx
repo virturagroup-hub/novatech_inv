@@ -187,6 +187,7 @@ export function AuthProvider({
 
   useEffect(() => {
     let mounted = true;
+    let authStateTimeout: number | null = null;
     const safeSetSession = (nextSession: AuthSession | null) => {
       if (mounted) {
         setSession(nextSession);
@@ -204,15 +205,34 @@ export function AuthProvider({
       }
     });
 
+    const scheduleSessionReload = () => {
+      if (authStateTimeout !== null) {
+        window.clearTimeout(authStateTimeout);
+      }
+
+      authStateTimeout = window.setTimeout(() => {
+        authStateTimeout = null;
+
+        if (!mounted) {
+          return;
+        }
+
+        void loadSupabaseSession(supabase, safeSetSession, safeSetAuthIssue);
+      }, 0);
+    };
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async () => {
+    } = supabase.auth.onAuthStateChange(() => {
       if (!mounted) return;
-      await loadSupabaseSession(supabase, safeSetSession, safeSetAuthIssue);
+      scheduleSessionReload();
     });
 
     return () => {
       mounted = false;
+      if (authStateTimeout !== null) {
+        window.clearTimeout(authStateTimeout);
+      }
       subscription.unsubscribe();
     };
   }, [supabase]);
