@@ -20,17 +20,17 @@ export function PageHero({
   return (
     <section
       className={cn(
-        "rounded-[2rem] border border-white/10 bg-white/5 px-5 py-5 shadow-2xl shadow-black/10 backdrop-blur-sm sm:px-6 sm:py-6",
+        "rounded-[2rem] border border-white/10 bg-white/5 px-4 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm sm:px-6 sm:py-6",
         className,
       )}
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl space-y-3">
           <Badge className="border-amber-400/30 bg-amber-400/15 text-amber-200">
             {eyebrow}
           </Badge>
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
               {title}
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">

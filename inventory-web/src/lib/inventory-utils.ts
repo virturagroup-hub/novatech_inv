@@ -1,7 +1,19 @@
-import { format, formatDistanceToNow } from "date-fns";
+import {
+  endOfDay,
+  endOfMonth,
+  endOfWeek,
+  format,
+  formatDistanceToNow,
+  isWithinInterval,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subDays,
+} from "date-fns";
 import type {
   ActivityEntry,
   Bin,
+  AuditAction,
   DeviceModel,
   InventoryState,
   InventorySortKey,
@@ -53,6 +65,118 @@ export function getDisplayPartNumber(part: Part, models: DeviceModel[]) {
   return `NPN - ${modelLabel}`;
 }
 
+const auditActionLabels: Record<AuditAction, string> = {
+  added: "Added",
+  removed: "Removed",
+  quantity_increased: "Quantity increased",
+  quantity_decreased: "Quantity decreased",
+  quantity_changed: "Quantity changed",
+  location_changed: "Location changed",
+  metadata_changed: "Metadata changed",
+  marked_npn: "Marked NPN",
+  unmarked_npn: "Unmarked NPN",
+  label_printed: "Label printed",
+};
+
+const auditActionTones: Record<AuditAction, ActivityEntry["tone"]> = {
+  added: "success",
+  removed: "danger",
+  quantity_increased: "success",
+  quantity_decreased: "warning",
+  quantity_changed: "info",
+  location_changed: "warning",
+  metadata_changed: "info",
+  marked_npn: "warning",
+  unmarked_npn: "info",
+  label_printed: "success",
+};
+
+export function getAuditActionLabel(action: AuditAction | null | undefined) {
+  if (!action) {
+    return "Updated";
+  }
+
+  return auditActionLabels[action] ?? action;
+}
+
+export function getAuditActionTone(action: AuditAction | null | undefined) {
+  if (!action) {
+    return "info" as const;
+  }
+
+  return auditActionTones[action] ?? "info";
+}
+
+function isFiniteDate(value: string | Date | null | undefined) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp);
+}
+
+function maxTimestamp(values: Array<string | Date | null | undefined>) {
+  const valid = values
+    .filter(isFiniteDate)
+    .map((value) => new Date(value as string | Date).getTime());
+
+  if (valid.length === 0) {
+    return null;
+  }
+
+  return new Date(Math.max(...valid));
+}
+
+export function normalizeAuditType(entry: Pick<ActivityEntry, "action" | "auditType" | "audit" | "tone">) {
+  if (entry.auditType) {
+    return entry.auditType;
+  }
+
+  switch (entry.action) {
+    case "added":
+    case "imported":
+      return "added";
+    case "removed":
+      return "removed";
+    case "printed":
+      return "label_printed";
+    case "moved":
+      return "location_changed";
+    case "adjusted": {
+      const delta = entry.audit?.delta ?? 0;
+      if (delta > 0) return "quantity_increased";
+      if (delta < 0) return "quantity_decreased";
+      return "quantity_changed";
+    }
+    case "updated": {
+      if (entry.audit?.previousIsNpn !== entry.audit?.nextIsNpn) {
+        return entry.audit?.nextIsNpn ? "marked_npn" : "unmarked_npn";
+      }
+
+      if ((entry.audit?.previousLocationId ?? null) !== (entry.audit?.nextLocationId ?? null)) {
+        return "location_changed";
+      }
+
+      if (
+        (entry.audit?.previousQuantity ?? null) !== (entry.audit?.nextQuantity ?? null) ||
+        (entry.audit?.previousPartNumber ?? null) !== (entry.audit?.nextPartNumber ?? null)
+      ) {
+        return "quantity_changed";
+      }
+
+      return "metadata_changed";
+    }
+    default:
+      return "metadata_changed";
+  }
+}
+
+export function getActivityAuditLabel(entry: Pick<ActivityEntry, "action" | "auditType" | "audit" | "tone">) {
+  return getAuditActionLabel(normalizeAuditType(entry));
+}
+
+export function getActivityAuditTone(entry: Pick<ActivityEntry, "action" | "auditType" | "audit" | "tone">) {
+  return getAuditActionTone(normalizeAuditType(entry));
+}
+
 export function getPartStockStatus(part: Part): "critical" | "low" | "healthy" {
   if (part.quantityOnHand === 0) return "critical";
   if (part.quantityOnHand <= part.reorderPoint) return "low";
@@ -96,21 +220,235 @@ export function getPartLookupBlob(part: Part, bins: Bin[], models: DeviceModel[]
   );
 }
 
+export type AuditWindowPreset =
+  | "today"
+  | "this-week"
+  | "weekly"
+  | "last-7-days"
+  | "this-month"
+  | "monthly"
+  | "last-30-days"
+  | "custom";
+
+export type LabelRecencyFilter =
+  | "all"
+  | "added-today"
+  | "added-last-3-days"
+  | "added-last-7-days"
+  | "quantity-increased-today"
+  | "quantity-increased-last-3-days"
+  | "quantity-increased-last-7-days"
+  | "added-or-quantity-increased-today"
+  | "added-or-quantity-increased-last-3-days"
+  | "added-or-quantity-increased-last-7-days";
+
+export interface AuditWindowBounds {
+  start: Date;
+  end: Date;
+}
+
+function asDate(value: string | Date | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function withinWindow(value: string | Date | null | undefined, bounds: AuditWindowBounds) {
+  const date = asDate(value);
+  return date ? isWithinInterval(date, bounds) : false;
+}
+
+export function getAuditWindowBounds(
+  preset: AuditWindowPreset,
+  options?: { customStart?: string | null; customEnd?: string | null; now?: Date },
+): AuditWindowBounds | null {
+  const now = options?.now ?? new Date();
+
+  switch (preset) {
+    case "today":
+      return { start: startOfDay(now), end: endOfDay(now) };
+    case "this-week":
+    case "weekly":
+      return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+    case "last-7-days":
+      return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
+    case "this-month":
+    case "monthly":
+      return { start: startOfMonth(now), end: endOfMonth(now) };
+    case "last-30-days":
+      return { start: startOfDay(subDays(now, 29)), end: endOfDay(now) };
+    case "custom": {
+      const start = asDate(options?.customStart);
+      const end = asDate(options?.customEnd);
+
+      if (!start || !end) {
+        return null;
+      }
+
+      return { start: startOfDay(start), end: endOfDay(end) };
+    }
+  }
+}
+
+export function getPartLabelTimeline(
+  part: Part,
+  activity: ActivityEntry[],
+): {
+  addedAt: Date | null;
+  quantityIncreasedAt: Date | null;
+  combinedAt: Date | null;
+  mostRecentAt: Date | null;
+} {
+  const related = activity.filter((entry) => {
+    const audit = entry.audit ?? {};
+    return entry.entityId === part.id || audit.itemId === part.id;
+  });
+
+  const addedAt = maxTimestamp([
+    part.receivedAt,
+    ...related
+      .filter((entry) => normalizeAuditType(entry) === "added")
+      .map((entry) => entry.occurredAt),
+  ]);
+
+  const quantityIncreasedAt = maxTimestamp([
+    ...related
+      .filter((entry) => {
+        const auditType = normalizeAuditType(entry);
+        const delta = entry.audit?.delta ?? 0;
+        return auditType === "quantity_increased" || (auditType === "quantity_changed" && delta > 0);
+      })
+      .map((entry) => entry.occurredAt),
+  ]);
+
+  const combinedAt = maxTimestamp([addedAt, quantityIncreasedAt]);
+  const mostRecentAt = maxTimestamp([combinedAt, part.updatedAt, part.lastCountedAt]);
+
+  return {
+    addedAt,
+    quantityIncreasedAt,
+    combinedAt,
+    mostRecentAt,
+  };
+}
+
+function labelRecencyBounds(days: number, now: Date) {
+  return {
+    start: startOfDay(subDays(now, days - 1)),
+    end: endOfDay(now),
+  };
+}
+
+export function getPartLabelRecencySortTimestamp(
+  part: Part,
+  activity: ActivityEntry[],
+  recencyFilter: LabelRecencyFilter = "all",
+) {
+  const timeline = getPartLabelTimeline(part, activity);
+
+  switch (recencyFilter) {
+    case "added-today":
+    case "added-last-3-days":
+    case "added-last-7-days":
+      return timeline.addedAt ?? timeline.mostRecentAt ?? asDate(part.updatedAt) ?? new Date(0);
+    case "quantity-increased-today":
+    case "quantity-increased-last-3-days":
+    case "quantity-increased-last-7-days":
+      return timeline.quantityIncreasedAt ?? timeline.combinedAt ?? timeline.mostRecentAt ?? asDate(part.updatedAt) ?? new Date(0);
+    case "added-or-quantity-increased-today":
+    case "added-or-quantity-increased-last-3-days":
+    case "added-or-quantity-increased-last-7-days":
+      return timeline.combinedAt ?? timeline.mostRecentAt ?? asDate(part.updatedAt) ?? new Date(0);
+    case "all":
+    default:
+      return timeline.mostRecentAt ?? asDate(part.updatedAt) ?? new Date(0);
+  }
+}
+
+export function partMatchesLabelRecency(
+  part: Part,
+  activity: ActivityEntry[],
+  recencyFilter: LabelRecencyFilter,
+  now = new Date(),
+) {
+  if (recencyFilter === "all") {
+    return true;
+  }
+
+  const timeline = getPartLabelTimeline(part, activity);
+  const hasAddedAt = timeline.addedAt ?? null;
+  const hasIncreaseAt = timeline.quantityIncreasedAt ?? null;
+
+  switch (recencyFilter) {
+    case "added-today":
+      return hasAddedAt ? withinWindow(hasAddedAt, labelRecencyBounds(1, now)) : false;
+    case "added-last-3-days":
+      return hasAddedAt ? withinWindow(hasAddedAt, labelRecencyBounds(3, now)) : false;
+    case "added-last-7-days":
+      return hasAddedAt ? withinWindow(hasAddedAt, labelRecencyBounds(7, now)) : false;
+    case "quantity-increased-today":
+      return hasIncreaseAt ? withinWindow(hasIncreaseAt, labelRecencyBounds(1, now)) : false;
+    case "quantity-increased-last-3-days":
+      return hasIncreaseAt ? withinWindow(hasIncreaseAt, labelRecencyBounds(3, now)) : false;
+    case "quantity-increased-last-7-days":
+      return hasIncreaseAt ? withinWindow(hasIncreaseAt, labelRecencyBounds(7, now)) : false;
+    case "added-or-quantity-increased-today":
+      return Boolean(
+        (hasAddedAt && withinWindow(hasAddedAt, labelRecencyBounds(1, now))) ||
+          (hasIncreaseAt && withinWindow(hasIncreaseAt, labelRecencyBounds(1, now))),
+      );
+    case "added-or-quantity-increased-last-3-days":
+      return Boolean(
+        (hasAddedAt && withinWindow(hasAddedAt, labelRecencyBounds(3, now))) ||
+          (hasIncreaseAt && withinWindow(hasIncreaseAt, labelRecencyBounds(3, now))),
+      );
+    case "added-or-quantity-increased-last-7-days":
+      return Boolean(
+        (hasAddedAt && withinWindow(hasAddedAt, labelRecencyBounds(7, now))) ||
+          (hasIncreaseAt && withinWindow(hasIncreaseAt, labelRecencyBounds(7, now))),
+      );
+    default:
+      return true;
+  }
+}
+
+export function filterPartsByLabelRecency(
+  parts: Part[],
+  activity: ActivityEntry[],
+  recencyFilter: LabelRecencyFilter,
+  now = new Date(),
+) {
+  const filtered = parts.filter((part) => partMatchesLabelRecency(part, activity, recencyFilter, now));
+  return [...filtered].sort((left, right) => {
+    const leftTimestamp = getPartLabelRecencySortTimestamp(left, activity, recencyFilter).getTime();
+    const rightTimestamp = getPartLabelRecencySortTimestamp(right, activity, recencyFilter).getTime();
+    return rightTimestamp - leftTimestamp;
+  });
+}
+
 export function sortParts(parts: Part[], sortKey: InventorySortKey) {
   return [...parts].sort((left, right) => {
     switch (sortKey) {
       case "partNumber":
-        return (left.partNumber || (left.isNpn ? "NPN" : "")).localeCompare(
-          right.partNumber || (right.isNpn ? "NPN" : ""),
+        return (
+          (left.partNumber || (left.isNpn ? "NPN" : "")).localeCompare(
+            right.partNumber || (right.isNpn ? "NPN" : ""),
+          ) ||
+          left.partName.localeCompare(right.partName) ||
+          left.id.localeCompare(right.id)
         );
       case "quantity":
-        return left.quantityOnHand - right.quantityOnHand;
+        return right.quantityOnHand - left.quantityOnHand || right.updatedAt.localeCompare(left.updatedAt);
       case "location":
-        return (left.binId ?? "zzz").localeCompare(right.binId ?? "zzz");
+        return (left.binId ?? "zzz").localeCompare(right.binId ?? "zzz") || left.id.localeCompare(right.id);
       case "updatedAt":
       default:
         return (
-          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() ||
+          left.id.localeCompare(right.id)
         );
     }
   });
@@ -129,6 +467,14 @@ export function filterParts(
     }
 
     if (filters.category && part.category !== filters.category) {
+      return false;
+    }
+
+    if (filters.partNumberState === "with-number" && part.isNpn) {
+      return false;
+    }
+
+    if (filters.partNumberState === "npn" && !part.isNpn) {
       return false;
     }
 
@@ -275,20 +621,29 @@ export function getBinSummary(bin: Bin, parts: Part[]) {
   };
 }
 
-export function getActivityColor(action: ActivityEntry["action"]) {
+export function getActivityColor(action: ActivityEntry["action"] | AuditAction) {
   switch (action) {
     case "added":
     case "imported":
+    case "quantity_increased":
+    case "label_printed":
       return "success";
-    case "adjusted":
-    case "updated":
-      return "info";
-    case "printed":
-      return "success";
-    case "moved":
+    case "quantity_decreased":
+    case "marked_npn":
       return "warning";
     case "removed":
       return "danger";
+    case "adjusted":
+    case "updated":
+      return "info";
+    case "moved":
+      return "warning";
+    case "printed":
+    case "quantity_changed":
+    case "location_changed":
+    case "metadata_changed":
+    case "unmarked_npn":
+      return "info";
     default:
       return "info";
   }
@@ -315,7 +670,9 @@ export function serializePartsCsv(
   state: Pick<InventoryState, "parts" | "bins" | "models">,
 ) {
   const header = [
+    "Display Part Number",
     "Part Number",
+    "NPN",
     "Part Name",
     "Manufacturer",
     "Category",
@@ -336,9 +693,12 @@ export function serializePartsCsv(
     const modelNames = getCompatibleModels(part, state.models)
       .map((model) => `${model.manufacturer} ${model.name}`)
       .join("; ");
+    const displayPartNumber = getDisplayPartNumber(part, state.models);
 
     return [
+      escapeCsvCell(displayPartNumber),
       escapeCsvCell(part.partNumber),
+      escapeCsvCell(part.isNpn ? "Yes" : "No"),
       escapeCsvCell(part.partName),
       escapeCsvCell(part.manufacturer),
       escapeCsvCell(part.category),
@@ -411,7 +771,9 @@ export function serializeLowStockCsv(
   );
 
   const header = [
+    "Display Part Number",
     "Part Number",
+    "NPN",
     "Part Name",
     "Manufacturer",
     "Quantity On Hand",
@@ -430,9 +792,12 @@ export function serializeLowStockCsv(
       : getCompatibleModels(part, state.models)
           .map((model) => `${model.manufacturer} ${model.name}`)
           .join("; ");
+    const displayPartNumber = getDisplayPartNumber(part, state.models);
 
     return [
+      escapeCsvCell(displayPartNumber),
       escapeCsvCell(part.partNumber),
+      escapeCsvCell(part.isNpn ? "Yes" : "No"),
       escapeCsvCell(part.partName),
       escapeCsvCell(part.manufacturer),
       part.quantityOnHand,
@@ -453,16 +818,49 @@ export function serializeLocationsCsv(state: InventoryState) {
 }
 
 export function serializeActivityCsv(state: InventoryState) {
-  const header = ["Timestamp", "Action", "Entity Type", "Title", "Detail"];
-  const rows = state.activity.map((entry) =>
-    [
+  const header = [
+    "Timestamp",
+    "Audit Type",
+    "Action",
+    "Entity Type",
+    "Item ID",
+    "Display Part Number",
+    "Part Name",
+    "Quantity Before",
+    "Quantity After",
+    "Delta",
+    "Location Before",
+    "Location After",
+    "User",
+    "Title",
+    "Detail",
+  ];
+  const rows = state.activity.map((entry) => {
+    const metadata = entry.audit?.metadata as Record<string, unknown> | null | undefined;
+    const displayPartNumber =
+      (typeof metadata?.displayPartNumber === "string" && metadata.displayPartNumber) ||
+      entry.audit?.nextPartNumber ||
+      entry.audit?.previousPartNumber ||
+      "";
+
+    return [
       escapeCsvCell(formatDateTime(entry.occurredAt)),
+      escapeCsvCell(entry.auditType ?? ""),
       escapeCsvCell(entry.action),
       escapeCsvCell(entry.entityType),
+      escapeCsvCell(entry.audit?.itemId ?? entry.entityId),
+      escapeCsvCell(displayPartNumber),
+      escapeCsvCell(entry.audit?.itemName ?? ""),
+      escapeCsvCell(entry.audit?.previousQuantity ?? ""),
+      escapeCsvCell(entry.audit?.nextQuantity ?? ""),
+      escapeCsvCell(entry.audit?.delta ?? ""),
+      escapeCsvCell(entry.audit?.previousLocationId ?? ""),
+      escapeCsvCell(entry.audit?.nextLocationId ?? ""),
+      escapeCsvCell(entry.audit?.actorLabel ?? ""),
       escapeCsvCell(entry.title),
       escapeCsvCell(entry.detail),
-    ].join(","),
-  );
+    ].join(",");
+  });
 
   return [header.join(","), ...rows].join("\n");
 }

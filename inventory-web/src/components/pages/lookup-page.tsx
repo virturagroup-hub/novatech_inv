@@ -64,7 +64,7 @@ export function LookupPage() {
   }, [models, mode, normalizedQuery]);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Fast lookup"
         title="Find a part, bin, or model without leaving the floor."
@@ -85,7 +85,7 @@ export function LookupPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Matches"
           value={partMatches.length + binMatches.length + modelMatches.length}
@@ -303,7 +303,11 @@ export function LookupPage() {
                     {modelMatches.map((model) => {
                 const compatibleCount = countCompatiblePartsForModel(parts, model.id);
                 return (
-                  <div key={model.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <Link
+                    key={model.id}
+                    href={`/models/${model.id}`}
+                    className="block rounded-3xl border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/10"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-white">
@@ -325,7 +329,7 @@ export function LookupPage() {
                       </Badge>
                     </div>
                     {model.notes && <p className="mt-2 text-xs text-slate-400">{model.notes}</p>}
-                  </div>
+                  </Link>
                 );
                     })}
                   </div>

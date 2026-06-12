@@ -52,6 +52,10 @@ type InventoryContextValue = InventoryState & {
   addPart: (draft: PartDraft) => void;
   deletePart: (partId: string) => void;
   adjustPart: (partId: string, delta: number) => void;
+  recordLabelPrint: (
+    partIds: string[],
+    options: { labelMode: string; copies: number; includeZero: boolean },
+  ) => void;
   saveBin: (draft: BinDraft) => void;
   deleteBin: (binId: string) => void;
   setBinStatus: (binId: string, status: "active" | "inactive") => void;
@@ -309,7 +313,6 @@ export function InventoryProvider({
         if (!part) return;
 
         dispatch({ type: "adjustPart", partId, delta });
-
         if (!browserSupabase) return;
 
         const nextQuantity = Math.max(0, part.quantityOnHand + delta);
@@ -322,20 +325,64 @@ export function InventoryProvider({
             .eq("id", partId);
 
           if (updateError) throw updateError;
+        });
+      },
+      recordLabelPrint: (
+        partIds: string[],
+        options: { labelMode: string; copies: number; includeZero: boolean },
+      ) => {
+        const printedParts = partIds
+          .map((partId) => state.parts.find((part) => part.id === partId))
+          .filter((part): part is Part => Boolean(part));
 
-          const { error: transactionError } = await browserSupabase.from("inventory_transactions").insert(
-            [
-              {
-                part_id: partId,
-                transaction_type: "adjustment",
-                delta,
-                note: delta >= 0 ? "Manual stock increase" : "Manual stock decrease",
-                created_by: null,
+        if (printedParts.length === 0) {
+          return;
+        }
+
+        dispatch({
+          type: "logLabelPrint",
+          partIds: printedParts.map((part) => part.id),
+          labelMode: options.labelMode,
+          copies: options.copies,
+          includeZero: options.includeZero,
+        });
+
+        if (!browserSupabase) return;
+
+        syncRemote(async () => {
+          const { error } = await browserSupabase.from("inventory_transactions").insert(
+            printedParts.map((part) => ({
+              part_id: part.id,
+              transaction_type: "adjustment",
+              delta: 0,
+              audit_type: "label_printed",
+              previous_quantity: part.quantityOnHand,
+              next_quantity: part.quantityOnHand,
+              previous_location_id: part.binId,
+              next_location_id: part.binId,
+              previous_part_number: part.isNpn ? null : part.partNumber || null,
+              next_part_number: part.isNpn ? null : part.partNumber || null,
+              previous_is_npn: part.isNpn,
+              next_is_npn: part.isNpn,
+              item_part_name: part.partName,
+              item_manufacturer: part.manufacturer,
+              item_category: part.category,
+              item_snapshot: {
+                partId: part.id,
+                labelMode: options.labelMode,
+                labelCopies: options.copies,
+                includeZero: options.includeZero,
+                displayPartNumber: getDisplayPartNumber(part, state.models),
               },
-            ],
+              label_mode: options.labelMode,
+              label_copies: options.copies,
+              note: `Printed ${options.labelMode} labels`,
+              created_by: null,
+              actor_label: null,
+            })),
           );
 
-          if (transactionError) throw transactionError;
+          if (error) throw error;
         });
       },
       saveBin: (draft: BinDraft) => {

@@ -15,7 +15,14 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { formatDateTime, formatRelative, getActivityColor } from "@/lib/inventory-utils";
+import {
+  formatDateTime,
+  formatRelative,
+  getActivityAuditLabel,
+  getActivityColor,
+  normalizeAuditType,
+} from "@/lib/inventory-utils";
+import { auditActions, type AuditAction } from "@/lib/inventory-types";
 
 type ActivityFilter = "all" | "part" | "bin" | "model" | "inventory" | "system";
 
@@ -24,15 +31,17 @@ export function ActivityPage() {
   const { activity, summary } = useInventory();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ActivityFilter>("all");
+  const [auditFilter, setAuditFilter] = useState<AuditAction | "all">("all");
 
   const filteredActivity = useMemo(() => {
     const search = query.trim().toLowerCase();
     return activity.filter((entry) => {
       if (filter !== "all" && entry.entityType !== filter) return false;
+      if (auditFilter !== "all" && normalizeAuditType(entry) !== auditFilter) return false;
       if (!search) return true;
       return `${entry.action} ${entry.title} ${entry.detail} ${entry.entityType}`.toLowerCase().includes(search);
     });
-  }, [activity, filter, query]);
+  }, [activity, auditFilter, filter, query]);
 
   const actionCounts = useMemo(() => {
     return {
@@ -67,7 +76,7 @@ export function ActivityPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Activity log"
         title="Audit trail for the current inventory source."
@@ -97,7 +106,7 @@ export function ActivityPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Entries"
           value={activity.length}
@@ -128,7 +137,7 @@ export function ActivityPage() {
       </div>
 
       <Card className="border-white/10 bg-white/5">
-        <CardContent className="grid gap-3 p-4 sm:p-5 lg:grid-cols-[1fr_220px]">
+        <CardContent className="grid gap-3 p-4 sm:p-5 lg:grid-cols-[1fr_220px_260px]">
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Search activity</p>
             <Input
@@ -154,6 +163,22 @@ export function ActivityPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Audit type</p>
+            <Select value={auditFilter} onValueChange={(value) => setAuditFilter(value as AuditAction | "all")}>
+              <SelectTrigger className="border-white/10 bg-slate-950/70 text-white">
+                <SelectValue placeholder="All audit types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All audit types</SelectItem>
+                {auditActions.map((auditType) => (
+                  <SelectItem key={auditType} value={auditType}>
+                    {getActivityAuditLabel({ action: "updated", auditType, tone: "info" })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -170,11 +195,12 @@ export function ActivityPage() {
               <div className="space-y-3 p-3 pr-4">
                 {filteredActivity.map((entry) => {
                   const activityTone = getActivityColor(entry.action);
+                  const auditLabel = getActivityAuditLabel(entry);
 
                   return (
                     <div key={entry.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Badge
                             className={cn(
                               "border",
@@ -190,8 +216,16 @@ export function ActivityPage() {
                             {entry.action}
                           </Badge>
                           <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {auditLabel}
+                          </Badge>
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
                             {entry.entityType}
                           </Badge>
+                          {entry.audit?.actorLabel && (
+                            <Badge className="border-white/10 bg-white/5 text-slate-200">
+                              {entry.audit.actorLabel}
+                            </Badge>
+                          )}
                         </div>
                         <span className="font-mono text-[11px] text-slate-500">
                           {formatRelative(entry.occurredAt)}
@@ -199,6 +233,17 @@ export function ActivityPage() {
                       </div>
                       <p className="mt-3 text-sm font-semibold text-white">{entry.title}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-400">{entry.detail}</p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                        {entry.audit?.delta !== undefined && <span>Delta {entry.audit.delta}</span>}
+                        {entry.audit?.previousQuantity !== undefined && (
+                          <span>Before {entry.audit.previousQuantity}</span>
+                        )}
+                        {entry.audit?.nextQuantity !== undefined && (
+                          <span>After {entry.audit.nextQuantity}</span>
+                        )}
+                        {entry.audit?.nextLocationId && <span>Location changed</span>}
+                        {entry.audit?.nextIsNpn !== undefined && <span>NPN {entry.audit.nextIsNpn ? "on" : "off"}</span>}
+                      </div>
                       <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                         {formatDateTime(entry.occurredAt)}
                       </p>

@@ -27,13 +27,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { parseInventoryCsv, type InventoryCsvPreview, type InventoryCsvRow } from "@/lib/inventory-csv";
+import { type AuditAction, auditActions } from "@/lib/inventory-types";
 import {
+  type AuditWindowPreset,
+  getAuditWindowBounds,
+  normalizeAuditType,
   serializeActivityCsv,
   serializeLowStockCsv,
   serializeLocationsCsv,
   serializePartsCsv,
 } from "@/lib/inventory-utils";
 import type { InventoryImportSummary } from "@/lib/inventory-import-types";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ReportCard =
   | {
@@ -81,6 +87,10 @@ export function ImportExportPage() {
   const [previewError, setPreviewError] = useState("");
   const [importResult, setImportResult] = useState<InventoryImportSummary | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activityWindowPreset, setActivityWindowPreset] = useState<AuditWindowPreset>("last-7-days");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [selectedAuditTypes, setSelectedAuditTypes] = useState<AuditAction[]>([]);
 
   const exportSummary = useMemo(
     () => [
@@ -95,6 +105,45 @@ export function ImportExportPage() {
     () => ({ parts, bins, models, activity, settings }),
     [activity, bins, models, parts, settings],
   );
+  const activityWindowBounds = useMemo(
+    () =>
+      getAuditWindowBounds(activityWindowPreset, {
+        customStart,
+        customEnd,
+      }),
+    [activityWindowPreset, customEnd, customStart],
+  );
+  const filteredActivity = useMemo(() => {
+    const selectedTypes = new Set(selectedAuditTypes);
+
+    return [...activity]
+      .filter((entry) => {
+        if (activityWindowBounds) {
+          const occurredAt = new Date(entry.occurredAt);
+          if (occurredAt < activityWindowBounds.start || occurredAt > activityWindowBounds.end) {
+            return false;
+          }
+        }
+
+        if (selectedTypes.size > 0 && !selectedTypes.has(normalizeAuditType(entry))) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+  }, [activity, activityWindowBounds, selectedAuditTypes]);
+  const filteredExportState = useMemo(
+    () => ({ ...exportState, activity: filteredActivity }),
+    [exportState, filteredActivity],
+  );
+  const toggleAuditType = (auditType: AuditAction) => {
+    setSelectedAuditTypes((current) =>
+      current.includes(auditType)
+        ? current.filter((item) => item !== auditType)
+        : [...current, auditType],
+    );
+  };
 
   const reportCards: ReportCard[] = [
     {
@@ -121,13 +170,13 @@ export function ImportExportPage() {
       disabled: !permissions.canExportReports,
       onClick: () => downloadCsv("green-nventory-locations.csv", serializeLocationsCsv(exportState)),
     },
-      {
+    {
       title: "Export Activity Report",
-      description: "Keep a lightweight audit trail of what happened in the active workspace.",
+      description: `Export ${filteredActivity.length} filtered activity row${filteredActivity.length === 1 ? "" : "s"} from the selected audit window.`,
       icon: <Clock3 className="h-5 w-5" />,
       actionLabel: "Download CSV",
       disabled: !permissions.canExportReports,
-      onClick: () => downloadCsv("green-nventory-activity.csv", serializeActivityCsv(exportState)),
+      onClick: () => downloadCsv("green-nventory-activity.csv", serializeActivityCsv(filteredExportState)),
     },
     {
       title: "Print Part Labels",
@@ -243,7 +292,7 @@ export function ImportExportPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Reports & Exports"
         title="Clean action cards for the jobs managers and technicians use most."
@@ -274,7 +323,7 @@ export function ImportExportPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         {exportSummary.map((metric) => (
           <StatCard
             key={metric.label}
@@ -351,6 +400,109 @@ export function ImportExportPage() {
           </Card>
         ))}
       </div>
+
+      <Card className="border-white/10 bg-white/5">
+        <CardHeader>
+          <CardTitle className="text-white">Activity export filters</CardTitle>
+          <CardDescription className="text-slate-400">
+            Choose the audit window and event types that should feed the activity export.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[260px_1fr]">
+            <div className="space-y-2">
+              <Label className="text-slate-200">Date window</Label>
+              <Select
+                value={activityWindowPreset}
+                onValueChange={(value) => setActivityWindowPreset(value as AuditWindowPreset)}
+              >
+                <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                  <SelectValue placeholder="Last 7 days" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this-week">This week</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="last-7-days">Last 7 days</SelectItem>
+                  <SelectItem value="this-month">This month</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="last-30-days">Last 30 days</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-200">Included audit types</Label>
+              <div className="flex flex-wrap gap-2">
+                {auditActions.map((auditType) => {
+                  const active = selectedAuditTypes.includes(auditType);
+
+                  return (
+                    <Button
+                      key={auditType}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-10 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                        active && "border-emerald-400/30 bg-emerald-400/10 text-emerald-100",
+                      )}
+                      onClick={() => toggleAuditType(auditType)}
+                    >
+                      {auditType.replace(/_/g, " ")}
+                    </Button>
+                  );
+                })}
+                {selectedAuditTypes.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                    onClick={() => setSelectedAuditTypes([])}
+                  >
+                    Clear types
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {activityWindowPreset === "custom" && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Custom start</Label>
+                <Input
+                  type="date"
+                  value={customStart}
+                  onChange={(event) => setCustomStart(event.target.value)}
+                  className="h-12 border-white/10 bg-slate-950/70 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-200">Custom end</Label>
+                <Input
+                  type="date"
+                  value={customEnd}
+                  onChange={(event) => setCustomEnd(event.target.value)}
+                  className="h-12 border-white/10 bg-slate-950/70 text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+            <Badge className="border-white/10 bg-white/5 text-slate-200">
+              {filteredActivity.length} activity row{filteredActivity.length === 1 ? "" : "s"}
+            </Badge>
+            <Badge className="border-white/10 bg-white/5 text-slate-200">
+              {selectedAuditTypes.length > 0 ? selectedAuditTypes.length : auditActions.length} type
+              {selectedAuditTypes.length === 1 ? "" : "s"}
+            </Badge>
+            <span className="text-xs text-slate-500">
+              The export card above will download only the rows that match these filters.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
       {!permissions.canImportCsv && (
         <Card className="border-white/10 bg-white/5">
@@ -532,9 +684,11 @@ export function ImportExportPage() {
                 </thead>
                 <tbody>
                   {preview.rows.slice(0, 8).map((row: InventoryCsvRow) => (
-                    <tr key={row.partNumber} className="border-t border-white/10">
+                    <tr key={row.rowIndex} className="border-t border-white/10">
                       <td className="px-4 py-3 text-slate-400">{row.rowIndex}</td>
-                      <td className="px-4 py-3 font-mono text-white">{row.partNumber}</td>
+                      <td className="px-4 py-3 font-mono text-white">
+                        {row.isNpn ? "NPN" : row.partNumber || "—"}
+                      </td>
                       <td className="px-4 py-3 text-slate-200">{row.partName}</td>
                       <td className="px-4 py-3 text-slate-300">{row.manufacturer}</td>
                       <td className="px-4 py-3 text-slate-300">

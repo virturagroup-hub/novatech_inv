@@ -49,6 +49,7 @@ const defaultFilters: PartFilters = {
   binId: "",
   modelId: "",
   status: "all",
+  partNumberState: "all",
 };
 
 export function InventoryPage() {
@@ -111,7 +112,7 @@ export function InventoryPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Inventory management"
         title="Browse, edit, and stock reusable parts quickly."
@@ -143,7 +144,7 @@ export function InventoryPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Parts"
           value={parts.length}
@@ -275,7 +276,31 @@ export function InventoryPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(3,minmax(0,1fr))]">
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(4,minmax(0,1fr))]">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                Part number
+              </Label>
+              <Select
+                value={filters.partNumberState ?? "all"}
+                onValueChange={(value) =>
+                  setFilters((current) => ({
+                    ...current,
+                    partNumberState: value as PartFilters["partNumberState"],
+                  }))
+                }
+              >
+                <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
+                  <SelectValue placeholder="All parts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All parts</SelectItem>
+                  <SelectItem value="with-number">With part number</SelectItem>
+                  <SelectItem value="npn">NPN only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-[0.22em] text-slate-500">
                 Model

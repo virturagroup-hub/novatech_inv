@@ -25,6 +25,14 @@ export interface AdminHealthLog {
   title: string;
   detail: string;
   occurredAt: string;
+  auditType?: string | null;
+  actorLabel?: string | null;
+  delta?: number | null;
+  entityLabel?: string | null;
+  labelMode?: string | null;
+  labelCopies?: number | null;
+  nextQuantity?: number | null;
+  previousQuantity?: number | null;
 }
 
 export interface AdminHealthSection {
@@ -351,6 +359,14 @@ export async function buildAdminHealthReport(supabase: SupabaseClient): Promise<
       title: transactionTitle(transaction, partLabel),
       detail: transactionDetail(transaction, partLabel),
       occurredAt: transaction.created_at,
+      auditType: transaction.audit_type ?? null,
+      actorLabel: transaction.actor_label ?? null,
+      delta: transaction.delta,
+      entityLabel: partLabel,
+      labelMode: transaction.label_mode ?? null,
+      labelCopies: transaction.label_copies ?? null,
+      nextQuantity: transaction.next_quantity ?? null,
+      previousQuantity: transaction.previous_quantity ?? null,
     };
   });
 

@@ -20,7 +20,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { formatDateTime, formatRelative } from "@/lib/inventory-utils";
+import { formatDateTime, formatRelative, getActivityAuditLabel } from "@/lib/inventory-utils";
+import type { AuditAction } from "@/lib/inventory-types";
 
 function severityTone(severity: HealthSeverity) {
   switch (severity) {
@@ -146,7 +147,7 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Admin health"
         title="Site, database, warnings, and logs in one place."
@@ -175,7 +176,7 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => (
           <StatCard
             key={card.label}
@@ -291,13 +292,37 @@ export function AdminHealthPage({ initialReport }: AdminHealthPageProps) {
                   {report.logs.map((log) => (
                     <div key={log.id} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <Badge className={logClassName(log.severity)}>{severityLabel(log.severity)}</Badge>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={logClassName(log.severity)}>{severityLabel(log.severity)}</Badge>
+                          {log.auditType && (
+                            <Badge className="border-white/10 bg-white/5 text-slate-200">
+                              {getActivityAuditLabel({
+                                action: "updated",
+                                auditType: log.auditType as AuditAction,
+                                tone: "info",
+                              })}
+                            </Badge>
+                          )}
+                          {log.actorLabel && (
+                            <Badge className="border-white/10 bg-white/5 text-slate-200">
+                              {log.actorLabel}
+                            </Badge>
+                          )}
+                        </div>
                         <span className="font-mono text-[11px] text-slate-500">
                           {formatRelative(log.occurredAt)}
                         </span>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-white">{log.title}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-400">{log.detail}</p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                        {log.entityLabel && <span>{log.entityLabel}</span>}
+                        {log.delta !== undefined && <span>Delta {log.delta}</span>}
+                        {log.previousQuantity !== undefined && <span>Before {log.previousQuantity}</span>}
+                        {log.nextQuantity !== undefined && <span>After {log.nextQuantity}</span>}
+                        {log.labelMode && <span>{log.labelMode}</span>}
+                        {log.labelCopies !== undefined && <span>x{log.labelCopies}</span>}
+                      </div>
                       <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                         {formatDateTime(log.occurredAt)}
                       </p>

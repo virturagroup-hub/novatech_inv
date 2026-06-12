@@ -38,6 +38,21 @@ export const activityActions = [
 
 export type ActivityAction = (typeof activityActions)[number];
 
+export const auditActions = [
+  "added",
+  "removed",
+  "quantity_increased",
+  "quantity_decreased",
+  "quantity_changed",
+  "location_changed",
+  "metadata_changed",
+  "marked_npn",
+  "unmarked_npn",
+  "label_printed",
+] as const;
+
+export type AuditAction = (typeof auditActions)[number];
+
 export type ActivityTone = "success" | "info" | "warning" | "danger";
 
 export type InventoryViewStatus =
@@ -102,6 +117,27 @@ export interface ActivityEntry {
   title: string;
   detail: string;
   occurredAt: string;
+  auditType?: AuditAction;
+  audit?: {
+    actorId?: string | null;
+    actorLabel?: string | null;
+    delta?: number | null;
+    labelCopies?: number | null;
+    labelMode?: string | null;
+    nextIsNpn?: boolean | null;
+    nextLocationId?: string | null;
+    nextPartNumber?: string | null;
+    nextQuantity?: number | null;
+    previousIsNpn?: boolean | null;
+    previousLocationId?: string | null;
+    previousPartNumber?: string | null;
+    previousQuantity?: number | null;
+    itemId?: string | null;
+    itemName?: string | null;
+    itemManufacturer?: string | null;
+    itemCategory?: Category | null;
+    metadata?: Record<string, unknown> | null;
+  };
 }
 
 export interface InventorySettings {
@@ -166,6 +202,7 @@ export interface PartFilters {
   binId: string;
   modelId: string;
   status: InventoryViewStatus;
+  partNumberState?: "all" | "with-number" | "npn";
 }
 
 export interface DashboardMetric {

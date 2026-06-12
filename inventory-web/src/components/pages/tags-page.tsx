@@ -28,7 +28,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { categories, type Bin, type Part } from "@/lib/inventory-types";
 import { buildBinPrintHref, buildPartPrintHref, normalizePrintCopies, parseIdList, type LabelMode } from "@/lib/labels";
-import { filterParts, getPartLocationLabel } from "@/lib/inventory-utils";
+import {
+  filterParts,
+  filterPartsByLabelRecency,
+  getPartLocationLabel,
+  type LabelRecencyFilter,
+} from "@/lib/inventory-utils";
 
 type BuilderMode = "part" | "bin";
 
@@ -85,7 +90,7 @@ export function TagsPage({
   };
 }>) {
   const { permissions } = useAuth();
-  const { bins, getPartById, getDisplayPartNumber, models, parts, settings } = useInventory();
+  const { activity, bins, getPartById, getDisplayPartNumber, models, parts, settings } = useInventory();
 
   const initialPartIds = parseIdList(searchParams.partIds ?? searchParams.partId);
   const initialMode: BuilderMode =
@@ -108,6 +113,7 @@ export function TagsPage({
   const [modelFilter, setModelFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
+  const [labelRecencyFilter, setLabelRecencyFilter] = useState<LabelRecencyFilter>("all");
 
   useEffect(() => {
     if (searchParams.binId || searchParams.mode === "bin") {
@@ -166,10 +172,8 @@ export function TagsPage({
         ? filteredParts.filter((part) => part.binId === null)
         : filteredParts;
 
-    return [...locationScopedParts].sort(
-      (left, right) => right.updatedAt.localeCompare(left.updatedAt),
-    );
-  }, [bins, categoryFilter, locationFilter, manufacturerFilter, modelFilter, models, mode, parts, query]);
+    return filterPartsByLabelRecency(locationScopedParts, activity, labelRecencyFilter);
+  }, [activity, bins, categoryFilter, labelRecencyFilter, locationFilter, manufacturerFilter, modelFilter, models, mode, parts, query]);
 
   const visiblePartMatches = partMatches.slice(0, MAX_VISIBLE_PARTS);
   const hasActiveFilters =
@@ -177,7 +181,8 @@ export function TagsPage({
     manufacturerFilter !== "all" ||
     modelFilter !== "all" ||
     categoryFilter !== "all" ||
-    locationFilter !== "all";
+    locationFilter !== "all" ||
+    labelRecencyFilter !== "all";
 
   const binMatches = useMemo(() => {
     return [...bins]
@@ -210,6 +215,7 @@ export function TagsPage({
     setModelFilter("all");
     setCategoryFilter("all");
     setLocationFilter("all");
+    setLabelRecencyFilter("all");
   };
 
   const selectAllFilteredParts = () => {
@@ -283,7 +289,7 @@ export function TagsPage({
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Labels"
         title="Prepare scan labels."
@@ -314,7 +320,7 @@ export function TagsPage({
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
           <StatCard
             key={card.label}
@@ -560,6 +566,36 @@ export function TagsPage({
                             {bin.code} · {bin.name}
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Label recency</Label>
+                    <Select
+                      value={labelRecencyFilter}
+                      onValueChange={(value) => setLabelRecencyFilter(value as LabelRecencyFilter)}
+                    >
+                      <SelectTrigger className="h-12 w-full border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue placeholder="All labels" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All labels</SelectItem>
+                        <SelectItem value="added-today">Added today</SelectItem>
+                        <SelectItem value="added-last-3-days">Added last 3 days</SelectItem>
+                        <SelectItem value="added-last-7-days">Added last 7 days</SelectItem>
+                        <SelectItem value="quantity-increased-today">Quantity increased today</SelectItem>
+                        <SelectItem value="quantity-increased-last-3-days">Quantity increased last 3 days</SelectItem>
+                        <SelectItem value="quantity-increased-last-7-days">Quantity increased last 7 days</SelectItem>
+                        <SelectItem value="added-or-quantity-increased-today">
+                          Added or increased today
+                        </SelectItem>
+                        <SelectItem value="added-or-quantity-increased-last-3-days">
+                          Added or increased last 3 days
+                        </SelectItem>
+                        <SelectItem value="added-or-quantity-increased-last-7-days">
+                          Added or increased last 7 days
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

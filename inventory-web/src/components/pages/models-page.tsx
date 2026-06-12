@@ -60,7 +60,7 @@ export function ModelsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Models"
         title="Manage printer and copier compatibility."
@@ -81,7 +81,7 @@ export function ModelsPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Models"
           value={models.length}
@@ -185,6 +185,15 @@ export function ModelsPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/models/${model.id}`}
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "default" }),
+                        "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                      )}
+                    >
+                      View
+                    </Link>
                     {permissions.canManageModels && (
                       <Link
                         href={`/models/${model.id}/edit`}

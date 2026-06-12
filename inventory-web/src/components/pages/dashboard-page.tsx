@@ -30,7 +30,7 @@ import {
 } from "@/lib/inventory-utils";
 
 export function DashboardPage() {
-  const { permissions } = useAuth();
+  const { permissions, effectiveRole } = useAuth();
   const {
     bins,
     parts,
@@ -38,6 +38,7 @@ export function DashboardPage() {
     getDisplayPartNumber,
     getCompatibleModels,
   } = useInventory();
+  const isManagementRole = effectiveRole === "admin" || effectiveRole === "manager";
 
   const topBins = [...bins]
     .map((bin) => ({
@@ -49,8 +50,138 @@ export function DashboardPage() {
 
   const manufacturerTotals = summary.manufacturers.slice(0, 5);
 
+  if (!isManagementRole) {
+    return (
+      <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+        <PageHero
+          eyebrow="Workspace home"
+          title="Quick actions for the floor."
+          description="Use lookup and inventory to get to the right record quickly, then jump into a read-only bin or model drill-down when you need more context."
+          actions={
+            <>
+              {permissions.canViewParts && (
+                <Link
+                  href="/lookup"
+                  className={cn(
+                    buttonVariants({ variant: "default", size: "default" }),
+                    "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                  )}
+                >
+                  <PackageSearch className="mr-2 h-4 w-4" />
+                  Lookup
+                </Link>
+              )}
+              {permissions.canViewParts && (
+                <Link
+                  href="/inventory"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  Inventory
+                </Link>
+              )}
+            </>
+          }
+        />
+
+        <Card className="border-emerald-400/20 bg-emerald-400/10">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-100/70">Short updates</p>
+              <p className="text-sm font-medium text-white">
+                {summary.lowStockCount} low-stock item{summary.lowStockCount === 1 ? "" : "s"}, {summary.attentionCount} needing attention, and {summary.coverage}% compatibility coverage.
+              </p>
+            </div>
+            <Badge className="border-white/10 bg-white/5 text-slate-200">
+              {summary.totalUnits} units on hand
+            </Badge>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[
+            {
+              href: "/lookup",
+              label: "Lookup parts",
+              description: "Search parts, bins, and models from one screen.",
+              icon: PackageSearch,
+            },
+            {
+              href: "/inventory",
+              label: "Inventory",
+              description: "Open the live part list and drill into any item.",
+              icon: Boxes,
+            },
+            {
+              href: "/locations",
+              label: "Locations",
+              description: "Review bins and open read-only location drill-downs.",
+              icon: ArrowUpRight,
+            },
+            {
+              href: "/models",
+              label: "Models",
+              description: "Open compatibility records and part lists.",
+              icon: Layers3,
+            },
+          ]
+            .filter((item) => {
+              if (item.href === "/locations") return permissions.canViewLocations;
+              if (item.href === "/models") return permissions.canViewModels;
+              return true;
+            })
+            .map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group rounded-[1.75rem] border border-white/10 bg-white/5 p-4 transition-colors hover:border-emerald-400/30 hover:bg-white/10"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <Icon className="h-5 w-5 text-emerald-300" />
+                      <p className="text-base font-semibold text-white">{item.label}</p>
+                      <p className="text-sm leading-6 text-slate-400">{item.description}</p>
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-slate-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                  </div>
+                </Link>
+              );
+            })}
+        </div>
+
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Recent inventory notes</CardTitle>
+            <CardDescription className="text-slate-400">
+              The home screen stays lean here so the extra navigation stays out of the way.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Low stock</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{summary.lowStockCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Attention</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{summary.attentionCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Coverage</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{summary.coverage}%</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Inventory command center"
         title="Keep the parts room moving without guessing."

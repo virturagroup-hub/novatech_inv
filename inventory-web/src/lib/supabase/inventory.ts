@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDefaultSettings, createEmptyState } from "@/lib/inventory-seed";
+import { profileDisplayName } from "@/lib/profile-display";
 import type { ActivityEntry, Bin, DeviceModel, InventoryState, Part } from "@/lib/inventory-types";
 import { categories, type Category } from "@/lib/inventory-types";
 import type { InventoryImportRowResult, InventoryImportSummary } from "@/lib/inventory-import-types";
@@ -12,6 +13,7 @@ import type {
   ModelRow,
   PartModelLinkRow,
   PartRow,
+  ProfileRow,
 } from "./types";
 
 type SnapshotPartRow = PartRow & {
@@ -75,30 +77,76 @@ function mapPartRow(part: SnapshotPartRow, links: PartModelLinkRow[]): Part {
   };
 }
 
-function mapTransactionAction(transaction: InventoryTransactionRow["transaction_type"]) {
-  switch (transaction) {
+function normalizeTransactionAuditType(
+  transaction: InventoryTransactionRow,
+): ActivityEntry["auditType"] {
+  if (transaction.audit_type) {
+    return transaction.audit_type as ActivityEntry["auditType"];
+  }
+
+  switch (transaction.transaction_type) {
     case "import":
-      return "imported" as const;
-    case "adjustment":
+      return "added";
     case "transfer":
-      return "adjusted" as const;
+      return "location_changed";
     case "reset":
-      return "updated" as const;
+      return "quantity_changed";
+    case "adjustment":
     default:
+      if (transaction.delta > 0) return "quantity_increased";
+      if (transaction.delta < 0) return "quantity_decreased";
+      return "quantity_changed";
+  }
+}
+
+function mapTransactionAction(transaction: InventoryTransactionRow) {
+  const auditType = normalizeTransactionAuditType(transaction);
+
+  switch (auditType) {
+    case "added":
+      return "added" as const;
+    case "removed":
+      return "removed" as const;
+    case "quantity_increased":
+    case "quantity_decreased":
+    case "quantity_changed":
+      return "adjusted" as const;
+    case "location_changed":
+      return "moved" as const;
+    case "metadata_changed":
+    case "marked_npn":
+    case "unmarked_npn":
       return "updated" as const;
+    case "label_printed":
+      return "printed" as const;
+    default:
+      return transaction.transaction_type === "import" ? "imported" as const : "updated" as const;
   }
 }
 
 function mapTransactionTone(transaction: InventoryTransactionRow) {
-  if (transaction.transaction_type === "import") return "success" as const;
-  if (transaction.delta < 0) return "danger" as const;
-  if (transaction.delta > 0) return "info" as const;
-  return "warning" as const;
+  const auditType = normalizeTransactionAuditType(transaction);
+
+  switch (auditType) {
+    case "added":
+    case "quantity_increased":
+    case "label_printed":
+      return "success" as const;
+    case "removed":
+      return "danger" as const;
+    case "quantity_decreased":
+    case "location_changed":
+    case "marked_npn":
+      return "warning" as const;
+    default:
+      return transaction.delta < 0 ? ("warning" as const) : ("info" as const);
+  }
 }
 
 function mapActivityRows(
   transactions: InventoryTransactionRow[],
   partLookup: Map<string, PartRow>,
+  profilesById: Map<string, ProfileRow>,
 ): ActivityEntry[] {
   return [...transactions]
     .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
@@ -108,24 +156,67 @@ function mapActivityRows(
       const partLabel = part
         ? `${part.is_npn ? "NPN" : part.part_number ?? "Unknown part"} · ${part.part_name}`
         : transaction.part_id;
+      const auditType = normalizeTransactionAuditType(transaction);
+      const actorLabel = transaction.created_by
+        ? profileDisplayName(profilesById.get(transaction.created_by) ?? { full_name: null }, "")
+        : transaction.actor_label ?? null;
       const deltaPrefix = transaction.delta >= 0 ? "+" : "";
 
       return {
         id: transaction.id,
-        action: mapTransactionAction(transaction.transaction_type),
+        action: mapTransactionAction(transaction),
         tone: mapTransactionTone(transaction),
         entityType: "part",
         entityId: transaction.part_id,
         title:
-          transaction.transaction_type === "import"
-            ? `Imported ${partLabel}`
-            : transaction.transaction_type === "reset"
-              ? `Reset ${partLabel}`
-              : `Adjusted ${partLabel}`,
+          auditType === "added"
+            ? `Added ${partLabel}`
+            : auditType === "removed"
+              ? `Removed ${partLabel}`
+              : auditType === "location_changed"
+                ? `Moved ${partLabel}`
+                : auditType === "label_printed"
+                  ? `Printed ${partLabel}`
+                  : auditType === "quantity_increased"
+                    ? `Quantity increased for ${partLabel}`
+                    : auditType === "quantity_decreased"
+                      ? `Quantity decreased for ${partLabel}`
+                      : auditType === "quantity_changed"
+                        ? `Quantity changed for ${partLabel}`
+                        : auditType === "marked_npn"
+                          ? `Marked ${partLabel} as NPN`
+                          : auditType === "unmarked_npn"
+                            ? `Unmarked ${partLabel} as NPN`
+                            : transaction.transaction_type === "import"
+                              ? `Imported ${partLabel}`
+                              : transaction.transaction_type === "reset"
+                                ? `Reset ${partLabel}`
+                                : `Updated ${partLabel}`,
         detail:
           transaction.note ??
           `${deltaPrefix}${transaction.delta} units ${part ? `for ${part.is_npn ? "NPN" : part.part_number ?? "Unknown part"}` : ""}`.trim(),
         occurredAt: transaction.created_at,
+        auditType,
+        audit: {
+          actorId: transaction.created_by,
+          actorLabel,
+          delta: transaction.delta,
+          itemCategory: transaction.item_category,
+          itemId: transaction.part_id,
+          itemManufacturer: transaction.item_manufacturer,
+          itemName: transaction.item_part_name ?? part?.part_name ?? null,
+          labelCopies: transaction.label_copies,
+          labelMode: transaction.label_mode,
+          metadata: transaction.item_snapshot,
+          nextIsNpn: transaction.next_is_npn,
+          nextLocationId: transaction.next_location_id,
+          nextPartNumber: transaction.next_part_number,
+          nextQuantity: transaction.next_quantity,
+          previousIsNpn: transaction.previous_is_npn,
+          previousLocationId: transaction.previous_location_id,
+          previousPartNumber: transaction.previous_part_number,
+          previousQuantity: transaction.previous_quantity,
+        },
       };
     });
 }
@@ -151,6 +242,15 @@ export async function fetchInventorySnapshot(supabase: SupabaseClient): Promise<
   const links = (linksResult.data ?? []) as PartModelLinkRow[];
   const transactions = (transactionsResult.data ?? []) as InventoryTransactionRow[];
   const partRows = (partsResult.data ?? []) as SnapshotPartRow[];
+  const actorIds = [...new Set(transactions.map((transaction) => transaction.created_by).filter((id): id is string => Boolean(id)))];
+  const profilesResult =
+    actorIds.length > 0
+      ? await supabase.from("profiles").select("id, full_name").in("id", actorIds)
+      : { data: [], error: null };
+
+  if (profilesResult && "error" in profilesResult && profilesResult.error) {
+    throw profilesResult.error;
+  }
 
   const linksByPart = links.reduce((acc, link) => {
     const current = acc.get(link.part_id) ?? [];
@@ -164,12 +264,15 @@ export async function fetchInventorySnapshot(supabase: SupabaseClient): Promise<
     partLookup.set(part.id, part);
     return mapPartRow(part, linksByPart.get(part.id) ?? []);
   });
+  const profilesById = new Map(
+    ((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]),
+  );
 
   return {
     parts,
     bins: locations,
     models,
-    activity: mapActivityRows(transactions, partLookup),
+    activity: mapActivityRows(transactions, partLookup, profilesById),
     settings: createDefaultSettings("supabase"),
   };
 }
@@ -197,12 +300,25 @@ export async function importInventoryCsvToSupabase(
   const preview = parseInventoryCsv(csvText);
   const readyRows = preview.rows.filter((row) => row.errors.length === 0);
 
-  const uniqueRows = [...readyRows].reduce((map, row) => {
-    map.set(row.partNumber.toUpperCase(), row);
-    return map;
-  }, new Map<string, InventoryCsvRow>());
+  const rows = readyRows.reduce((acc, row) => {
+    if (row.isNpn || !row.partNumber.trim()) {
+      acc.push(row);
+      return acc;
+    }
 
-  const rows = [...uniqueRows.values()];
+    const normalizedPartNumber = row.partNumber.toUpperCase();
+    const existingIndex = acc.findIndex(
+      (item) => !item.isNpn && item.partNumber.toUpperCase() === normalizedPartNumber,
+    );
+
+    if (existingIndex >= 0) {
+      acc[existingIndex] = row;
+    } else {
+      acc.push(row);
+    }
+
+    return acc;
+  }, [] as InventoryCsvRow[]);
 
   const [partsResult, locationsResult, modelsResult] = await Promise.all([
     supabase.from("parts").select("id, part_number, is_npn"),
@@ -337,21 +453,37 @@ export async function importInventoryCsvToSupabase(
     ]),
   );
 
-  const partRows = rows.map((row) => ({
-    part_number: row.partNumber,
-    is_npn: false,
-    part_name: row.partName,
-    manufacturer: row.manufacturer,
-    category: row.category,
-    location_id: row.locationCode ? locationIdByCode.get(toLocationKey(row)) ?? null : null,
-    quantity_on_hand: row.quantityOnHand,
-    reorder_point: row.reorderPoint,
-    reorder_target: row.reorderTarget,
-    universal: row.universal,
-    notes: row.notes || "",
-  }));
+  const preparedPartRows = rows.map((row) => {
+    const id = crypto.randomUUID();
+    return {
+      sourceRow: row,
+      tempId: id,
+      row: {
+        id,
+        part_number: row.isNpn ? null : row.partNumber,
+        is_npn: row.isNpn,
+        part_name: row.partName,
+        manufacturer: row.manufacturer,
+        category: row.category,
+        location_id: row.locationCode ? locationIdByCode.get(toLocationKey(row)) ?? null : null,
+        quantity_on_hand: row.quantityOnHand,
+        reorder_point: row.reorderPoint,
+        reorder_target: row.reorderTarget,
+        universal: row.universal,
+        notes: row.notes || "",
+      },
+    };
+  });
 
-  const partsCreated = partRows.filter((part) => !partsByNumber.has(normalizeLookup(part.part_number))).length;
+  const partRows = preparedPartRows.map((entry) => entry.row);
+
+  const partsCreated = preparedPartRows.filter(({ row }) => {
+    if (row.is_npn) {
+      return true;
+    }
+
+    return !partsByNumber.has(normalizeLookup(row.part_number ?? ""));
+  }).length;
   const partsUpdated = partRows.length - partsCreated;
 
   const { data: upsertedParts, error: partsError } = await supabase
@@ -367,9 +499,17 @@ export async function importInventoryCsvToSupabase(
       .map((part) => [normalizeLookup(part.part_number ?? ""), part.id]),
   );
 
+  const getPreparedPartId = (preparedRow: (typeof preparedPartRows)[number]) => {
+    const row = preparedRow.sourceRow;
+    return row.isNpn
+      ? preparedRow.tempId
+      : partIdByNumber.get(normalizeLookup(row.partNumber)) ?? preparedRow.tempId;
+  };
+
   const importLinks: Array<{ part_id: string; model_id: string }> = [];
-  for (const row of rows) {
-    const partId = partIdByNumber.get(normalizeLookup(row.partNumber));
+  for (const preparedRow of preparedPartRows) {
+    const row = preparedRow.sourceRow;
+    const partId = getPreparedPartId(preparedRow);
     if (!partId) continue;
 
     const modelNames = splitModels(row);
@@ -380,7 +520,9 @@ export async function importInventoryCsvToSupabase(
     }
   }
 
-  const partIds = [...partIdByNumber.values()];
+  const partIds = [...new Set(
+    preparedPartRows.map((preparedRow) => getPreparedPartId(preparedRow)),
+  )];
   if (partIds.length > 0) {
     const { error } = await supabase.from("part_model_links").delete().in("part_id", partIds);
     if (error) throw error;
@@ -393,18 +535,17 @@ export async function importInventoryCsvToSupabase(
     linksCreated = importLinks.length;
   }
 
-  const importTransactions = rows
-    .filter((row) => row.quantityOnHand !== 0)
-    .map((row) => ({
-      part_id: partIdByNumber.get(normalizeLookup(row.partNumber)) ?? "",
+  const importTransactions = preparedPartRows
+    .filter(({ sourceRow }) => sourceRow.quantityOnHand !== 0)
+    .map((preparedRow) => ({
+      part_id: getPreparedPartId(preparedRow),
       transaction_type: "import" as const,
-      delta: row.quantityOnHand,
+      delta: preparedRow.sourceRow.quantityOnHand,
       note: sourceName
         ? `Imported from ${sourceName}`
         : "Imported from CSV",
       created_by: createdByUserId,
-    }))
-    .filter((row) => row.part_id);
+    }));
 
   let transactionsCreated = 0;
   if (importTransactions.length > 0) {

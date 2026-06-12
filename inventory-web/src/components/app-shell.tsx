@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { BrandLockup } from "@/components/brand-lockup";
+import { RolePreviewPanel } from "@/components/role-preview-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -336,6 +337,12 @@ export function AppShell({
             </div>
           </div>
 
+          {permissions.canPreviewRoles && (
+            <div className="mt-4">
+              <RolePreviewPanel compact />
+            </div>
+          )}
+
           <div className="mt-6 space-y-2">
             {primaryNav.map((item) => (
               <AppLink
@@ -530,13 +537,16 @@ export function AppShell({
                   <span className="leading-none">More</span>
                 </SheetTrigger>
                 <SheetContent side="bottom" className="border-white/10 bg-slate-950 text-white">
-                    <SheetHeader className="p-4">
+                  <SheetHeader className="p-4">
                     <SheetTitle className="text-white">More sections</SheetTitle>
                     <SheetDescription className="text-slate-400">
                       Open locations, models, reports, activity, health, and settings.
                     </SheetDescription>
                   </SheetHeader>
                   <div className="grid gap-2 px-4 pb-4">
+                    {permissions.canPreviewRoles && (
+                      <RolePreviewPanel compact className="mb-2" />
+                    )}
                     {secondaryNav.map((item) => (
                       <AppLink
                         key={item.href}

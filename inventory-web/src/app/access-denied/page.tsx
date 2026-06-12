@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Home, Lock } from "lucide-react";
 
 import { PageHero } from "@/components/page-hero";
+import { RolePreviewPanel } from "@/components/role-preview-panel";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -95,6 +96,11 @@ export default async function Page({
           </p>
         </CardContent>
       </Card>
+
+      <RolePreviewPanel
+        compact
+        afterClearHref={nextPath || "/"}
+      />
     </div>
   );
 }

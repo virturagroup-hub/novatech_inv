@@ -5,6 +5,7 @@ import { categories, type Category } from "@/lib/inventory-types";
 export interface InventoryCsvRow {
   rowIndex: number;
   partNumber: string;
+  isNpn: boolean;
   partName: string;
   manufacturer: string;
   category: Category;
@@ -135,8 +136,13 @@ export function parseInventoryCsv(text: string): InventoryCsvPreview {
       const errors: string[] = [];
 
       const partNumber = readValue(row, ["part number", "partnumber", "part_number"]);
-      if (!partNumber) {
+      const npnValue = readValue(row, ["npn", "is npn", "is_npn", "no part number"]);
+      const isNpn = isTruthyText(npnValue) || partNumber.trim().toUpperCase() === "NPN";
+
+      if (!partNumber && !isNpn) {
         errors.push("Missing part number.");
+      } else if (isNpn && !partNumber) {
+        warnings.push("Row is marked NPN, so the part number will be stored as blank.");
       }
 
       const rawPartName = readValue(row, ["part name", "partname", "part_name"]);
@@ -202,6 +208,7 @@ export function parseInventoryCsv(text: string): InventoryCsvPreview {
       return {
         rowIndex: index + 1,
         partNumber,
+        isNpn,
         partName,
         manufacturer,
         category,
@@ -220,7 +227,7 @@ export function parseInventoryCsv(text: string): InventoryCsvPreview {
         errors,
       } satisfies InventoryCsvRow;
     })
-    .filter((row) => row.partNumber || row.errors.length > 0);
+    .filter((row) => row.partNumber || row.isNpn || row.errors.length > 0);
 
   const warningCount = rows.reduce((count, row) => count + row.warnings.length, 0);
   const errorCount = rows.reduce((count, row) => count + row.errors.length, 0);
@@ -235,4 +242,3 @@ export function parseInventoryCsv(text: string): InventoryCsvPreview {
     rows,
   };
 }
-

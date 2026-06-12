@@ -63,7 +63,23 @@ export interface InventoryTransactionRow {
   part_id: string;
   delta: number;
   transaction_type: "adjustment" | "import" | "reset" | "transfer";
+  audit_type: string | null;
+  previous_quantity: number | null;
+  next_quantity: number | null;
+  previous_location_id: string | null;
+  next_location_id: string | null;
+  previous_part_number: string | null;
+  next_part_number: string | null;
+  previous_is_npn: boolean | null;
+  next_is_npn: boolean | null;
+  item_part_name: string | null;
+  item_manufacturer: string | null;
+  item_category: Category | null;
+  item_snapshot: Record<string, unknown> | null;
+  label_mode: string | null;
+  label_copies: number | null;
   note: string | null;
   created_by: string | null;
+  actor_label: string | null;
   created_at: string;
 }
