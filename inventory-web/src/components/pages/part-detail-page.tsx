@@ -214,16 +214,14 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
               {permissions.canAdjustStock && (
                 <div className="flex gap-2">
                   <Button
-                    variant="outline"
-                    className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                    variant="warning"
                     onClick={() => adjustPart(part.id, -1)}
                   >
                     <Minus className="mr-2 h-4 w-4" />
                     -1
                   </Button>
                   <Button
-                    variant="outline"
-                    className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                    variant="success"
                     onClick={() => adjustPart(part.id, 1)}
                   >
                     <PlusCircle className="mr-2 h-4 w-4" />
@@ -439,8 +437,8 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
             </Link>
             {permissions.canManageParts && (
               <Button
-                variant="outline"
-                className="h-11 justify-start border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                variant="destructive"
+                className="h-11 justify-start"
                 onClick={() => {
                   if (
                     window.confirm(

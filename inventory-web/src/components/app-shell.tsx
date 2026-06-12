@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowUpRight,
@@ -27,6 +27,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetClose,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -111,7 +112,6 @@ export function AppShell({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const { summary, refreshInventory, isSupabaseMode } = useInventory();
   const {
     session,
@@ -528,7 +528,7 @@ export function AppShell({
                 );
               })}
 
-              <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
+              <Sheet key={pathname}>
                 <SheetTrigger
                   className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
                   aria-label="Open more navigation items"
@@ -536,14 +536,32 @@ export function AppShell({
                   <LayoutGrid className="h-4 w-4" />
                   <span className="leading-none">More</span>
                 </SheetTrigger>
-                <SheetContent side="bottom" className="border-white/10 bg-slate-950 text-white">
-                  <SheetHeader className="p-4">
-                    <SheetTitle className="text-white">More sections</SheetTitle>
-                    <SheetDescription className="text-slate-400">
-                      Open locations, models, reports, activity, health, and settings.
-                    </SheetDescription>
+                <SheetContent
+                  side="bottom"
+                  showCloseButton={false}
+                  className="max-h-[calc(100dvh-1rem)] overflow-y-auto border-white/10 bg-slate-950 text-white"
+                >
+                  <SheetHeader className="flex-row items-start justify-between gap-4 px-4 pb-0 pt-4">
+                    <div className="space-y-1">
+                      <SheetTitle className="text-white">More sections</SheetTitle>
+                      <SheetDescription className="text-slate-400">
+                        Open locations, models, reports, activity, health, and settings.
+                      </SheetDescription>
+                    </div>
+                    <SheetClose
+                      render={
+                        <Button
+                          variant="outline"
+                          size="default"
+                          className="h-10 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        >
+                        </Button>
+                      }
+                    >
+                      Close
+                    </SheetClose>
                   </SheetHeader>
-                  <div className="grid gap-2 px-4 pb-4">
+                  <div className="grid gap-2 px-4 pb-4 pt-4">
                     {permissions.canPreviewRoles && (
                       <RolePreviewPanel compact className="mb-2" />
                     )}
@@ -555,7 +573,6 @@ export function AppShell({
                         icon={item.icon}
                         pathname={pathname}
                         mobile
-                        onNavigate={() => setMoreMenuOpen(false)}
                       />
                     ))}
                     <Button

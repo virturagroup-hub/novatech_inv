@@ -144,35 +144,37 @@ export function InventoryPage() {
         }
       />
 
-      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Parts"
-          value={parts.length}
-          hint={isSupabaseMode ? "Tracked in Supabase" : "Tracked locally"}
-          icon={<PackageSearch className="h-5 w-5" />}
-        />
-        <StatCard
-          label="Low stock"
-          value={summary.lowStockCount}
-          hint="At or below reorder point"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          tone="amber"
-        />
-        <StatCard
-          label="Unassigned"
-          value={summary.unassignedCount}
-          hint="Need a storage bin"
-          icon={<MapPin className="h-5 w-5" />}
-          tone="rose"
-        />
-        <StatCard
-          label="Coverage"
-          value={`${summary.coverage}%`}
-          hint="Compatible or universal parts"
-          icon={<Sparkles className="h-5 w-5" />}
-          tone="emerald"
-        />
-      </div>
+      {permissions.canViewReports && (
+        <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Parts"
+            value={parts.length}
+            hint={isSupabaseMode ? "Tracked in Supabase" : "Tracked locally"}
+            icon={<PackageSearch className="h-5 w-5" />}
+          />
+          <StatCard
+            label="Low stock"
+            value={summary.lowStockCount}
+            hint="At or below reorder point"
+            icon={<AlertTriangle className="h-5 w-5" />}
+            tone="amber"
+          />
+          <StatCard
+            label="Unassigned"
+            value={summary.unassignedCount}
+            hint="Need a storage bin"
+            icon={<MapPin className="h-5 w-5" />}
+            tone="rose"
+          />
+          <StatCard
+            label="Coverage"
+            value={`${summary.coverage}%`}
+            hint="Compatible or universal parts"
+            icon={<Sparkles className="h-5 w-5" />}
+            tone="emerald"
+          />
+        </div>
+      )}
 
       <Card className="border-white/10 bg-white/5">
         <CardContent className="space-y-5 p-4 sm:p-5">
@@ -399,29 +401,6 @@ export function InventoryPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {[
-          { label: "Results", value: filteredParts.length },
-          {
-            label: "Selected low stock",
-            value: filteredParts.filter((part) => getPartStockStatus(part) !== "healthy").length,
-          },
-          {
-            label: "Attention",
-            value: filteredParts.filter((part) => requiresAttention(part)).length,
-          },
-        ].map((metric) => (
-          <Card key={metric.label} className="border-white/10 bg-white/5">
-            <CardContent className="p-4">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                {metric.label}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">{metric.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <Card className="border-white/10 bg-white/5">
         <CardContent className="p-0">
           <div className="hidden lg:block">
@@ -608,17 +587,17 @@ function InventoryTableRow({
           {canAdjustStock && (
             <div className="flex gap-1">
               <Button
-                variant="outline"
+                variant="warning"
                 size="icon-sm"
-                className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                aria-label="Decrease quantity"
                 onClick={() => onAdjust(-1)}
               >
                 <Minus className="h-3.5 w-3.5" />
               </Button>
               <Button
-                variant="outline"
+                variant="success"
                 size="icon-sm"
-                className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                aria-label="Increase quantity"
                 onClick={() => onAdjust(1)}
               >
                 <PlusCircle className="h-3.5 w-3.5" />
@@ -653,9 +632,9 @@ function InventoryTableRow({
           )}
           {canManageParts && (
             <Button
-              variant="ghost"
+              variant="destructive"
               size="icon-sm"
-              className="text-slate-300 hover:bg-white/10 hover:text-white"
+              aria-label={`Delete ${displayPartNumber}`}
               onClick={onDelete}
             >
               <Trash2 className="h-4 w-4" />
@@ -726,16 +705,16 @@ function InventoryMobileCard({
         {canAdjustStock && (
           <div className="grid grid-cols-2 gap-2">
             <Button
-              variant="outline"
-              className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              variant="warning"
+              className="h-11"
               onClick={() => onAdjust(-1)}
             >
               <Minus className="mr-2 h-4 w-4" />
               -1
             </Button>
             <Button
-              variant="outline"
-              className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              variant="success"
+              className="h-11"
               onClick={() => onAdjust(1)}
             >
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -768,8 +747,8 @@ function InventoryMobileCard({
           )}
           {canManageParts && (
             <Button
-              variant="outline"
-              className="h-11 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              variant="destructive"
+              className="h-11"
               onClick={onDelete}
             >
               <Trash2 className="mr-2 h-4 w-4" />

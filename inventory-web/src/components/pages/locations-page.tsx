@@ -244,8 +244,7 @@ export function LocationsPage() {
                     )}
                     {permissions.canManageLocations && safeToDelete && (
                       <Button
-                        variant="outline"
-                        className="border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/20 hover:text-white"
+                        variant="destructive"
                         onClick={() => handleDelete(bin.id, `${bin.code} · ${bin.name}`)}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />

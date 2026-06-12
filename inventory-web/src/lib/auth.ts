@@ -144,13 +144,14 @@ function getBasePermissions(role: UserRole) {
 
 export function resolvePermissions(context: RoleContext): PermissionSet {
   const base = getBasePermissions(context.effectiveRole);
+  const canAccessAdminTools = context.effectiveRole === "admin";
 
   return {
     ...base,
-    canManageUsers: context.realRole === "admin",
-    canAccessSettings: context.realRole === "admin",
+    canManageUsers: canAccessAdminTools,
+    canAccessSettings: canAccessAdminTools,
     canPreviewRoles: context.realRole === "admin",
-    canViewUsers: context.realRole === "admin",
+    canViewUsers: canAccessAdminTools,
   };
 }
 

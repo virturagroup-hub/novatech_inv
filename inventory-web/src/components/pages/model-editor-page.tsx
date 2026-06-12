@@ -367,8 +367,8 @@ export function ModelEditorPage({ mode, modelId }: Readonly<ModelEditorPageProps
                   {editingModel.status === "active" ? "Archive model" : "Restore model"}
                 </Button>
                 <Button
-                  variant="outline"
-                  className="w-full border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/20 hover:text-white"
+                  variant="destructive"
+                  className="w-full"
                   onClick={() => void handleDelete()}
                   disabled={busyAction === "delete" || !canDelete}
                 >

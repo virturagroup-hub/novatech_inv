@@ -640,9 +640,9 @@ export function SettingsPage() {
                               <Settings2 className="h-4 w-4" />
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="destructive"
                               size="icon-sm"
-                              className="text-slate-300 hover:bg-white/10 hover:text-white"
+                              aria-label={`Delete ${bin.code}`}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 if (window.confirm(`Delete ${bin.code}? Parts assigned to it will become unassigned.`)) {
@@ -801,9 +801,9 @@ export function SettingsPage() {
                               <Settings2 className="h-4 w-4" />
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="destructive"
                               size="icon-sm"
-                              className="text-slate-300 hover:bg-white/10 hover:text-white"
+                              aria-label={`Delete ${model.manufacturer} ${model.name}`}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 if (window.confirm(`Delete ${model.manufacturer} ${model.name}?`)) {
