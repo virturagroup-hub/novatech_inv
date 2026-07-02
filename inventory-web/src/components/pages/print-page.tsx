@@ -56,6 +56,27 @@ const knownManufacturers = [
   "HP",
 ];
 
+const manufacturerAliases: Record<string, string> = {
+  canon: "Canon",
+  hp: "HP",
+  konica: "Konica Minolta",
+  minolta: "Konica Minolta",
+  ricoh: "Ricoh",
+  riso: "Riso",
+  sharp: "Sharp",
+  universal: "Universal",
+  xerox: "Xerox",
+};
+
+function getManufacturerFromMachineId(machineId: string | null | undefined) {
+  if (!machineId) {
+    return null;
+  }
+
+  const token = machineId.trim().toLowerCase().split(/[-_]/)[0];
+  return manufacturerAliases[token] ?? null;
+}
+
 function stripManufacturerPrefix(value: string, manufacturer: string) {
   const trimmed = value.trim();
   const prefix = manufacturer.trim();
@@ -82,6 +103,7 @@ function getMachineLabelIdentity(machine: GreenMachine, model: DeviceModel | nul
   const displayName = machine.modelName.trim();
   const manufacturer =
     model?.manufacturer?.trim() ||
+    getManufacturerFromMachineId(machine.modelId) ||
     knownManufacturers.find((candidate) => {
       const lowerDisplayName = displayName.toLowerCase();
       const lowerCandidate = candidate.toLowerCase();
