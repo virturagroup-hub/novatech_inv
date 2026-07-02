@@ -47,6 +47,9 @@ export type InventoryAction =
       labelMode: string;
       copies: number;
       includeZero: boolean;
+      copiesByPart?: Record<string, number>;
+      layout?: string;
+      totalCopies: number;
     }
   | { type: "updateSettings"; settings: Partial<InventorySettings> };
 
@@ -622,7 +625,7 @@ export function inventoryReducer(
         title: "Labels printed",
         detail:
           action.partIds.length > 0
-            ? `${action.partIds.length} label${action.partIds.length === 1 ? "" : "s"} printed${action.labelMode ? ` in ${action.labelMode} mode` : ""}.`
+            ? `${action.totalCopies} label${action.totalCopies === 1 ? "" : "s"} printed${action.labelMode ? ` in ${action.labelMode} mode` : ""}${action.layout ? ` using ${action.layout} layout` : ""}.`
             : "A label print job completed.",
         auditType: "label_printed",
         audit: {
@@ -633,9 +636,11 @@ export function inventoryReducer(
           nextIsNpn: firstPart?.isNpn ?? null,
           nextPartNumber: firstPart ? getPartLabel(firstPart) : null,
           labelMode: action.labelMode,
-          labelCopies: action.copies,
+          labelCopies: action.totalCopies,
           metadata: {
             includeZero: action.includeZero,
+            copiesByPart: action.copiesByPart ?? null,
+            layout: action.layout ?? null,
             partIds: action.partIds,
           },
         },

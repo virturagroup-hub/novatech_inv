@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Part } from "@/lib/inventory-types";
 import { categories, manufacturers } from "@/lib/inventory-types";
 import { requiresAttention } from "@/lib/inventory-utils";
@@ -15,8 +15,9 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, PackagePlus, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, PackagePlus } from "lucide-react";
 import { toast } from "sonner";
+import { ModelFamilyPicker } from "@/components/model-family-picker";
 
 type PartEditorSheetProps = {
   open: boolean;
@@ -88,23 +89,6 @@ export function PartEditorSheet({
 }: PartEditorSheetProps) {
   const { bins, models, addPart, getCompatibleModels } = useInventory();
   const [form, setForm] = useState<PartFormState>(() => formFromPart(part, defaultBinId));
-  const [modelSearch, setModelSearch] = useState("");
-  const [modelManufacturer, setModelManufacturer] = useState("");
-
-  const availableModels = useMemo(() => {
-    const search = modelSearch.trim().toLowerCase();
-    return models.filter((model) => {
-      if (modelManufacturer && model.manufacturer !== modelManufacturer) {
-        return false;
-      }
-      if (!search) return true;
-      return (
-        model.name.toLowerCase().includes(search) ||
-        model.manufacturer.toLowerCase().includes(search) ||
-        model.series.toLowerCase().includes(search)
-      );
-    });
-  }, [models, modelManufacturer, modelSearch]);
 
   const attentionPreview = requiresAttention({
     id: part?.id ?? "",
@@ -335,7 +319,7 @@ export function PartEditorSheet({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <div className="space-y-2">
                 <Label htmlFor="quantity" className="text-slate-200">
                   Quantity on hand
@@ -354,41 +338,14 @@ export function PartEditorSheet({
                   className="border-white/10 bg-white/5 text-white"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="reorderPoint" className="text-slate-200">
-                  Reorder point
-                </Label>
-                <Input
-                  id="reorderPoint"
-                  type="number"
-                  min={0}
-                  value={form.reorderPoint}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      reorderPoint: event.target.value,
-                    }))
-                  }
-                  className="border-white/10 bg-white/5 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="reorderTarget" className="text-slate-200">
-                  Reorder target
-                </Label>
-                <Input
-                  id="reorderTarget"
-                  type="number"
-                  min={0}
-                  value={form.reorderTarget}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      reorderTarget: event.target.value,
-                    }))
-                  }
-                  className="border-white/10 bg-white/5 text-white"
-                />
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Health</p>
+                <p className="mt-2 text-sm font-semibold text-white">
+                  {attentionPreview ? "Needs review" : "Looks complete"}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Reorder thresholds stay hidden in this streamlined form.
+                </p>
               </div>
             </div>
 
@@ -399,7 +356,7 @@ export function PartEditorSheet({
                     Compatible printer/copier models
                   </p>
                   <p className="text-xs text-slate-400">
-                    Search or filter models, then tick the ones this part fits.
+                    Search by manufacturer, model series, or notes, then pick the whole family or individual models.
                   </p>
                 </div>
                 {form.universal ? (
@@ -413,83 +370,19 @@ export function PartEditorSheet({
                 )}
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <Input
-                    value={modelSearch}
-                    onChange={(event) => setModelSearch(event.target.value)}
-                    placeholder="Search models"
-                    className="border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
-                  />
-                </div>
-                <Select
-                  value={modelManufacturer || "all"}
-                  onValueChange={(value) =>
-                    setModelManufacturer(value && value !== "all" ? value : "")
-                  }
-                >
-                  <SelectTrigger className="w-full border-white/10 bg-slate-950/70 text-white">
-                    <SelectValue placeholder="Filter manufacturer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All manufacturers</SelectItem>
-                    {manufacturers.filter((item) => item !== "Universal").map((manufacturer) => (
-                      <SelectItem key={manufacturer} value={manufacturer}>
-                        {manufacturer}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="mt-4">
-                <ScrollArea className="h-56 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                  <div className="space-y-2">
-                    {availableModels.map((model) => {
-                      const checked = form.compatibleModelIds.includes(model.id);
-                      return (
-                        <label
-                          key={model.id}
-                          className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2 transition-colors",
-                            checked
-                              ? "border-amber-400/30 bg-amber-400/10"
-                              : "border-white/10 bg-white/5 hover:bg-white/10",
-                          )}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(next) => {
-                              setForm((current) => ({
-                                ...current,
-                                compatibleModelIds: next
-                                  ? [...current.compatibleModelIds, model.id]
-                                  : current.compatibleModelIds.filter(
-                                      (modelId) => modelId !== model.id,
-                                    ),
-                              }));
-                            }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-white">
-                              {model.manufacturer} {model.name}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {model.series} · {model.status}
-                            </p>
-                          </div>
-                        </label>
-                      );
-                    })}
-
-                    {availableModels.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
-                        No models match the current filter.
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
+                <ModelFamilyPicker
+                  models={models}
+                  selectedModelIds={form.compatibleModelIds}
+                  onSelectionChange={(nextIds) =>
+                    setForm((current) => ({
+                      ...current,
+                      compatibleModelIds: nextIds,
+                      universal: false,
+                    }))
+                  }
+                  compact
+                />
               </div>
 
               {!form.universal && form.compatibleModelIds.length === 0 && (

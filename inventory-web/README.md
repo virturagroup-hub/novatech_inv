@@ -27,10 +27,14 @@ The current application uses Supabase for live inventory data when configured, w
 - Location/bin tracking
 - Compatible printer/copier model management
 - Printable part tags and bin tags
+- Thermal and sheet print layouts for part and bin labels
 - CSV import/export with a server-side Supabase import path
 - Activity log placeholder
 - Mobile-friendly lookup and edit flows
 - List-first admin screens for users, locations, and models
+- Support hub for requests, feature ideas, FAQs, update logs, and SOPs
+- Notification center for workspace updates and acknowledgements
+- Green Machines tracking for stripped units and salvage parts
 - Centralized print-label workflow in Reports & Exports
 - Admin-only user management for Supabase Auth
 - Admin-only role preview for testing permissions
@@ -182,6 +186,9 @@ The app uses `realRole` for server checks and `effectiveRole` only for UI previe
 - Inactive locations and models stay hidden from normal assignment flows unless they are explicitly shown.
 - Print labels live primarily in Reports & Exports at `/import-export`.
 - Contextual single-label print buttons remain only on the part detail and location detail screens when they help the current record.
+- Support content lives at `/support`, notifications at `/notifications`, and Green Machines at `/green-machines`.
+- Green Machine detail pages keep a timeline of stripped-parts events and support QR scanning for the machine record.
+- Label printing now supports both sheet and thermal layouts from the print workflow.
 
 ## First Login Password Change
 

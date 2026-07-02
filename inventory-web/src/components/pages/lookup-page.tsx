@@ -21,6 +21,11 @@ import {
   getPartStockStatus,
   requiresAttention,
 } from "@/lib/inventory-utils";
+import {
+  getModelDisplayName,
+  getModelSearchReason,
+  groupModelsForSearch,
+} from "@/lib/model-search";
 
 type LookupMode = "parts" | "bins" | "models";
 
@@ -32,12 +37,6 @@ const lookupModes: Array<{ value: LookupMode; label: string }> = [
 
 function getBinSearchBlob(bin: { code: string; name: string; description: string; aisle: string; row: number; column: number; manufacturer: string | null; }) {
   return `${bin.code} ${bin.name} ${bin.description} ${bin.aisle} ${bin.row} ${bin.column} ${bin.manufacturer ?? ""}`
-    .toLowerCase()
-    .trim();
-}
-
-function getModelSearchBlob(model: { manufacturer: string; name: string; series: string; status: string; notes?: string | null; }) {
-  return `${model.manufacturer} ${model.name} ${model.series} ${model.status} ${model.notes ?? ""}`
     .toLowerCase()
     .trim();
 }
@@ -71,16 +70,11 @@ export function LookupPage() {
       });
   }, [bins, normalizedQuery]);
 
-  const modelMatches = useMemo(() => {
-    return [...models]
-      .sort((left, right) =>
-        `${left.manufacturer} ${left.name}`.localeCompare(`${right.manufacturer} ${right.name}`),
-      )
-      .filter((model) => {
-        if (!normalizedQuery) return true;
-        return getModelSearchBlob(model).includes(normalizedQuery);
-      });
-  }, [models, normalizedQuery]);
+  const modelGroups = useMemo(() => groupModelsForSearch(models, query), [models, query]);
+  const modelMatchCount = useMemo(
+    () => modelGroups.reduce((sum, group) => sum + group.models.length, 0),
+    [modelGroups],
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
@@ -105,7 +99,7 @@ export function LookupPage() {
       <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Matches"
-          value={partMatches.length + binMatches.length + modelMatches.length}
+          value={partMatches.length + binMatches.length + modelMatchCount}
           hint="Across all record types"
           icon={<ScanSearch className="h-5 w-5" />}
         />
@@ -125,7 +119,7 @@ export function LookupPage() {
         />
         <StatCard
           label="Models"
-          value={modelMatches.length}
+          value={modelMatchCount}
           hint="Compatible device records"
           icon={<Boxes className="h-5 w-5" />}
           tone="amber"
@@ -309,42 +303,73 @@ export function LookupPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {modelMatches.length > 0 ? (
+                  {modelGroups.length > 0 ? (
                     <ScrollArea className="h-[clamp(18rem,60vh,32rem)] rounded-3xl border border-white/10 bg-slate-950/50">
-                      <div className="space-y-3 p-3 pr-4">
-                        {modelMatches.map((model) => {
-                          const compatibleCount = countCompatiblePartsForModel(parts, model.id);
-
-                          return (
-                            <Link
-                              key={model.id}
-                              href={`/models/${model.id}`}
-                              className="block rounded-3xl border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/10"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="text-sm font-semibold text-white">
-                                    {model.manufacturer} {model.name}
-                                  </p>
-                                  <p className="mt-1 text-xs text-slate-400">
-                                    {model.series} · {model.status}
-                                  </p>
+                      <div className="space-y-4 p-3 pr-4">
+                        {modelGroups.map((group) => (
+                          <div
+                            key={group.familyKey}
+                            className="rounded-[1.75rem] border border-white/10 bg-slate-950/50 p-4"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                                    Series / family
+                                  </Badge>
+                                  <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                                    {group.label}
+                                  </Badge>
                                 </div>
-                                <Badge
-                                  className={cn(
-                                    "border",
-                                    model.status === "inactive"
-                                      ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                                      : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
-                                  )}
-                                >
-                                  {compatibleCount} parts
-                                </Badge>
+                                <p className="mt-2 text-sm font-semibold text-white">
+                                  {group.manufacturer} family
+                                </p>
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {getModelSearchReason(group)}
+                                </p>
                               </div>
-                              {model.notes && <p className="mt-2 text-xs text-slate-400">{model.notes}</p>}
-                            </Link>
-                          );
-                        })}
+                              <Badge className="border-white/10 bg-white/5 text-slate-200">
+                                {group.models.length} model{group.models.length === 1 ? "" : "s"}
+                              </Badge>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                              {group.models.map((model) => {
+                                const compatibleCount = countCompatiblePartsForModel(parts, model.id);
+
+                                return (
+                                  <Link
+                                    key={model.id}
+                                    href={`/models/${model.id}`}
+                                    className="block rounded-3xl border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/10"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-semibold text-white">
+                                          {getModelDisplayName(model)}
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                          {model.series || "No series listed"} · {model.status}
+                                        </p>
+                                      </div>
+                                      <Badge
+                                        className={cn(
+                                          "border",
+                                          model.status === "inactive"
+                                            ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                                            : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+                                        )}
+                                      >
+                                        {compatibleCount} parts
+                                      </Badge>
+                                    </div>
+                                    {model.notes && <p className="mt-2 text-xs text-slate-400">{model.notes}</p>}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </ScrollArea>
                   ) : (

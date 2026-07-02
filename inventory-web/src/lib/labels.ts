@@ -1,4 +1,5 @@
 export type LabelMode = "each" | "copies" | "quantity";
+export type LabelLayout = "sheet" | "thermal";
 
 export const LABELS_PER_SHEET = 8;
 export const MAX_PRINT_COPIES = 12;
@@ -28,11 +29,41 @@ export function parseIdList(value: string | null | undefined) {
   );
 }
 
+export function encodeCopiesByPart(copiesByPart: Record<string, number>) {
+  return Object.entries(copiesByPart)
+    .filter(([, copies]) => Number.isFinite(copies) && copies > 0)
+    .map(([partId, copies]) => `${encodeURIComponent(partId)}:${normalizePrintCopies(copies)}`)
+    .join(",");
+}
+
+export function parseCopiesByPart(value: string | null | undefined) {
+  if (!value) {
+    return {} as Record<string, number>;
+  }
+
+  return value.split(",").reduce<Record<string, number>>((accumulator, entry) => {
+    const [rawPartId, rawCopies] = entry.split(":");
+    if (!rawPartId || !rawCopies) {
+      return accumulator;
+    }
+
+    const partId = decodeURIComponent(rawPartId.trim());
+    const copies = normalizePrintCopies(rawCopies, 1);
+    if (partId && copies > 0) {
+      accumulator[partId] = copies;
+    }
+
+    return accumulator;
+  }, {});
+}
+
 export function buildPartPrintHref(options: {
   partIds: string[];
   labelMode?: LabelMode;
   copies?: number;
   includeZero?: boolean;
+  copiesByPart?: Record<string, number>;
+  layout?: LabelLayout;
 }) {
   const params = new URLSearchParams();
 
@@ -52,14 +83,25 @@ export function buildPartPrintHref(options: {
     params.set("includeZero", "1");
   }
 
+  if (options.copiesByPart && Object.keys(options.copiesByPart).length > 0) {
+    params.set("copiesByPart", encodeCopiesByPart(options.copiesByPart));
+  }
+
+  if (options.layout && options.layout !== "sheet") {
+    params.set("layout", options.layout);
+  }
+
   const query = params.toString();
   return query ? `/print?${query}` : "/print";
 }
 
-export function buildBinPrintHref(options: { binId: string; copies?: number }) {
+export function buildBinPrintHref(options: { binId: string; copies?: number; layout?: LabelLayout }) {
   const params = new URLSearchParams();
   params.set("binId", options.binId);
   params.set("copies", String(normalizePrintCopies(options.copies ?? 1)));
+  if (options.layout && options.layout !== "sheet") {
+    params.set("layout", options.layout);
+  }
   const query = params.toString();
   return query ? `/print?${query}` : "/print";
 }

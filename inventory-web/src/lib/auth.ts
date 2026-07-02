@@ -29,6 +29,15 @@ export interface PermissionSet {
   canAccessSettings: boolean;
   canPreviewRoles: boolean;
   canViewUsers: boolean;
+  canAccessSupport: boolean;
+  canCreateSupportRequests: boolean;
+  canCreateFeatureRequests: boolean;
+  canModerateSupport: boolean;
+  canManageSupportContent: boolean;
+  canViewNotifications: boolean;
+  canViewGreenMachines: boolean;
+  canManageGreenMachines: boolean;
+  canRecordGreenMachineEvents: boolean;
 }
 
 export interface RoleContext {
@@ -92,6 +101,15 @@ function getBasePermissions(role: UserRole) {
         canExportReports: true,
         canImportCsv: true,
         canViewActivity: true,
+        canAccessSupport: true,
+        canCreateSupportRequests: true,
+        canCreateFeatureRequests: true,
+        canModerateSupport: true,
+        canManageSupportContent: true,
+        canViewNotifications: true,
+        canViewGreenMachines: true,
+        canManageGreenMachines: true,
+        canRecordGreenMachineEvents: true,
       };
     case "manager":
       return {
@@ -107,6 +125,15 @@ function getBasePermissions(role: UserRole) {
         canExportReports: true,
         canImportCsv: true,
         canViewActivity: true,
+        canAccessSupport: true,
+        canCreateSupportRequests: true,
+        canCreateFeatureRequests: true,
+        canModerateSupport: true,
+        canManageSupportContent: false,
+        canViewNotifications: true,
+        canViewGreenMachines: true,
+        canManageGreenMachines: true,
+        canRecordGreenMachineEvents: true,
       };
     case "technician":
       return {
@@ -122,6 +149,15 @@ function getBasePermissions(role: UserRole) {
         canExportReports: false,
         canImportCsv: false,
         canViewActivity: false,
+        canAccessSupport: true,
+        canCreateSupportRequests: true,
+        canCreateFeatureRequests: true,
+        canModerateSupport: false,
+        canManageSupportContent: false,
+        canViewNotifications: true,
+        canViewGreenMachines: true,
+        canManageGreenMachines: false,
+        canRecordGreenMachineEvents: true,
       };
     case "viewer":
     default:
@@ -138,6 +174,15 @@ function getBasePermissions(role: UserRole) {
         canExportReports: false,
         canImportCsv: false,
         canViewActivity: false,
+        canAccessSupport: true,
+        canCreateSupportRequests: true,
+        canCreateFeatureRequests: true,
+        canModerateSupport: false,
+        canManageSupportContent: false,
+        canViewNotifications: true,
+        canViewGreenMachines: true,
+        canManageGreenMachines: false,
+        canRecordGreenMachineEvents: false,
       };
   }
 }
@@ -152,6 +197,10 @@ export function resolvePermissions(context: RoleContext): PermissionSet {
     canAccessSettings: canAccessAdminTools,
     canPreviewRoles: context.realRole === "admin",
     canViewUsers: canAccessAdminTools,
+    canManageSupportContent: context.effectiveRole === "admin",
+    canModerateSupport: context.effectiveRole === "admin" || context.effectiveRole === "manager",
+    canManageGreenMachines:
+      context.effectiveRole === "admin" || context.effectiveRole === "manager",
   };
 }
 

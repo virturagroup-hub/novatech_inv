@@ -64,12 +64,14 @@ The initial implementation now includes:
 - Locations and Models are now list-first, with dedicated create/edit routes and archive-first behavior when records are linked.
 - The role matrix now matches the requested admin/manager/technician/viewer split, with technician/viewer access tightened on reports, labels, and settings.
 - QR label printing now uses clean scan labels instead of report-style cards, with larger QR codes and absolute URLs that land on the part or bin record.
+- The label workflow now supports both sheet and thermal layouts, plus per-part copy control for mixed print runs.
 - Broad print-label buttons were removed from unrelated pages so Reports & Exports remains the main label workflow.
 - Scanned routes preserve login return paths through a sanitized internal `next` parameter.
 - The edit part experience was widened and broken into clear sections.
 - The compatible model picker and location picker were made easier to use on desktop and mobile.
 - The reports page now uses simple action cards.
 - Printing now uses a dedicated `/print` route with print-only CSS.
+- A support hub, notifications center, and Green Machines workflow were added for technician and floor-team collaboration.
 - PWA metadata, icons, and theme color were kept in sync with the new brand.
 - Supabase-ready client helpers, table types, CSV import routes, snapshot routes, and schema docs were added without silently mixing demo data with live inventory.
 - The Supabase helper layer now includes a middleware session-refresh path and publishable-key support.

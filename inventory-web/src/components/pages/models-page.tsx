@@ -16,26 +16,18 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { countCompatiblePartsForModel, getModelStatusLabel } from "@/lib/inventory-utils";
+import {
+  getModelDisplayName,
+  getModelSearchReason,
+  groupModelsForSearch,
+} from "@/lib/model-search";
 
 export function ModelsPage() {
   const { permissions } = useAuth();
   const { models, parts, deleteModel, setModelStatus } = useInventory();
   const [query, setQuery] = useState("");
 
-  const filteredModels = useMemo(() => {
-    const search = query.trim().toLowerCase();
-
-    return [...models]
-      .sort((left, right) =>
-        `${left.manufacturer} ${left.name}`.localeCompare(`${right.manufacturer} ${right.name}`),
-      )
-      .filter((model) => {
-        if (!search) return true;
-        return `${model.manufacturer} ${model.name} ${model.series} ${model.status} ${model.notes ?? ""}`
-          .toLowerCase()
-          .includes(search);
-      });
-  }, [models, query]);
+  const groupedModels = useMemo(() => groupModelsForSearch(models, query), [models, query]);
 
   const activeCount = models.filter((model) => model.status === "active").length;
   const inactiveCount = models.filter((model) => model.status === "inactive").length;
@@ -147,97 +139,128 @@ export function ModelsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {filteredModels.length > 0 ? (
+          {groupedModels.length > 0 ? (
             <ScrollArea className="h-[clamp(24rem,60vh,42rem)] rounded-3xl border border-white/10 bg-slate-950/50">
-              <div className="space-y-3 p-3 pr-4">
-                {filteredModels.map((model) => {
-            const compatibleCount = countCompatiblePartsForModel(parts, model.id);
-            const safeToDelete = compatibleCount === 0;
-
-            return (
-              <div
-                key={model.id}
-                className="rounded-[1.75rem] border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/5"
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 flex-1 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-base font-semibold text-white">
-                        {model.manufacturer} {model.name}
-                      </p>
-                      <Badge
-                        className={
-                          model.status === "inactive"
-                            ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
-                            : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                        }
-                      >
-                        {getModelStatusLabel(model)}
-                      </Badge>
-                      {compatibleCount > 0 && (
-                        <Badge className="border-sky-400/20 bg-sky-400/10 text-sky-100">
-                          {compatibleCount} parts
+              <div className="space-y-4 p-3 pr-4">
+                {groupedModels.map((group) => (
+                  <Card key={group.familyKey} className="border-white/10 bg-slate-950/50">
+                    <CardHeader className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="border-white/10 bg-white/5 text-slate-200">
+                          Series / family
                         </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-slate-400">{model.series || "No series listed"}</p>
-                    {model.notes && <p className="text-sm text-slate-300">{model.notes}</p>}
-                  </div>
+                        <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                          {group.label}
+                        </Badge>
+                        <Badge className="border-sky-400/20 bg-sky-400/10 text-sky-100">
+                          {group.models.length} model{group.models.length === 1 ? "" : "s"}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <CardTitle className="text-white">
+                            {group.manufacturer} family
+                          </CardTitle>
+                          <CardDescription className="text-slate-400">
+                            {getModelSearchReason(group)}
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {group.models.map((model) => {
+                        const compatibleCount = countCompatiblePartsForModel(parts, model.id);
+                        const safeToDelete = compatibleCount === 0;
 
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/models/${model.id}`}
-                      className={cn(
-                        buttonVariants({ variant: "outline", size: "default" }),
-                        "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                      )}
-                    >
-                      View
-                    </Link>
-                    {permissions.canManageModels && (
-                      <Link
-                        href={`/models/${model.id}/edit`}
-                        className={cn(
-                          buttonVariants({ variant: "outline", size: "default" }),
-                          "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
-                        )}
-                      >
-                        Edit
-                      </Link>
-                    )}
-                    {permissions.canManageModels && (
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "border-white/10 bg-white/5 hover:bg-white/10 hover:text-white",
-                          model.status === "active" ? "text-amber-100" : "text-emerald-100",
-                        )}
-                        onClick={() =>
-                          handleStatusToggle(
-                            model.id,
-                            model.status === "active" ? "inactive" : "active",
-                            `${model.manufacturer} ${model.name}`,
-                          )
-                        }
-                      >
-                        <Archive className="mr-2 h-4 w-4" />
-                        {model.status === "active" ? "Archive" : "Restore"}
-                      </Button>
-                    )}
-                    {permissions.canManageModels && safeToDelete && (
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleDelete(model.id, `${model.manufacturer} ${model.name}`)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                        return (
+                          <div
+                            key={model.id}
+                            className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4 transition-colors hover:bg-white/5"
+                          >
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                              <div className="min-w-0 flex-1 space-y-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-base font-semibold text-white">
+                                    {getModelDisplayName(model)}
+                                  </p>
+                                  <Badge
+                                    className={
+                                      model.status === "inactive"
+                                        ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
+                                        : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                                    }
+                                  >
+                                    {getModelStatusLabel(model)}
+                                  </Badge>
+                                  {compatibleCount > 0 && (
+                                    <Badge className="border-sky-400/20 bg-sky-400/10 text-sky-100">
+                                      {compatibleCount} parts
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-slate-400">
+                                  {model.series || "No series listed"}
+                                </p>
+                                {model.notes && <p className="text-sm text-slate-300">{model.notes}</p>}
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <Link
+                                  href={`/models/${model.id}`}
+                                  className={cn(
+                                    buttonVariants({ variant: "outline", size: "default" }),
+                                    "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                                  )}
+                                >
+                                  View
+                                </Link>
+                                {permissions.canManageModels && (
+                                  <Link
+                                    href={`/models/${model.id}/edit`}
+                                    className={cn(
+                                      buttonVariants({ variant: "outline", size: "default" }),
+                                      "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                                    )}
+                                  >
+                                    Edit
+                                  </Link>
+                                )}
+                                {permissions.canManageModels && (
+                                  <Button
+                                    variant="outline"
+                                    className={cn(
+                                      "border-white/10 bg-white/5 hover:bg-white/10 hover:text-white",
+                                      model.status === "active" ? "text-amber-100" : "text-emerald-100",
+                                    )}
+                                    onClick={() =>
+                                      handleStatusToggle(
+                                        model.id,
+                                        model.status === "active" ? "inactive" : "active",
+                                        getModelDisplayName(model),
+                                      )
+                                    }
+                                  >
+                                    <Archive className="mr-2 h-4 w-4" />
+                                    {model.status === "active" ? "Archive" : "Restore"}
+                                  </Button>
+                                )}
+                                {permissions.canManageModels && safeToDelete && (
+                                  <Button
+                                    variant="destructive"
+                                    onClick={() => handleDelete(model.id, getModelDisplayName(model))}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </ScrollArea>
           ) : (

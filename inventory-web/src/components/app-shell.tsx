@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   Boxes,
   ChevronRight,
+  Bell,
   FileClock,
   Home,
   LayoutGrid,
@@ -14,6 +15,8 @@ import {
   Gauge,
   PackageSearch,
   Printer,
+  MessagesSquare,
+  Recycle,
   Users,
   Settings2,
   LogOut,
@@ -36,6 +39,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useInventory } from "@/components/inventory-provider";
 import { useAuth } from "@/components/auth-provider";
+import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/brand";
 import { getRoleLabel } from "@/lib/auth";
 import {
@@ -58,6 +62,7 @@ function AppLink({
   pathname,
   mobile = false,
   onNavigate,
+  badge,
 }: {
   href: string;
   label: string;
@@ -65,6 +70,7 @@ function AppLink({
   pathname: string;
   mobile?: boolean;
   onNavigate?: () => void;
+  badge?: string | number | null;
 }) {
   const active = isActiveRoute(pathname, href);
 
@@ -79,9 +85,14 @@ function AppLink({
           ? "border-emerald-400/20 bg-emerald-400/10 text-white shadow-sm"
           : "text-slate-300 hover:border-white/10 hover:bg-white/5 hover:text-white",
       )}
-    >
+      >
       <Icon className="h-4 w-4 shrink-0" />
       <span className="font-medium">{label}</span>
+      {badge !== null && badge !== undefined && (
+        <Badge className="ml-auto border-white/10 bg-white/5 text-[10px] uppercase tracking-[0.18em] text-slate-200">
+          {badge}
+        </Badge>
+      )}
       {active && <ChevronRight className="ml-auto h-4 w-4" />}
     </Link>
   );
@@ -113,6 +124,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const { summary, refreshInventory, isSupabaseMode } = useInventory();
+  const { unreadNotificationCount } = useWorkspaceContent();
   const {
     session,
     hydrated,
@@ -139,6 +151,26 @@ export function AppShell({
   ].filter((item) => item.visible);
 
   const secondaryNav = [
+    {
+      href: "/support",
+      label: "Support",
+      icon: MessagesSquare,
+      visible: permissions.canAccessSupport,
+      badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
+    },
+    {
+      href: "/notifications",
+      label: "Notifications",
+      icon: Bell,
+      visible: permissions.canViewNotifications,
+      badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
+    },
+    {
+      href: "/green-machines",
+      label: "Green Machines",
+      icon: Recycle,
+      visible: permissions.canViewGreenMachines,
+    },
     { href: "/admin/users", label: "Users", icon: Users, visible: effectiveRole === "admin" },
     { href: "/admin/health", label: "Health", icon: Gauge, visible: permissions.canAccessSettings },
     { href: "/locations", label: "Locations", icon: MapPinned, visible: permissions.canViewLocations },
@@ -365,6 +397,7 @@ export function AppShell({
                 label={item.label}
                 icon={item.icon}
                 pathname={pathname}
+                badge={item.badge}
               />
             ))}
           </div>
@@ -545,7 +578,7 @@ export function AppShell({
                     <div className="space-y-1">
                       <SheetTitle className="text-white">More sections</SheetTitle>
                       <SheetDescription className="text-slate-400">
-                        Open locations, models, reports, activity, health, and settings.
+                        Open support, notifications, green machines, locations, models, reports, activity, health, and settings.
                       </SheetDescription>
                     </div>
                     <SheetClose
@@ -573,6 +606,7 @@ export function AppShell({
                         icon={item.icon}
                         pathname={pathname}
                         mobile
+                        badge={item.badge}
                       />
                     ))}
                     <Button

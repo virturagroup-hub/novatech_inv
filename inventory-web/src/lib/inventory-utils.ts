@@ -17,9 +17,15 @@ import type {
   DeviceModel,
   InventoryState,
   InventorySortKey,
+  PartSetupStatus,
   Part,
   PartFilters,
 } from "./inventory-types";
+import {
+  getModelDisplayName,
+  getModelSearchBlob,
+  getModelSeriesLabel,
+} from "./model-search";
 
 function normalizeSearch(value: string) {
   return value
@@ -183,8 +189,44 @@ export function getPartStockStatus(part: Part): "critical" | "low" | "healthy" {
   return "healthy";
 }
 
+export function getPartSetupStatus(part: Part): PartSetupStatus {
+  const hasLocation = part.binId !== null;
+  const hasCompatibility = part.universal || part.compatibleModelIds.length > 0;
+
+  if (hasLocation && hasCompatibility) {
+    return "complete";
+  }
+
+  if (!hasLocation && !hasCompatibility) {
+    return "critical";
+  }
+
+  return "attention";
+}
+
+export function getPartSetupMessages(part: Part) {
+  const hasLocation = part.binId !== null;
+  const hasCompatibility = part.universal || part.compatibleModelIds.length > 0;
+
+  if (hasLocation && hasCompatibility) {
+    return ["Complete setup"];
+  }
+
+  const messages: string[] = [];
+
+  if (!hasLocation) {
+    messages.push("Missing bin/location");
+  }
+
+  if (!hasCompatibility) {
+    messages.push("Missing compatible models");
+  }
+
+  return messages;
+}
+
 export function requiresAttention(part: Part) {
-  return part.binId === null || (!part.universal && part.compatibleModelIds.length === 0);
+  return getPartSetupStatus(part) !== "complete";
 }
 
 export function getPartLocationLabel(part: Part, bins: Bin[]) {
@@ -196,7 +238,7 @@ export function getPartLocationLabel(part: Part, bins: Bin[]) {
 export function getPartLookupBlob(part: Part, bins: Bin[], models: DeviceModel[]) {
   const bin = getBinById(bins, part.binId);
   const modelNames = getCompatibleModels(part, models)
-    .map((model) => `${model.manufacturer} ${model.name}`)
+    .map((model) => `${getModelDisplayName(model)} ${getModelSeriesLabel(model)} ${getModelSearchBlob(model)}`)
     .join(" ");
   const displayPartNumber = getDisplayPartNumber(part, models);
 
@@ -691,7 +733,7 @@ export function serializePartsCsv(
   const rows = state.parts.map((part) => {
     const bin = getBinById(state.bins, part.binId);
     const modelNames = getCompatibleModels(part, state.models)
-      .map((model) => `${model.manufacturer} ${model.name}`)
+      .map((model) => `${getModelDisplayName(model)} (${getModelSeriesLabel(model)})`)
       .join("; ");
     const displayPartNumber = getDisplayPartNumber(part, state.models);
 
@@ -790,7 +832,7 @@ export function serializeLowStockCsv(
     const compatibility = part.universal
       ? "Universal"
       : getCompatibleModels(part, state.models)
-          .map((model) => `${model.manufacturer} ${model.name}`)
+          .map((model) => `${getModelDisplayName(model)} (${getModelSeriesLabel(model)})`)
           .join("; ");
     const displayPartNumber = getDisplayPartNumber(part, state.models);
 

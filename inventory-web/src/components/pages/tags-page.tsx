@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Filter,
@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { categories, type Bin, type Part } from "@/lib/inventory-types";
-import { buildBinPrintHref, buildPartPrintHref, normalizePrintCopies, parseIdList, type LabelMode } from "@/lib/labels";
+import { buildBinPrintHref, buildPartPrintHref, normalizePrintCopies, parseIdList, type LabelLayout, type LabelMode } from "@/lib/labels";
 import {
   filterParts,
   filterPartsByLabelRecency,
@@ -44,38 +44,6 @@ function formatPartLocation(part: Part, bins: Bin[]) {
   return location.replace(" (Inactive)", "");
 }
 
-function toggleValue(values: string[], value: string) {
-  return values.includes(value)
-    ? values.filter((item) => item !== value)
-    : [...values, value];
-}
-
-function summarizeLabelCount(
-  mode: BuilderMode,
-  labelMode: LabelMode,
-  selectedParts: Part[],
-  selectedBin: Bin | null,
-  copies: number,
-  includeZero: boolean,
-) {
-  if (mode === "bin") {
-    return selectedBin ? copies : 0;
-  }
-
-  if (labelMode === "copies") {
-    return selectedParts.length * copies;
-  }
-
-  if (labelMode === "quantity") {
-    return selectedParts.reduce((total, part) => {
-      const repeatCount = part.quantityOnHand > 0 ? part.quantityOnHand : includeZero ? 1 : 0;
-      return total + repeatCount;
-    }, 0);
-  }
-
-  return selectedParts.length;
-}
-
 export function TagsPage({
   searchParams,
 }: Readonly<{
@@ -87,6 +55,7 @@ export function TagsPage({
     labelMode?: string;
     copies?: string;
     includeZero?: string;
+    layout?: string;
   };
 }>) {
   const { permissions } = useAuth();
@@ -99,15 +68,18 @@ export function TagsPage({
     searchParams.labelMode === "copies" || searchParams.labelMode === "quantity"
       ? searchParams.labelMode
       : "each";
+  const initialLayout: LabelLayout = searchParams.layout === "thermal" ? "thermal" : "sheet";
 
   const [mode, setMode] = useState<BuilderMode>(initialMode);
   const [query, setQuery] = useState("");
   const [labelMode, setLabelMode] = useState<LabelMode>(initialLabelMode);
+  const [labelLayout, setLabelLayout] = useState<LabelLayout>(initialLayout);
   const [copies, setCopies] = useState(() =>
     String(normalizePrintCopies(searchParams.copies ?? settings.defaultPrintCopies, settings.defaultPrintCopies)),
   );
   const [includeZero, setIncludeZero] = useState(searchParams.includeZero === "1");
   const [selectedPartIds, setSelectedPartIds] = useState<string[]>(initialPartIds);
+  const [partCopyCounts, setPartCopyCounts] = useState<Record<string, number>>({});
   const [selectedBinId, setSelectedBinId] = useState(searchParams.binId ?? "");
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [modelFilter, setModelFilter] = useState("all");
@@ -209,6 +181,11 @@ export function TagsPage({
 
   const selectedBin = selectedBinId ? bins.find((bin) => bin.id === selectedBinId) ?? null : null;
 
+  const getPartCopyCount = useCallback(
+    (partId: string) => partCopyCounts[partId] ?? (labelMode === "copies" ? normalizedCopies : 1),
+    [labelMode, normalizedCopies, partCopyCounts],
+  );
+
   const clearFilters = () => {
     setQuery("");
     setManufacturerFilter("all");
@@ -226,20 +203,81 @@ export function TagsPage({
     setSelectedPartIds((current) =>
       Array.from(new Set([...current, ...partMatches.map((part) => part.id)])),
     );
+    setPartCopyCounts((current) => {
+      const next = { ...current };
+
+      partMatches.forEach((part) => {
+        if (!next[part.id]) {
+          next[part.id] = labelMode === "copies" ? normalizedCopies : 1;
+        }
+      });
+
+      return next;
+    });
   };
 
   const deselectAll = () => {
     setSelectedPartIds([]);
     setSelectedBinId("");
+    setPartCopyCounts({});
   };
 
-  const estimatedLabelCount = summarizeLabelCount(
-    mode,
-    labelMode,
-    selectedParts,
-    selectedBin,
-    normalizedCopies,
-    includeZero,
+  const togglePartSelection = (partId: string) => {
+    setMode("part");
+    setSelectedBinId("");
+
+    const isSelected = selectedPartIds.includes(partId);
+
+    if (isSelected) {
+      setSelectedPartIds((current) => current.filter((item) => item !== partId));
+      setPartCopyCounts((current) => {
+        if (!(partId in current)) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[partId];
+        return next;
+      });
+      return;
+    }
+
+    setSelectedPartIds((current) => [...current, partId]);
+    setPartCopyCounts((current) => ({
+      ...current,
+      [partId]: current[partId] ?? (labelMode === "copies" ? normalizedCopies : 1),
+    }));
+  };
+
+  const estimatedLabelCount = useMemo(() => {
+    if (mode === "bin") {
+      return selectedBin ? normalizedCopies : 0;
+    }
+
+    if (labelMode === "quantity") {
+      return selectedParts.reduce((total, part) => {
+        const repeatCount = part.quantityOnHand > 0 ? part.quantityOnHand : includeZero ? 1 : 0;
+        return total + repeatCount;
+      }, 0);
+    }
+
+    return selectedParts.reduce((total, part) => total + getPartCopyCount(part.id), 0);
+  }, [getPartCopyCount, includeZero, labelMode, mode, normalizedCopies, selectedBin, selectedParts]);
+
+  const copiesByPart = useMemo(
+    () =>
+      selectedParts.reduce<Record<string, number>>((accumulator, part) => {
+        accumulator[part.id] =
+          labelMode === "quantity"
+            ? part.quantityOnHand > 0
+              ? part.quantityOnHand
+              : includeZero
+                ? 1
+                : 0
+            : getPartCopyCount(part.id);
+        return accumulator;
+      }, {}),
+    [getPartCopyCount, includeZero, labelMode, selectedParts],
   );
 
   const selectedPrintHref =
@@ -249,11 +287,14 @@ export function TagsPage({
           labelMode,
           copies: normalizedCopies,
           includeZero,
+          copiesByPart,
+          layout: labelLayout,
         })
       : selectedBin
         ? buildBinPrintHref({
             binId: selectedBin.id,
             copies: normalizedCopies,
+            layout: labelLayout,
           })
         : "/print";
 
@@ -405,7 +446,7 @@ export function TagsPage({
 
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
-                  {mode === "part" ? "Copies" : "Sheets"}
+                  {mode === "part" ? "Default copies" : "Sheets"}
                 </p>
                 <Input
                   value={copies}
@@ -455,6 +496,41 @@ export function TagsPage({
                   >
                     Quantity on hand
                   </Button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Layout</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={labelLayout === "sheet" ? "default" : "outline"}
+                        className={cn(
+                          "h-10",
+                          labelLayout === "sheet"
+                            ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                        )}
+                        onClick={() => setLabelLayout("sheet")}
+                      >
+                        Sheet
+                      </Button>
+                      <Button
+                        variant={labelLayout === "thermal" ? "default" : "outline"}
+                        className={cn(
+                          "h-10",
+                          labelLayout === "thermal"
+                            ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                        )}
+                        onClick={() => setLabelLayout("thermal")}
+                      >
+                        Thermal
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
+                    Thermal mode prints one label per page. Sheet mode keeps the full label grid.
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
@@ -657,10 +733,7 @@ export function TagsPage({
                       <button
                         key={part.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedBinId("");
-                          setSelectedPartIds((current) => toggleValue(current, part.id));
-                        }}
+                        onClick={() => togglePartSelection(part.id)}
                         className={cn(
                           "rounded-3xl border p-4 text-left transition-colors",
                           selected
@@ -751,26 +824,39 @@ export function TagsPage({
                   </div>
                 </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2">
-                  {selectedParts.slice(0, 6).map((part) => (
+                <div className="space-y-2">
+                  {selectedParts.map((part) => (
                     <div
                       key={part.id}
-                      className="rounded-2xl border border-white/10 bg-slate-950/70 p-3"
+                      className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3 sm:flex-row sm:items-center"
                     >
-                      <p className="font-mono text-sm font-semibold text-white">
-                        {getDisplayPartNumber(part)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
-                      <p className="mt-2 text-xs text-slate-400">{formatPartLocation(part, bins)}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-sm font-semibold text-white">
+                          {getDisplayPartNumber(part)}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
+                        <p className="mt-2 text-xs text-slate-400">{formatPartLocation(part, bins)}</p>
+                      </div>
+                      <div className="w-full sm:w-32">
+                        <Label className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                          Copies
+                        </Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={getPartCopyCount(part.id)}
+                          onChange={(event) =>
+                            setPartCopyCounts((current) => ({
+                              ...current,
+                              [part.id]: normalizePrintCopies(event.target.value, 1),
+                            }))
+                          }
+                          className="mt-2 h-11 border-white/10 bg-slate-900/80 text-white"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
-
-                {selectedParts.length > 6 && (
-                  <p className="text-xs text-slate-400">
-                    + {selectedParts.length - 6} more selected parts
-                  </p>
-                )}
 
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
@@ -789,6 +875,17 @@ export function TagsPage({
                     <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Queued</p>
                     <p className="mt-2 text-sm text-white">{estimatedLabelCount} labels</p>
                   </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">
+                    Layout: {labelLayout === "thermal" ? "Thermal" : "Sheet"}
+                  </Badge>
+                  {labelMode === "quantity" && (
+                    <Badge className="border-amber-400/20 bg-amber-400/10 text-amber-200">
+                      Quantity mode ignores copies
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2">

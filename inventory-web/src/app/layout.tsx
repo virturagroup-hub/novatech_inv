@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider } from "@/components/auth-provider";
 import { InventoryProvider } from "@/components/inventory-provider";
+import { WorkspaceContentProvider } from "@/components/workspace-content-provider";
 import { PwaRegister } from "@/components/pwa-register";
 import { APP_DESCRIPTION, APP_NAME, APP_TITLE_TEMPLATE } from "@/lib/brand";
 import "./globals.css";
@@ -43,7 +44,9 @@ export default function RootLayout({
       <body className="min-h-full bg-background text-foreground antialiased">
         <AuthProvider>
           <InventoryProvider>
-            <AppShell>{children}</AppShell>
+            <WorkspaceContentProvider>
+              <AppShell>{children}</AppShell>
+            </WorkspaceContentProvider>
           </InventoryProvider>
         </AuthProvider>
         <PwaRegister />

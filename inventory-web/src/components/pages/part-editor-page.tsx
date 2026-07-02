@@ -37,6 +37,7 @@ import {
   getPartStockStatus,
   requiresAttention,
 } from "@/lib/inventory-utils";
+import { ModelFamilyPicker } from "@/components/model-family-picker";
 
 type PartFormState = {
   partNumber: string;
@@ -110,38 +111,11 @@ export function PartEditorPage({
 
   const part = mode === "edit" && partId ? getPartById(partId) : undefined;
   const [form, setForm] = useState<PartFormState>(() => formFromPart(part, defaultBinId));
-  const [modelSearch, setModelSearch] = useState("");
-  const [modelManufacturerFilter, setModelManufacturerFilter] = useState("all");
   const [binSearch, setBinSearch] = useState("");
 
   useEffect(() => {
     setForm(formFromPart(part, defaultBinId));
   }, [defaultBinId, part]);
-
-  const availableModels = useMemo(() => {
-    const search = modelSearch.trim().toLowerCase();
-    return [...models]
-      .sort((left, right) =>
-        `${left.manufacturer} ${left.name}`.localeCompare(`${right.manufacturer} ${right.name}`),
-      )
-      .filter((model) => {
-        if (modelManufacturerFilter !== "all" && model.manufacturer !== modelManufacturerFilter) {
-          return false;
-        }
-        if (!search) return true;
-        return `${model.manufacturer} ${model.name} ${model.series} ${model.status} ${model.notes ?? ""}`
-          .toLowerCase()
-          .includes(search);
-      });
-  }, [modelManufacturerFilter, modelSearch, models]);
-
-  const modelManufacturerOptions = useMemo(
-    () =>
-      [...new Set(models.map((model) => model.manufacturer))]
-        .sort((left, right) => left.localeCompare(right))
-        .map((manufacturer) => ({ value: manufacturer, label: manufacturer })),
-    [models],
-  );
 
   const availableBins = useMemo(() => {
     const search = binSearch.trim().toLowerCase();
@@ -264,7 +238,7 @@ export function PartEditorPage({
   const editingPart = part as Part;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 overflow-x-hidden px-4 pb-8 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <div className="rounded-[2rem] border border-white/10 bg-white/5 px-5 py-5 shadow-2xl shadow-black/10 backdrop-blur-sm sm:px-6 sm:py-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-3">
@@ -464,13 +438,13 @@ export function PartEditorPage({
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-white">2. Stock and reorder</CardTitle>
+              <CardTitle className="text-white">2. Stock snapshot</CardTitle>
               <CardDescription className="text-slate-400">
-                Use plain numbers that older technicians can scan at a glance.
+                Quantity stays editable here, while reorder thresholds stay tucked into the record behind the scenes.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-slate-200">Quantity on hand</Label>
                   <Input
@@ -483,30 +457,22 @@ export function PartEditorPage({
                     className="h-12 border-white/10 bg-slate-950/70 text-white"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Reorder point</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.reorderPoint}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, reorderPoint: event.target.value }))
-                    }
-                    className="h-12 border-white/10 bg-slate-950/70 text-white"
-                  />
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Health</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {getPartStockStatus(previewPart) === "healthy"
+                      ? "Healthy"
+                      : getPartStockStatus(previewPart) === "critical"
+                        ? "Critical"
+                        : "Low stock"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {attentionPreview ? "Setup still needs attention" : "Setup looks complete"}
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Reorder target</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.reorderTarget}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, reorderTarget: event.target.value }))
-                    }
-                    className="h-12 border-white/10 bg-slate-950/70 text-white"
-                  />
-                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
+                Reorder point and reorder target stay stored with the part record, but they are no longer shown in the main form.
               </div>
             </CardContent>
           </Card>
@@ -606,35 +572,10 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">4. Compatible models</CardTitle>
               <CardDescription className="text-slate-400">
-                Filter by manufacturer or search models, with the selected devices pinned to the top.
+                Search by manufacturer, model series, or notes, then select individual devices or whole families.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {form.universal ? (
-                  <Badge className="border-emerald-400/30 bg-emerald-400/15 text-emerald-100">
-                    Universal enabled
-                  </Badge>
-                ) : (
-                  <Badge className="border-white/10 bg-white/5 text-slate-200">
-                    {form.compatibleModelIds.length} selected
-                  </Badge>
-                )}
-                <Button
-                  variant="outline"
-                  className="h-9 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                  onClick={() =>
-                    setForm((current) => ({
-                      ...current,
-                      compatibleModelIds: [],
-                      universal: false,
-                    }))
-                  }
-                >
-                  Clear selected
-                </Button>
-              </div>
-
               {form.compatibleModelIds.length > 0 && !form.universal && (
                 <div className="space-y-2 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
@@ -650,113 +591,19 @@ export function PartEditorPage({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label className="text-slate-200">Search models</Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <Input
-                    value={modelSearch}
-                    onChange={(event) => setModelSearch(event.target.value)}
-                    placeholder="Search by manufacturer, model, series, or notes"
-                    className="h-12 border-white/10 bg-slate-950/70 pl-9 text-white placeholder:text-slate-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Filter manufacturer</Label>
-                  <Select
-                    value={modelManufacturerFilter}
-                    onValueChange={(value) => setModelManufacturerFilter(value ?? "all")}
-                  >
-                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                      <SelectValue placeholder="All manufacturers" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All manufacturers</SelectItem>
-                      {modelManufacturerOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  {modelManufacturerFilter !== "all" ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 w-full border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                      onClick={() => setModelManufacturerFilter("all")}
-                    >
-                      Clear manufacturer filter
-                    </Button>
-                  ) : (
-                    <div className="hidden h-12 w-full md:block" />
-                  )}
-                </div>
-              </div>
-
-              <ScrollArea className="h-[28rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
-                <div className="space-y-2">
-                  {availableModels.map((model) => {
-                    const checked = form.compatibleModelIds.includes(model.id);
-                    return (
-                      <label
-                        key={model.id}
-                        className={cn(
-                          "flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 transition-colors",
-                          checked
-                            ? "border-emerald-400/30 bg-emerald-400/10"
-                            : "border-white/10 bg-slate-950/50 hover:bg-white/10",
-                          model.status === "inactive" && "opacity-80",
-                        )}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(next) =>
-                            setForm((current) => ({
-                              ...current,
-                              compatibleModelIds: next
-                                ? [...current.compatibleModelIds, model.id]
-                                : current.compatibleModelIds.filter(
-                                    (modelId) => modelId !== model.id,
-                                  ),
-                              universal: false,
-                            }))
-                          }
-                          disabled={form.universal}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">
-                            {model.manufacturer} {model.name}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-slate-400">
-                            {model.series || "No series"} · {model.status}
-                          </p>
-                        </div>
-                        <Badge
-                          className={cn(
-                            "border",
-                            model.status === "inactive"
-                              ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
-                              : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100",
-                          )}
-                        >
-                          {model.status}
-                        </Badge>
-                      </label>
-                    );
-                  })}
-                  {availableModels.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
-                      No models matched the current search or manufacturer filter.
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
+              <ModelFamilyPicker
+                models={models}
+                selectedModelIds={form.compatibleModelIds}
+                onSelectionChange={(nextIds) =>
+                  setForm((current) => ({
+                    ...current,
+                    compatibleModelIds: nextIds,
+                    universal: false,
+                  }))
+                }
+                disabled={form.universal}
+                compact
+              />
             </CardContent>
           </Card>
 

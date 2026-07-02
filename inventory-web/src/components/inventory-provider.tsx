@@ -54,7 +54,14 @@ type InventoryContextValue = InventoryState & {
   adjustPart: (partId: string, delta: number) => void;
   recordLabelPrint: (
     partIds: string[],
-    options: { labelMode: string; copies: number; includeZero: boolean },
+    options: {
+      labelMode: string;
+      copies: number;
+      includeZero: boolean;
+      copiesByPart?: Record<string, number>;
+      layout?: string;
+      totalCopies: number;
+    },
   ) => void;
   saveBin: (draft: BinDraft) => void;
   deleteBin: (binId: string) => void;
@@ -329,7 +336,14 @@ export function InventoryProvider({
       },
       recordLabelPrint: (
         partIds: string[],
-        options: { labelMode: string; copies: number; includeZero: boolean },
+        options: {
+          labelMode: string;
+          copies: number;
+          includeZero: boolean;
+          copiesByPart?: Record<string, number>;
+          layout?: string;
+          totalCopies: number;
+        },
       ) => {
         const printedParts = partIds
           .map((partId) => state.parts.find((part) => part.id === partId))
@@ -345,6 +359,9 @@ export function InventoryProvider({
           labelMode: options.labelMode,
           copies: options.copies,
           includeZero: options.includeZero,
+          copiesByPart: options.copiesByPart,
+          layout: options.layout,
+          totalCopies: options.totalCopies,
         });
 
         if (!browserSupabase) return;
@@ -372,11 +389,14 @@ export function InventoryProvider({
                 labelMode: options.labelMode,
                 labelCopies: options.copies,
                 includeZero: options.includeZero,
+                copiesByPart: options.copiesByPart ?? null,
+                layout: options.layout ?? null,
+                totalCopies: options.totalCopies,
                 displayPartNumber: getDisplayPartNumber(part, state.models),
               },
               label_mode: options.labelMode,
-              label_copies: options.copies,
-              note: `Printed ${options.labelMode} labels`,
+              label_copies: options.copiesByPart?.[part.id] ?? options.copies,
+              note: `Printed ${options.labelMode} labels${options.layout ? ` (${options.layout})` : ""}`,
               created_by: null,
               actor_label: null,
             })),

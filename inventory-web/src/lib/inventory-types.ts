@@ -13,14 +13,33 @@ export type Manufacturer = (typeof manufacturers)[number];
 
 export const categories = [
   "Accessory",
+  "Boards",
+  "Cables",
+  "Cooling",
+  "Covers",
+  "Drives",
   "Drum",
+  "Duplex",
+  "Feeders",
+  "Finishing",
   "Fuser",
+  "Fusers",
+  "Hardware",
+  "Imaging",
   "Maintenance",
+  "Miscellaneous",
+  "Motors",
   "Other",
+  "Power Supplies",
   "Roller",
+  "Rollers",
+  "Scanner / ADF",
   "Sensor",
-  "Transfer",
+  "Sensors",
   "Toner",
+  "Toner / Consumables",
+  "Trays",
+  "Transfer",
 ] as const;
 
 export type Category = (typeof categories)[number];
@@ -79,6 +98,8 @@ export interface Bin {
 }
 
 export type ModelStatus = "active" | "inactive";
+
+export type PartSetupStatus = "complete" | "attention" | "critical";
 
 export interface DeviceModel {
   id: string;

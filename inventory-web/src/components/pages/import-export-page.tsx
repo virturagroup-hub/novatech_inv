@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
-import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,16 +90,6 @@ export function ImportExportPage() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [selectedAuditTypes, setSelectedAuditTypes] = useState<AuditAction[]>([]);
-
-  const exportSummary = useMemo(
-    () => [
-      { label: "Parts", value: parts.length },
-      { label: "Bins", value: bins.length },
-      { label: "Models", value: models.length },
-      { label: "Activity", value: activity.length },
-    ],
-    [activity.length, bins.length, models.length, parts.length],
-  );
   const exportState = useMemo(
     () => ({ parts, bins, models, activity, settings }),
     [activity, bins, models, parts, settings],
@@ -323,27 +312,19 @@ export function ImportExportPage() {
         }
       />
 
-      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
-        {exportSummary.map((metric) => (
-          <StatCard
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            hint="Current inventory totals"
-            icon={<Files className="h-5 w-5" />}
-          />
-        ))}
-        <StatCard
-          label="Data source"
-          value={dataSource === "supabase" ? "Supabase" : "Local workspace"}
-          hint={
-            dataSource === "supabase"
-              ? "Reads from live tables when Supabase is configured."
-              : "Uses browser-local workspace data."
-          }
-          icon={<Upload className="h-5 w-5" />}
-        />
-      </div>
+      <Card className="border-white/10 bg-white/5">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Export snapshot</p>
+            <p className="text-sm font-medium text-white">
+              {parts.length} parts, {bins.length} bins, {models.length} models, and {activity.length} activity rows are available for export.
+            </p>
+          </div>
+          <Badge className="border-white/10 bg-white/5 text-slate-200">
+            {dataSource === "supabase" ? "Supabase" : "Local workspace"}
+          </Badge>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {reportCards.map((card) => (

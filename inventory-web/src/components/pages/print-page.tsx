@@ -15,8 +15,10 @@ import type { Bin, Part } from "@/lib/inventory-types";
 import { buildAbsoluteAppUrl } from "@/lib/navigation";
 import {
   LABELS_PER_SHEET,
+  type LabelLayout,
   normalizePrintCopies,
   parseIdList,
+  parseCopiesByPart,
   type LabelMode,
 } from "@/lib/labels";
 import { getBinById } from "@/lib/inventory-utils";
@@ -40,6 +42,7 @@ function buildPartLabels(
   mode: LabelMode,
   copies: number,
   includeZero: boolean,
+  copiesByPart: Record<string, number>,
 ) {
   if (!parts.length) {
     return [] as PrintLabel[];
@@ -47,7 +50,7 @@ function buildPartLabels(
 
   if (mode === "copies") {
     return parts.flatMap((part) =>
-      Array.from({ length: copies }, () => ({ type: "part" as const, part })),
+      Array.from({ length: copiesByPart[part.id] ?? copies }, () => ({ type: "part" as const, part })),
     );
   }
 
@@ -58,7 +61,18 @@ function buildPartLabels(
     });
   }
 
-  return parts.map((part) => ({ type: "part" as const, part }));
+  const hasPerPartCopies = Object.keys(copiesByPart).length > 0;
+
+  return parts.flatMap((part) =>
+    Array.from(
+      {
+        length: hasPerPartCopies
+          ? copiesByPart[part.id] ?? 1
+          : copies,
+      },
+      () => ({ type: "part" as const, part }),
+    ),
+  );
 }
 
 function buildBinLabels(bin: Bin, copies: number) {
@@ -75,6 +89,8 @@ export function PrintPage({
     copies?: string;
     labelMode?: string;
     includeZero?: string;
+    copiesByPart?: string;
+    layout?: string;
   };
 }>) {
   const { permissions } = useAuth();
@@ -103,12 +119,17 @@ export function PrintPage({
       ? searchParams.labelMode
       : "each";
 
+  const labelLayout: LabelLayout = searchParams.layout === "thermal" ? "thermal" : "sheet";
   const copies = normalizePrintCopies(searchParams.copies ?? 1, 1);
   const includeZero = searchParams.includeZero === "1" || searchParams.includeZero === "true";
+  const copiesByPart = useMemo(
+    () => parseCopiesByPart(searchParams.copiesByPart),
+    [searchParams.copiesByPart],
+  );
 
   const labels = useMemo<PrintLabel[]>(() => {
     if (selectedParts.length > 0) {
-      return buildPartLabels(selectedParts, labelMode, copies, includeZero);
+      return buildPartLabels(selectedParts, labelMode, copies, includeZero, copiesByPart);
     }
 
     if (selectedBin) {
@@ -116,7 +137,7 @@ export function PrintPage({
     }
 
     return [];
-  }, [copies, includeZero, labelMode, selectedBin, selectedParts]);
+  }, [copies, copiesByPart, includeZero, labelMode, selectedBin, selectedParts]);
 
   const mode: "part" | "bin" | null = selectedParts.length > 0 ? "part" : selectedBin ? "bin" : null;
   const sheetCount = labels.length > 0 ? Math.ceil(labels.length / LABELS_PER_SHEET) : 0;
@@ -137,6 +158,9 @@ export function PrintPage({
           labelMode,
           copies,
           includeZero,
+          copiesByPart,
+          layout: labelLayout,
+          totalCopies: labels.length,
         },
       );
     }
@@ -169,6 +193,9 @@ export function PrintPage({
             <div className="flex flex-wrap gap-2">
               <Badge className="bg-emerald-100 text-emerald-800">{selectedSummary}</Badge>
               <Badge className="bg-slate-100 text-slate-700">{queueSummary}</Badge>
+              <Badge className="bg-slate-100 text-slate-700">
+                {labelLayout === "thermal" ? "Thermal layout" : "Sheet layout"}
+              </Badge>
               {mode === "part" && (
                 <Badge className="bg-slate-100 text-slate-700">
                   {labelMode === "each"
@@ -262,6 +289,26 @@ export function PrintPage({
               </div>
             </CardContent>
           </Card>
+        ) : labelLayout === "thermal" ? (
+          <div className="space-y-4">
+            {labels.map((label, index) => (
+              <section
+                key={`${label.type}-${index}`}
+                className="thermal-label-page mx-auto flex w-full max-w-[2.82in] break-after-page rounded-2xl border border-slate-300 bg-white p-2 shadow-lg shadow-slate-200/60 print:max-w-none print:border-0 print:p-0 print:shadow-none"
+              >
+                {label.type === "part" ? (
+                  <PartLabelCard
+                    part={label.part}
+                    displayPartNumber={getDisplayPartNumber(label.part)}
+                    bins={bins}
+                    layout="thermal"
+                  />
+                ) : (
+                  <BinLabelCard key={`${label.type}-${index}`} bin={label.bin} layout="thermal" />
+                )}
+              </section>
+            ))}
+          </div>
         ) : (
           <div className="space-y-6">
             {Array.from({ length: sheetCount }, (_, sheetIndex) => {
@@ -304,8 +351,8 @@ export function PrintPage({
 
       <style jsx global>{`
         @page {
-          size: letter;
-          margin: 0.12in;
+          size: ${labelLayout === "thermal" ? "3in 2in" : "letter"};
+          margin: ${labelLayout === "thermal" ? "0.08in" : "0.12in"};
         }
 
         @media print {
@@ -314,12 +361,14 @@ export function PrintPage({
             background: white !important;
           }
 
-          .print-sheet {
+          .print-sheet,
+          .thermal-label-page {
             break-after: page;
             page-break-after: always;
           }
 
-          .print-sheet:last-child {
+          .print-sheet:last-child,
+          .thermal-label-page:last-child {
             break-after: auto;
             page-break-after: auto;
           }
@@ -333,29 +382,50 @@ function PartLabelCard({
   part,
   displayPartNumber,
   bins,
+  layout = "sheet",
 }: Readonly<{
   part: Part;
   displayPartNumber: string;
   bins: Bin[];
+  layout?: LabelLayout;
 }>) {
   const bin = getBinById(bins, part.binId);
   const locationText = bin ? `${bin.code} · ${getBinLocationText(bin)}` : "Unassigned";
   const qrValue = buildAbsoluteAppUrl(`/inventory/${part.id}`);
 
   return (
-    <div className="flex h-[2in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-1.5 text-slate-950 print:border-slate-300">
-      <div className="flex justify-center">
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-950 print:border-slate-300",
+        layout === "thermal"
+          ? "flex h-[1.75in] w-full items-center gap-3 p-2"
+          : "flex h-[2in] flex-col justify-between p-1.5",
+      )}
+    >
+      <div className={layout === "thermal" ? "shrink-0" : "flex justify-center"}>
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={92}
+          size={layout === "thermal" ? 72 : 92}
           className="rounded-lg bg-white p-1"
         />
       </div>
-      <div className="mt-2 space-y-0.5 text-center">
-        <p className="font-mono text-[13px] font-semibold leading-4">{displayPartNumber}</p>
-        <p className="text-[11px] font-medium leading-4">{part.partName}</p>
-        <p className="text-[10px] leading-4 text-slate-700">{locationText}</p>
+      <div
+        className={cn(
+          layout === "thermal"
+            ? "min-w-0 flex-1 space-y-1"
+            : "mt-2 space-y-0.5 text-center",
+        )}
+      >
+        <p className={cn("font-mono font-semibold leading-4", layout === "thermal" ? "text-[12px]" : "text-[13px]")}>
+          {displayPartNumber}
+        </p>
+        <p className={cn(layout === "thermal" ? "text-[10px]" : "text-[11px]", "font-medium leading-4")}>
+          {part.partName}
+        </p>
+        <p className={cn(layout === "thermal" ? "text-[9px]" : "text-[10px]", "leading-4 text-slate-700")}>
+          {locationText}
+        </p>
       </div>
     </div>
   );
@@ -363,27 +433,48 @@ function PartLabelCard({
 
 function BinLabelCard({
   bin,
+  layout = "sheet",
 }: Readonly<{
   bin: Bin;
+  layout?: LabelLayout;
 }>) {
   const qrValue = buildAbsoluteAppUrl(`/locations/${bin.id}`);
   const locationText = getBinLocationText(bin);
 
   return (
-    <div className="flex h-[2in] flex-col justify-between overflow-hidden rounded-lg border border-slate-300 bg-white p-1.5 text-slate-950 print:border-slate-300">
-      <div className="flex justify-center">
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-950 print:border-slate-300",
+        layout === "thermal"
+          ? "flex h-[1.75in] w-full items-center gap-3 p-2"
+          : "flex h-[2in] flex-col justify-between p-1.5",
+      )}
+    >
+      <div className={layout === "thermal" ? "shrink-0" : "flex justify-center"}>
         <QRCodeSVG
           value={qrValue}
           includeMargin
-          size={92}
+          size={layout === "thermal" ? 72 : 92}
           className="rounded-lg bg-white p-1"
         />
       </div>
-      <div className="mt-2 space-y-0.5 text-center">
-        <p className="font-mono text-[13px] font-semibold leading-4">{bin.code}</p>
-        <p className="text-[11px] font-medium leading-4">{locationText}</p>
+      <div
+        className={cn(
+          layout === "thermal"
+            ? "min-w-0 flex-1 space-y-1"
+            : "mt-2 space-y-0.5 text-center",
+        )}
+      >
+        <p className={cn("font-mono font-semibold leading-4", layout === "thermal" ? "text-[12px]" : "text-[13px]")}>
+          {bin.code}
+        </p>
+        <p className={cn(layout === "thermal" ? "text-[10px]" : "text-[11px]", "font-medium leading-4")}>
+          {locationText}
+        </p>
         {bin.description ? (
-          <p className="text-[10px] leading-4 text-slate-700">{bin.description}</p>
+          <p className={cn(layout === "thermal" ? "text-[9px]" : "text-[10px]", "leading-4 text-slate-700")}>
+            {bin.description}
+          </p>
         ) : null}
       </div>
     </div>
