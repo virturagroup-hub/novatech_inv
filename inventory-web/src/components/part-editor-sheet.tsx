@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Part } from "@/lib/inventory-types";
-import { categories, manufacturers } from "@/lib/inventory-types";
+import { categories, defaultCategory, manufacturers } from "@/lib/inventory-types";
 import { requiresAttention } from "@/lib/inventory-utils";
 import { useInventory } from "@/components/inventory-provider";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ const blankForm: PartFormState = {
   isNpn: false,
   partName: "",
   manufacturer: "Canon",
-  category: "Accessory",
+  category: defaultCategory,
   binId: "",
   quantityOnHand: "0",
   reorderPoint: "5",
@@ -167,7 +167,7 @@ export function PartEditorSheet({
                 {part ? "Edit part" : "Add part"}
               </SheetTitle>
               <SheetDescription className="text-slate-400">
-                Keep part numbers, NPN status, locations, and model compatibility in sync.
+                Keep the part number, category, location, and compatibility in one place.
               </SheetDescription>
             </div>
           </div>
@@ -203,8 +203,8 @@ export function PartEditorSheet({
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-white">Mark as NPN</p>
                     <p className="text-xs leading-5 text-slate-400">
-                      No Part Number items can be saved without a part number. Labels will use the
-                      first compatible model, or Unknown Model if none is linked.
+                      Use this when the item has no printed part number. Labels will use the first
+                      compatible model, or Unknown Model if none is linked.
                     </p>
                   </div>
                 </div>
@@ -312,7 +312,7 @@ export function PartEditorSheet({
                       ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-200"
                       : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
                   )}
-                >
+                  >
                   <span>{form.universal ? "Universal enabled" : "Mark as universal"}</span>
                   <CheckCircle2 className="h-4 w-4" />
                 </button>
@@ -341,10 +341,10 @@ export function PartEditorSheet({
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Health</p>
                 <p className="mt-2 text-sm font-semibold text-white">
-                  {attentionPreview ? "Needs review" : "Looks complete"}
+                  {attentionPreview ? "Needs review" : "Ready"}
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  Reorder thresholds stay hidden in this streamlined form.
+                  Current count only. Reorder details stay on the part record.
                 </p>
               </div>
             </div>
@@ -356,7 +356,7 @@ export function PartEditorSheet({
                     Compatible printer/copier models
                   </p>
                   <p className="text-xs text-slate-400">
-                    Search by manufacturer, model series, or notes, then pick the whole family or individual models.
+                    Search by manufacturer or series, then pick the whole family or individual models.
                   </p>
                 </div>
                 {form.universal ? (
@@ -389,8 +389,7 @@ export function PartEditorSheet({
                 <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-amber-100">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <p className="text-sm">
-                    This part will show as attention-needed until a compatible
-                    model is selected or the part is marked universal.
+                    This part stays flagged until a compatible model is selected or the part is marked universal.
                   </p>
                 </div>
               )}
@@ -417,8 +416,8 @@ export function PartEditorSheet({
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-slate-400">
               {attentionPreview
-                ? "This part will be highlighted for review after save."
-                : "Compatibility and location look complete."}
+                ? "Add a location or compatible model to finish this record."
+                : "Everything is ready to save."}
             </div>
             <div className="flex gap-2">
               <Button

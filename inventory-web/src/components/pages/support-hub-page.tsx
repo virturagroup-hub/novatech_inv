@@ -173,8 +173,8 @@ export function SupportHubPage({
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Support hub"
-        title="Keep support requests, feature ideas, and reference content in one place."
-        description="The support hub gives the floor a single destination for questions, requests, seeded SOPs, release notes, and what is coming next."
+        title="Keep support requests, ideas, and reference notes in one place."
+        description="Use the hub to submit requests, follow replies, and keep SOPs and updates close by."
         actions={
           <>
             <Link
@@ -226,7 +226,7 @@ export function SupportHubPage({
         <StatCard
           label="Role"
           value={effectiveRole}
-          hint="Current preview role"
+          hint="Current access"
           icon={<ShieldAlert className="h-5 w-5" />}
         />
       </div>
@@ -236,7 +236,7 @@ export function SupportHubPage({
           <CardHeader>
             <CardTitle className="text-white">Submit support</CardTitle>
             <CardDescription className="text-slate-400">
-              Open a support request for a floor issue, then follow the thread in the detail panel.
+              Open a support request for a floor issue and track it from the detail panel.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -277,11 +277,11 @@ export function SupportHubPage({
         </Card>
 
         <Card className="border-white/10 bg-white/5">
-          <CardHeader>
-            <CardTitle className="text-white">Thread detail</CardTitle>
-            <CardDescription className="text-slate-400">
-              Open a support or feature thread from the list to review replies and status.
-            </CardDescription>
+        <CardHeader>
+          <CardTitle className="text-white">Thread detail</CardTitle>
+          <CardDescription className="text-slate-400">
+              Open a thread from the list to review replies and status.
+          </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {selectedThread ? (
@@ -418,7 +418,7 @@ export function SupportHubPage({
         <CardHeader>
           <CardTitle className="text-white">Thread index</CardTitle>
           <CardDescription className="text-slate-400">
-            Jump to any support or feature thread without leaving the hub.
+            Jump to any request without leaving the hub.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 xl:grid-cols-2">
@@ -490,7 +490,7 @@ export function SupportHubPage({
         <CardHeader>
           <CardTitle className="text-white">Feature requests</CardTitle>
           <CardDescription className="text-slate-400">
-            Capture ideas from the floor and vote on the ones that should move first.
+            Capture ideas from the floor and vote on the ones that should move next.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -576,7 +576,7 @@ export function SupportHubPage({
         <CardHeader>
           <CardTitle className="text-white">Reference content</CardTitle>
           <CardDescription className="text-slate-400">
-            FAQs, update notes, coming-soon items, and SOPs that keep the workspace aligned.
+            FAQs, update notes, coming-soon items, and SOPs for the floor.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 
-import { categories, type Category } from "@/lib/inventory-types";
+import { normalizeCategory, type Category } from "@/lib/category-normalization";
 
 export interface InventoryCsvRow {
   rowIndex: number;
@@ -77,11 +77,6 @@ function splitList(value: string) {
 function parseInteger(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function normalizeCategory(value: string): Category {
-  const match = categories.find((category) => category.toLowerCase() === value.toLowerCase());
-  return match ?? "Other";
 }
 
 function deriveLocation(row: Record<string, unknown>) {
@@ -161,9 +156,7 @@ export function parseInventoryCsv(text: string): InventoryCsvPreview {
         warnings.push("Manufacturer was missing, so Imported was used.");
       }
 
-      const category = normalizeCategory(
-        readValue(row, ["category", "type", "part category"]) || "Other",
-      );
+      const category = normalizeCategory(readValue(row, ["category", "type", "part category"]));
 
       const quantityRaw = readValue(row, ["quantity on hand", "quantity", "qty"]);
       const quantityOnHand = quantityRaw ? parseInteger(quantityRaw, 0) : 0;

@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { normalizeCategory } from "@/lib/category-normalization";
 import { createDefaultSettings, createEmptyState } from "@/lib/inventory-seed";
 import { profileDisplayName } from "@/lib/profile-display";
 import type { ActivityEntry, Bin, DeviceModel, InventoryState, Part } from "@/lib/inventory-types";
-import { categories, type Category } from "@/lib/inventory-types";
 import type { InventoryImportRowResult, InventoryImportSummary } from "@/lib/inventory-import-types";
 import { parseInventoryCsv, type InventoryCsvRow } from "@/lib/inventory-csv";
 
@@ -22,12 +22,6 @@ type SnapshotPartRow = PartRow & {
 
 function normalizeLookup(value: string) {
   return value.trim().toLowerCase();
-}
-
-function normalizeCategory(value: string): Category {
-  return (
-    categories.find((category) => category.toLowerCase() === value.toLowerCase()) ?? "Other"
-  );
 }
 
 function mapLocationRow(location: LocationRow): Bin {

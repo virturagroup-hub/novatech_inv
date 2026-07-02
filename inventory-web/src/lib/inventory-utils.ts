@@ -10,6 +10,7 @@ import {
   startOfWeek,
   subDays,
 } from "date-fns";
+import { normalizeCategory } from "./category-normalization";
 import type {
   ActivityEntry,
   Bin,
@@ -503,12 +504,13 @@ export function filterParts(
   filters: PartFilters,
 ) {
   const query = normalizeSearch(filters.query);
+  const normalizedCategory = filters.category ? normalizeCategory(filters.category) : "";
   return parts.filter((part) => {
     if (filters.manufacturer && part.manufacturer !== filters.manufacturer) {
       return false;
     }
 
-    if (filters.category && part.category !== filters.category) {
+    if (normalizedCategory && normalizeCategory(part.category) !== normalizedCategory) {
       return false;
     }
 
@@ -602,9 +604,11 @@ export function getDashboardSummary(state: InventoryState) {
     })
     .sort((left, right) => right.units - left.units);
 
-  const categories = Array.from(new Set(state.parts.map((part) => part.category)))
+  const categories = Array.from(
+    new Set(state.parts.map((part) => normalizeCategory(part.category))),
+  )
     .map((category) => {
-      const parts = state.parts.filter((part) => part.category === category);
+      const parts = state.parts.filter((part) => normalizeCategory(part.category) === category);
       const units = parts.reduce((sum, part) => sum + part.quantityOnHand, 0);
       return {
         label: category,
@@ -743,7 +747,7 @@ export function serializePartsCsv(
       escapeCsvCell(part.isNpn ? "Yes" : "No"),
       escapeCsvCell(part.partName),
       escapeCsvCell(part.manufacturer),
-      escapeCsvCell(part.category),
+      escapeCsvCell(normalizeCategory(part.category)),
       part.quantityOnHand,
       part.reorderPoint,
       part.reorderTarget,

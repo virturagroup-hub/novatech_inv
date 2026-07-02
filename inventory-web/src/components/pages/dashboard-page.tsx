@@ -425,7 +425,7 @@ export function DashboardPage() {
               <CardHeader>
                 <CardTitle className="text-white">Recent activity</CardTitle>
               <CardDescription className="text-slate-400">
-                  Audit trail entries from the current inventory source.
+                  Audit trail entries from the inventory.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">

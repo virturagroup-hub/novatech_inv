@@ -1,3 +1,5 @@
+import type { Category } from "./category-normalization";
+
 export const manufacturers = [
   "Canon",
   "HP",
@@ -11,38 +13,8 @@ export const manufacturers = [
 
 export type Manufacturer = (typeof manufacturers)[number];
 
-export const categories = [
-  "Accessory",
-  "Boards",
-  "Cables",
-  "Cooling",
-  "Covers",
-  "Drives",
-  "Drum",
-  "Duplex",
-  "Feeders",
-  "Finishing",
-  "Fuser",
-  "Fusers",
-  "Hardware",
-  "Imaging",
-  "Maintenance",
-  "Miscellaneous",
-  "Motors",
-  "Other",
-  "Power Supplies",
-  "Roller",
-  "Rollers",
-  "Scanner / ADF",
-  "Sensor",
-  "Sensors",
-  "Toner",
-  "Toner / Consumables",
-  "Trays",
-  "Transfer",
-] as const;
-
-export type Category = (typeof categories)[number];
+export { categories, defaultCategory, normalizeCategory } from "./category-normalization";
+export type { Category };
 
 export const activityActions = [
   "added",

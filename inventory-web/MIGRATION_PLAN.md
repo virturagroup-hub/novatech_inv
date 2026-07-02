@@ -69,6 +69,7 @@ The initial implementation now includes:
 - Scanned routes preserve login return paths through a sanitized internal `next` parameter.
 - The edit part experience was widened and broken into clear sections.
 - The compatible model picker and location picker were made easier to use on desktop and mobile.
+- Part categories were normalized to a single canonical list, and legacy Supabase part rows now have a cleanup migration.
 - The reports page now uses simple action cards.
 - Printing now uses a dedicated `/print` route with print-only CSS.
 - A support hub, notifications center, and Green Machines workflow were added for technician and floor-team collaboration.

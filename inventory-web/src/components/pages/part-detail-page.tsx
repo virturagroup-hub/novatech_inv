@@ -55,7 +55,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
         <PageHero
           eyebrow="Part detail"
           title="That part is not in the current inventory."
-          description="The current inventory source did not find a matching part record. Go back to the table or search the lookup screen."
+          description="We could not find a matching part record. Go back to the table or search the lookup screen."
           actions={
             <>
               <Link
@@ -178,9 +178,9 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
         <Card className="xl:col-span-2 border-white/10 bg-white/5">
           <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
             <div className="min-w-0">
-              <CardTitle className="text-white">Part overview</CardTitle>
-              <CardDescription className="text-slate-400">
-                The current record for this part from the active inventory source.
+            <CardTitle className="text-white">Part overview</CardTitle>
+            <CardDescription className="text-slate-400">
+                The current record for this part.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -321,7 +321,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
           <CardHeader>
             <CardTitle className="text-white">Notes</CardTitle>
             <CardDescription className="text-slate-400">
-              Freeform details for the counter or tech team.
+              Short notes for the counter or tech team.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -442,7 +442,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
                 onClick={() => {
                   if (
                     window.confirm(
-                      `Delete ${getDisplayPartNumber(part)}? This removes the part from the current inventory source.`,
+                        `Delete ${getDisplayPartNumber(part)}? This removes the part from the inventory.`,
                     )
                   ) {
                     deletePart(part.id);

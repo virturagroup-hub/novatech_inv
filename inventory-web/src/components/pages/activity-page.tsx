@@ -79,7 +79,7 @@ export function ActivityPage() {
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Activity log"
-        title="Audit trail for the current inventory source."
+        title="Audit trail for the inventory."
         description="Review recent imports, stock changes, label actions, and system updates from the active workspace."
         actions={
           <>

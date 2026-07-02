@@ -9,6 +9,7 @@ The current application uses Supabase for live inventory data when configured, w
 - live inventory state reads from Supabase when the public env vars are configured and a user is signed in
 - authentication and user management use real Supabase Auth
 - demo seed data is only shown when Supabase is unavailable or `NEXT_PUBLIC_ENABLE_DEMO_DATA=true`
+- part categories are normalized to one canonical list on load and write, with a migration for existing Supabase rows
 
 ## Tech Stack
 

@@ -81,7 +81,7 @@ export function LookupPage() {
       <PageHero
         eyebrow="Fast lookup"
         title="Find a part, bin, or model without leaving the floor."
-        description="This mobile-first search screen is designed for quick checks on a desktop monitor or an Android phone. Type a part number, bin code, or model name to jump straight to the right record."
+        description="Search parts, bins, and models from a single mobile-friendly screen."
         actions={
           <Link
             href="/inventory"
@@ -388,7 +388,7 @@ export function LookupPage() {
         <CardHeader>
           <CardTitle className="text-white">Coverage snapshot</CardTitle>
           <CardDescription className="text-slate-400">
-            This search is backed by the same typed mock store that drives the dashboard.
+            Quick health indicators for the current inventory.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-300">

@@ -31,7 +31,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { categories, manufacturers, type Part, type PartDraft } from "@/lib/inventory-types";
+import {
+  categories,
+  defaultCategory,
+  manufacturers,
+  type Part,
+  type PartDraft,
+} from "@/lib/inventory-types";
 import {
   getPartLocationLabel,
   getPartStockStatus,
@@ -61,7 +67,7 @@ function formFromPart(part?: Part | null, defaultBinId?: string | null): PartFor
       isNpn: false,
       partName: "",
       manufacturer: "Canon",
-      category: "Accessory",
+      category: defaultCategory,
       binId: defaultBinId ?? "",
       quantityOnHand: "0",
       reorderPoint: "5",
@@ -73,7 +79,7 @@ function formFromPart(part?: Part | null, defaultBinId?: string | null): PartFor
   }
 
   return {
-    partNumber: part.isNpn ? "" : part.partNumber,
+      partNumber: part.isNpn ? "" : part.partNumber,
     isNpn: Boolean(part.isNpn),
     partName: part.partName,
     manufacturer: part.manufacturer,
@@ -203,7 +209,7 @@ export function PartEditorPage({
               <div>
                 <h1 className="text-2xl font-semibold text-white">Part not found</h1>
                 <p className="text-sm text-slate-400">
-                  This part does not exist in the current inventory source.
+                  This part is not in the current inventory.
                 </p>
               </div>
             </div>
@@ -248,11 +254,11 @@ export function PartEditorPage({
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                 {mode === "create"
-                  ? "Add a reusable part"
+                  ? "Add a part"
                   : `${getDisplayPartNumber(editingPart)} · ${editingPart.partName}`}
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Keep stock, shelf location, and printer compatibility in one clear screen.
+                Keep the part number, category, location, and compatibility in one place.
               </p>
             </div>
           </div>
@@ -302,7 +308,7 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">1. Part identity</CardTitle>
               <CardDescription className="text-slate-400">
-                Give the team a clear part number or mark the item as NPN when none exists.
+                Start with a part number, or mark the item as NPN when it has no printed number.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -331,8 +337,8 @@ export function PartEditorPage({
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-white">Mark as NPN</p>
                       <p className="text-xs leading-5 text-slate-400">
-                        No Part Number items can be saved without a part number. The label will
-                        use the first compatible model, or Unknown Model if none is linked.
+                        Use this when the item has no printed part number. Labels will use the first
+                        compatible model, or Unknown Model if none is linked.
                       </p>
                     </div>
                   </div>
@@ -440,7 +446,7 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">2. Stock snapshot</CardTitle>
               <CardDescription className="text-slate-400">
-                Quantity stays editable here, while reorder thresholds stay tucked into the record behind the scenes.
+                Set the current count for this part.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -467,12 +473,9 @@ export function PartEditorPage({
                         : "Low stock"}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
-                    {attentionPreview ? "Setup still needs attention" : "Setup looks complete"}
+                    {attentionPreview ? "Needs location or compatibility" : "Ready to save"}
                   </p>
                 </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
-                Reorder point and reorder target stay stored with the part record, but they are no longer shown in the main form.
               </div>
             </CardContent>
           </Card>
@@ -572,7 +575,7 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">4. Compatible models</CardTitle>
               <CardDescription className="text-slate-400">
-                Search by manufacturer, model series, or notes, then select individual devices or whole families.
+                Search by manufacturer or series, then select whole families or individual models.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -611,7 +614,7 @@ export function PartEditorPage({
             <CardHeader>
               <CardTitle className="text-white">5. Notes and status</CardTitle>
               <CardDescription className="text-slate-400">
-                Keep the wording simple for the technicians who rely on this screen.
+                Keep notes short and useful for the team.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -641,7 +644,7 @@ export function PartEditorPage({
                 <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                   <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Attention</p>
                   <p className="mt-2 text-sm font-semibold text-white">
-                    {attentionPreview ? "Review needed" : "Complete"}
+                    {attentionPreview ? "Review needed" : "Ready"}
                   </p>
                 </div>
               </div>
@@ -652,9 +655,9 @@ export function PartEditorPage({
         <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-white">Part summary</CardTitle>
-              <CardDescription className="text-slate-400">
-                A quick preview of what will be saved.
+            <CardTitle className="text-white">Part summary</CardTitle>
+            <CardDescription className="text-slate-400">
+                Quick preview of the saved record.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -717,15 +720,15 @@ export function PartEditorPage({
 
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle className="text-white">Compatibility preview</CardTitle>
-              <CardDescription className="text-slate-400">
-                The preview stays honest even before the record is saved.
+            <CardTitle className="text-white">Compatibility preview</CardTitle>
+            <CardDescription className="text-slate-400">
+                What this part will match after save.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {form.universal ? (
                 <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-100">
-                  This part is marked universal and will apply across the fleet.
+                  This part is marked universal and applies across the fleet.
                 </div>
               ) : compatibleModels.length > 0 ? (
                 compatibleModels.map((model) => (
@@ -755,8 +758,8 @@ export function PartEditorPage({
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs leading-5 text-slate-400">
             {attentionPreview
-              ? "This record still needs a location or compatibility review."
-              : "Everything looks ready to save."}
+              ? "Add a location or compatibility to finish this record."
+              : "Everything is ready to save."}
           </div>
           <div className="flex flex-wrap gap-2">
             <Link

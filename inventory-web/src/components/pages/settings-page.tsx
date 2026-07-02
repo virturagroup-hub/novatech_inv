@@ -233,7 +233,7 @@ export function SettingsPage() {
         <PageHero
           eyebrow="Admin settings"
           title="Settings are reserved for real admin users."
-          description="Viewer and technician accounts can still search inventory, but the master-data and role-preview controls live here for admin users only."
+          description="Viewer and technician accounts can still search inventory, but admin-only tools stay here."
           actions={
             <Link
               href="/inventory"
@@ -248,7 +248,7 @@ export function SettingsPage() {
         />
         <Card className="border-amber-400/20 bg-amber-400/10">
           <CardContent className="p-4 text-sm text-amber-100">
-            Your current preview role cannot edit these settings, but your real admin role can still open this page.
+            This page is read-only for your current access level, but your admin account can still open it.
           </CardContent>
         </Card>
       </div>
@@ -260,7 +260,7 @@ export function SettingsPage() {
       <PageHero
         eyebrow="Admin settings"
         title="Fine-tune workspace settings, locations, and models."
-        description="Use this page to manage default inventory behavior, storage records, and role preview."
+        description="Use this page to manage workspace defaults, locations, models, and role preview."
         actions={
           <>
             <Link
@@ -299,8 +299,8 @@ export function SettingsPage() {
           <CardHeader className="space-y-2">
             <CardTitle className="text-white">View as Role</CardTitle>
             <CardDescription className="text-amber-100/80">
-              Preview the interface as viewer, technician, or manager. This only changes the UI for your current
-              browser session and never changes your real Supabase role.
+              Preview the interface as viewer, technician, or manager. This only changes the UI in your current
+              browser session and never changes your real role.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -356,7 +356,7 @@ export function SettingsPage() {
               <p className="font-semibold text-white">Safe preview</p>
               <p className="mt-2">
                 The preview only changes what the app shows in this browser. Server actions, admin routes, and user
-                management still use your real Supabase role.
+                management still use your real role.
               </p>
               {isRolePreviewActive && (
                 <Button
@@ -419,10 +419,10 @@ export function SettingsPage() {
 
         <TabsContent value="workspace" className="space-y-6">
           <Card className="border-white/10 bg-white/5">
-            <CardHeader>
+              <CardHeader>
               <CardTitle className="text-white">Workspace defaults</CardTitle>
               <CardDescription className="text-slate-400">
-                These values shape low-stock badges, tag defaults, and the default experience for the team.
+                These values shape low-stock badges, tag defaults, and the team default.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -484,9 +484,9 @@ export function SettingsPage() {
           <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
-                <CardTitle className="text-white">Edit bin</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Keep the physical storage map aligned with what the crew sees on the shelf.
+              <CardTitle className="text-white">Edit bin</CardTitle>
+              <CardDescription className="text-slate-400">
+                  Keep the storage map aligned with what the crew sees on the shelf.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -593,8 +593,8 @@ export function SettingsPage() {
 
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
-                <CardTitle className="text-white">Bin catalog</CardTitle>
-                <CardDescription className="text-slate-400">
+              <CardTitle className="text-white">Bin catalog</CardTitle>
+              <CardDescription className="text-slate-400">
                   Choose a bin to edit, or delete one after moving the contents elsewhere.
                 </CardDescription>
               </CardHeader>
@@ -667,8 +667,8 @@ export function SettingsPage() {
           <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
-                <CardTitle className="text-white">Edit model</CardTitle>
-                <CardDescription className="text-slate-400">
+              <CardTitle className="text-white">Edit model</CardTitle>
+              <CardDescription className="text-slate-400">
                   Keep compatibility records clean so search and tags stay useful.
                 </CardDescription>
               </CardHeader>
@@ -755,9 +755,9 @@ export function SettingsPage() {
 
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
-                <CardTitle className="text-white">Model catalog</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Active and legacy devices are both preserved to keep compatibility lookups accurate.
+              <CardTitle className="text-white">Model catalog</CardTitle>
+              <CardDescription className="text-slate-400">
+                  Active and legacy devices stay available for compatibility lookups.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -826,11 +826,11 @@ export function SettingsPage() {
 
         <TabsContent value="system" className="space-y-6">
           <Card className="border-white/10 bg-white/5">
-            <CardHeader>
-              <CardTitle className="text-white">Workspace status</CardTitle>
-              <CardDescription className="text-slate-400">
-                Use this section to review the active workspace mode and jump to the health dashboard.
-              </CardDescription>
+          <CardHeader>
+            <CardTitle className="text-white">Workspace status</CardTitle>
+            <CardDescription className="text-slate-400">
+                Review the active workspace mode and jump to the health dashboard.
+            </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[

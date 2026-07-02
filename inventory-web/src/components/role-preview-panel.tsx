@@ -75,7 +75,7 @@ export function RolePreviewPanel({
         <div className="space-y-1">
           <p className="text-sm font-semibold text-white">View as Role</p>
           <p className={cn("text-xs leading-5", compact ? "text-amber-100/85" : "text-amber-100/80")}>
-            Preview the app as viewer, technician, or manager without changing your real Supabase role.
+            Preview the app as viewer, technician, or manager without changing your real role.
           </p>
         </div>
         <Badge className="shrink-0 border-white/10 bg-white/10 text-slate-200">
@@ -129,8 +129,7 @@ export function RolePreviewPanel({
       <div className={cn("mt-4 rounded-2xl border border-white/10 bg-slate-950/50", compact ? "p-3" : "p-4")}>
         <p className="text-sm font-semibold text-white">Safe preview</p>
         <p className={cn("mt-2 text-slate-300", compact ? "text-xs leading-5" : "text-sm leading-6")}>
-          This only changes what the browser shows. Server routes, admin actions, and saved data still use your real
-          Supabase role.
+          This only changes what the browser shows. Server actions and saved data still use your real role.
         </p>
         {isRolePreviewActive && (
           <Button

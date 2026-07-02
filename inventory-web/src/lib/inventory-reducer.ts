@@ -1,4 +1,5 @@
 import { createSeedState } from "./inventory-seed";
+import { normalizeCategory } from "./category-normalization";
 import type {
   ActivityAction,
   ActivityEntry,
@@ -99,6 +100,16 @@ function pushActivity(state: InventoryState, entry: ActivityEntry) {
 
 function normalizeText(value: string) {
   return value.trim();
+}
+
+function normalizeInventoryState(state: InventoryState): InventoryState {
+  return {
+    ...state,
+    parts: state.parts.map((part) => ({
+      ...part,
+      category: normalizeCategory(part.category),
+    })),
+  };
 }
 
 function getPartLabel(part: Pick<Part, "partNumber" | "isNpn">) {
@@ -214,7 +225,7 @@ function upsertPartDraft(state: InventoryState, draft: PartDraft) {
     isNpn,
     partName: normalizeText(draft.partName),
     manufacturer: normalizeText(draft.manufacturer),
-    category: draft.category,
+    category: normalizeCategory(draft.category),
     binId: draft.binId || null,
     quantityOnHand: Math.max(0, Number(draft.quantityOnHand) || 0),
     reorderPoint: Math.max(0, Number(draft.reorderPoint) || 0),
@@ -310,7 +321,7 @@ function importPartRow(state: InventoryState, row: PartImportRow) {
     isNpn: row.isNpn,
     partName: row.partName,
     manufacturer: row.manufacturer,
-    category: row.category,
+    category: normalizeCategory(row.category),
     binId: matchedBin?.id ?? null,
     quantityOnHand: row.quantityOnHand,
     reorderPoint: row.reorderPoint,
@@ -327,10 +338,10 @@ export function inventoryReducer(
 ): InventoryState {
   switch (action.type) {
     case "hydrate":
-      return action.state;
+      return normalizeInventoryState(action.state);
 
     case "reset":
-      return createSeedState();
+      return normalizeInventoryState(createSeedState());
 
     case "upsertPart": {
       const draft = {
@@ -610,7 +621,7 @@ export function inventoryReducer(
           entityType: "inventory",
           entityId: "import",
           title: "CSV imported",
-          detail: `${action.rows.length} part row${action.rows.length === 1 ? "" : "s"} were imported into the current inventory source.`,
+          detail: `${action.rows.length} part row${action.rows.length === 1 ? "" : "s"} were imported into the inventory.`,
         }),
       );
     }
@@ -665,7 +676,7 @@ export function inventoryReducer(
           entityType: "system",
           entityId: "settings",
           title: "Settings saved",
-          detail: "Local inventory settings were updated in the current inventory source.",
+          detail: "Local inventory settings were updated in the inventory.",
         }),
       );
 

@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { normalizeCategory } from "@/lib/category-normalization";
 import { createEmptyState, createSeedState, inventoryStorageKey } from "@/lib/inventory-seed";
 import { inventoryReducer, type PartImportRow } from "@/lib/inventory-reducer";
 import type {
@@ -272,7 +273,7 @@ export function InventoryProvider({
                 is_npn: partDraft.isNpn,
                 part_name: partDraft.partName,
                 manufacturer: partDraft.manufacturer,
-                category: partDraft.category,
+                category: normalizeCategory(partDraft.category),
                 location_id: partDraft.binId,
                 quantity_on_hand: Math.max(0, Number(partDraft.quantityOnHand) || 0),
                 reorder_point: Math.max(0, Number(partDraft.reorderPoint) || 0),

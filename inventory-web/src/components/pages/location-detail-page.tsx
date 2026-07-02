@@ -37,7 +37,7 @@ export function LocationDetailPage({ binId }: Readonly<{ binId: string }>) {
         <PageHero
           eyebrow="Location detail"
           title="That location is not in the current inventory."
-          description="The current inventory source did not find a matching location. Go back to the location list or scan another label."
+          description="We could not find a matching location. Go back to the location list or scan another label."
           actions={
             <>
               <Link
