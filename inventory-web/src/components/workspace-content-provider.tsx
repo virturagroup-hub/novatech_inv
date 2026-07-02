@@ -165,6 +165,8 @@ export function WorkspaceContentProvider({
   }, [hydrated, state]);
 
   const currentUserId = session?.id ?? "system";
+  const canManageGreenMachines = effectiveRole === "admin" || effectiveRole === "manager";
+  const canRecordGreenMachineEvents = canManageGreenMachines || effectiveRole === "technician";
 
   const pushNotification = (notification: Omit<Notification, "id" | "createdAt" | "isRead"> & { isRead?: boolean }) => {
     const now = timestamp();
@@ -527,6 +529,10 @@ export function WorkspaceContentProvider({
   };
 
   const saveGreenMachine = (draft: GreenMachineDraft) => {
+    if (!canManageGreenMachines) {
+      return draft.id ?? "";
+    }
+
     const now = timestamp();
     const machineId = draft.id ?? crypto.randomUUID();
     const existing = state.greenMachines.find((item) => item.id === machineId);
@@ -560,6 +566,10 @@ export function WorkspaceContentProvider({
   };
 
   const archiveGreenMachine = (machineId: string) => {
+    if (!canManageGreenMachines) {
+      return;
+    }
+
     const now = timestamp();
     setState((current) => ({
       ...current,
@@ -572,6 +582,10 @@ export function WorkspaceContentProvider({
   };
 
   const addGreenMachineEvent = (machineId: string, draft: GreenMachineEventDraft) => {
+    if (!canRecordGreenMachineEvents) {
+      return;
+    }
+
     const now = timestamp();
     const event: GreenMachineEvent = {
       id: crypto.randomUUID(),

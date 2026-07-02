@@ -8,6 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
+import { MachineModelPicker } from "@/components/machine-model-picker";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -59,7 +60,7 @@ function statusLabel(status: GreenMachineDraft["status"]) {
 export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: string }>) {
   const router = useRouter();
   const { permissions } = useAuth();
-  const { bins, getBinById, getDisplayPartNumber, parts } = useInventory();
+  const { bins, getBinById, getDisplayPartNumber, models, parts } = useInventory();
   const {
     getGreenMachineById,
     greenMachineEventsFor,
@@ -78,6 +79,8 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     condition: "",
     note: "",
   });
+  const canManageGreenMachines = permissions.canManageGreenMachines;
+  const canRecordGreenMachineEvents = permissions.canRecordGreenMachineEvents;
 
   useEffect(() => {
     if (!machine) return;
@@ -98,6 +101,24 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
 
   const location = useMemo(() => (machine ? getBinById(machine.locationId ?? "") : null), [getBinById, machine]);
   const events = machine ? greenMachineEventsFor(machine.id) : [];
+  const handleModelChange = (model: (typeof models)[number] | null) => {
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (!model) {
+        return { ...current, modelId: null };
+      }
+
+      return {
+        ...current,
+        modelId: model.id,
+        modelName: model.manufacturer ? `${model.manufacturer} ${model.name}` : model.name,
+        seriesFamily: model.series.trim() || current.seriesFamily,
+      };
+    });
+  };
 
   if (!machine) {
     return (
@@ -136,7 +157,10 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
   const qrValue = buildAbsoluteAppUrl(`/green-machines/${machine.id}`);
 
   const saveMachine = () => {
-    if (!draft) return;
+    if (!canManageGreenMachines || !draft) {
+      return;
+    }
+
     if (!draft.modelName.trim() || !draft.seriesFamily.trim()) {
       toast.error("Model name and series/family are required.");
       return;
@@ -153,6 +177,10 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
   };
 
   const saveEvent = () => {
+    if (!canRecordGreenMachineEvents) {
+      return;
+    }
+
     addGreenMachineEvent(machine.id, {
       ...eventDraft,
       partName: eventDraft.partName.trim(),
@@ -237,128 +265,186 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="border-white/10 bg-white/5">
-          <CardHeader>
-            <CardTitle className="text-white">Machine record</CardTitle>
-            <CardDescription className="text-slate-400">
-              Edit the machine details and keep the teardown notes current.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {draft && (
-              <>
-                <div className="grid gap-4 md:grid-cols-2">
+        {canManageGreenMachines ? (
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">Machine record</CardTitle>
+              <CardDescription className="text-slate-400">
+                Edit the machine details and keep the teardown notes current.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {draft && (
+                <>
                   <div className="space-y-2">
-                    <Label className="text-slate-200">Model name</Label>
-                    <Input
-                      value={draft.modelName}
-                      onChange={(event) =>
-                        setDraft((current) => (current ? { ...current, modelName: event.target.value } : current))
-                      }
-                      className="h-12 border-white/10 bg-slate-950/70 text-white"
+                    <Label className="text-slate-200">Inventory model</Label>
+                    <MachineModelPicker
+                      models={models}
+                      value={draft.modelId}
+                      onChange={handleModelChange}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Series / family</Label>
-                    <Input
-                      value={draft.seriesFamily}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current ? { ...current, seriesFamily: event.target.value } : current,
-                        )
-                      }
-                      className="h-12 border-white/10 bg-slate-950/70 text-white"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Serial number</Label>
-                    <Input
-                      value={draft.serialNumber}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current ? { ...current, serialNumber: event.target.value } : current,
-                        )
-                      }
-                      className="h-12 border-white/10 bg-slate-950/70 text-white"
-                    />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-slate-200">Model name</Label>
+                      <Input
+                        value={draft.modelName}
+                        onChange={(event) =>
+                          setDraft((current) => (current ? { ...current, modelName: event.target.value } : current))
+                        }
+                        className="h-12 border-white/10 bg-slate-950/70 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-200">Series / family</Label>
+                      <Input
+                        value={draft.seriesFamily}
+                        onChange={(event) =>
+                          setDraft((current) =>
+                            current ? { ...current, seriesFamily: event.target.value } : current,
+                          )
+                        }
+                        className="h-12 border-white/10 bg-slate-950/70 text-white"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Location</Label>
-                    <Select
-                      value={draft.locationId ?? "unassigned"}
-                      onValueChange={(value) =>
-                        setDraft((current) =>
-                          current
-                            ? { ...current, locationId: value === "unassigned" ? null : value }
-                            : current,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                        <SelectValue placeholder="Unassigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {[...bins].sort((left, right) => left.code.localeCompare(right.code)).map((bin) => (
-                          <SelectItem key={bin.id} value={bin.id}>
-                            {bin.code} · {bin.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Status</Label>
-                    <Select
-                      value={draft.status}
-                      onValueChange={(value) =>
-                        setDraft((current) =>
-                          current ? { ...current, status: value as GreenMachineDraft["status"] } : current,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="partially_stripped">Partially stripped</SelectItem>
-                        <SelectItem value="depleted">Depleted</SelectItem>
-                        <SelectItem value="scrapped">Scrapped</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-slate-200">Serial number</Label>
+                      <Input
+                        value={draft.serialNumber}
+                        onChange={(event) =>
+                          setDraft((current) =>
+                            current ? { ...current, serialNumber: event.target.value } : current,
+                          )
+                        }
+                        className="h-12 border-white/10 bg-slate-950/70 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-200">Location</Label>
+                      <Select
+                        value={draft.locationId ?? "unassigned"}
+                        onValueChange={(value) =>
+                          setDraft((current) =>
+                            current
+                              ? { ...current, locationId: value === "unassigned" ? null : value }
+                              : current,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {[...bins].sort((left, right) => left.code.localeCompare(right.code)).map((bin) => (
+                            <SelectItem key={bin.id} value={bin.id}>
+                              {bin.code} · {bin.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Notes</Label>
-                    <Textarea
-                      value={draft.notes}
-                      onChange={(event) =>
-                        setDraft((current) => (current ? { ...current, notes: event.target.value } : current))
-                      }
-                      className="min-h-28 border-white/10 bg-slate-950/70 text-white"
-                    />
-                  </div>
-                </div>
 
-                <Button
-                  className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
-                  onClick={saveMachine}
-                  disabled={!permissions.canManageGreenMachines}
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  Save machine
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-slate-200">Status</Label>
+                      <Select
+                        value={draft.status}
+                        onValueChange={(value) =>
+                          setDraft((current) =>
+                            current ? { ...current, status: value as GreenMachineDraft["status"] } : current,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="partially_stripped">Partially stripped</SelectItem>
+                          <SelectItem value="depleted">Depleted</SelectItem>
+                          <SelectItem value="scrapped">Scrapped</SelectItem>
+                          <SelectItem value="archived">Archived</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-200">Notes</Label>
+                      <Textarea
+                        value={draft.notes}
+                        onChange={(event) =>
+                          setDraft((current) => (current ? { ...current, notes: event.target.value } : current))
+                        }
+                        className="min-h-28 border-white/10 bg-slate-950/70 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                    onClick={saveMachine}
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Save machine
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">Machine record</CardTitle>
+              <CardDescription className="text-slate-400">
+                Read-only machine summary for floor lookups and QR scans.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Model</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{machine.modelName}</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Series / family</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{machine.seriesFamily}</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Serial</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {machine.serialNumber || "Unlisted"}
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Location</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {location ? `${location.code} · ${location.name}` : "Unassigned"}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className={cn("border", statusTone(machine.status))}>
+                    {statusLabel(machine.status)}
+                  </Badge>
+                  {machine.modelId && (
+                    <Badge className="border-white/10 bg-white/5 text-slate-200">
+                      Linked to inventory model
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  {machine.notes || "No machine notes yet."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
@@ -397,105 +483,107 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
               </div>
             </div>
 
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-white">Log an event</p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Event type</Label>
-                  <Select
-                    value={eventDraft.eventType}
-                    onValueChange={(value) =>
-                      setEventDraft((current) => ({ ...current, eventType: value as GreenMachineEventDraft["eventType"] }))
-                    }
-                  >
-                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="taken">Taken</SelectItem>
-                      <SelectItem value="transferred_to_inventory">Transferred to inventory</SelectItem>
-                      <SelectItem value="note">Note</SelectItem>
-                      <SelectItem value="status_change">Status change</SelectItem>
-                    </SelectContent>
-                  </Select>
+            {canRecordGreenMachineEvents && (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-white">Log an event</p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Event type</Label>
+                    <Select
+                      value={eventDraft.eventType}
+                      onValueChange={(value) =>
+                        setEventDraft((current) => ({ ...current, eventType: value as GreenMachineEventDraft["eventType"] }))
+                      }
+                    >
+                      <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="taken">Taken</SelectItem>
+                        <SelectItem value="transferred_to_inventory">Transferred to inventory</SelectItem>
+                        <SelectItem value="note">Note</SelectItem>
+                        <SelectItem value="status_change">Status change</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Part</Label>
+                    <Select
+                      value={eventDraft.partId ?? "manual"}
+                      onValueChange={(value) => {
+                        const part = parts.find((item) => item.id === value) ?? null;
+                        setEventDraft((current) => ({
+                          ...current,
+                          partId: value === "manual" ? null : value,
+                          partName: part ? getDisplayPartNumber(part) : current.partName,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                        <SelectValue placeholder="Manual entry" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual entry</SelectItem>
+                        {parts.map((part) => (
+                          <SelectItem key={part.id} value={part.id}>
+                            {getDisplayPartNumber(part)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Part</Label>
-                  <Select
-                    value={eventDraft.partId ?? "manual"}
-                    onValueChange={(value) => {
-                      const part = parts.find((item) => item.id === value) ?? null;
-                      setEventDraft((current) => ({
-                        ...current,
-                        partId: value === "manual" ? null : value,
-                        partName: part ? getDisplayPartNumber(part) : current.partName,
-                      }));
-                    }}
-                  >
-                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                      <SelectValue placeholder="Manual entry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Manual entry</SelectItem>
-                      {parts.map((part) => (
-                        <SelectItem key={part.id} value={part.id}>
-                          {getDisplayPartNumber(part)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Part name</Label>
+                    <Input
+                      value={eventDraft.partName}
+                      onChange={(event) =>
+                        setEventDraft((current) => ({ ...current, partName: event.target.value }))
+                      }
+                      placeholder="Fuser sleeve"
+                      className="h-12 border-white/10 bg-slate-950/70 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Quantity</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={eventDraft.quantity}
+                      onChange={(event) =>
+                        setEventDraft((current) => ({ ...current, quantity: event.target.value }))
+                      }
+                      className="h-12 border-white/10 bg-slate-950/70 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-200">Condition</Label>
+                    <Input
+                      value={eventDraft.condition}
+                      onChange={(event) =>
+                        setEventDraft((current) => ({ ...current, condition: event.target.value }))
+                      }
+                      placeholder="Good / damaged / missing"
+                      className="h-12 border-white/10 bg-slate-950/70 text-white"
+                    />
+                  </div>
                 </div>
+
+                <Textarea
+                  value={eventDraft.note}
+                  onChange={(event) => setEventDraft((current) => ({ ...current, note: event.target.value }))}
+                  placeholder="Add a short note about what happened."
+                  className="min-h-28 border-white/10 bg-slate-950/70 text-white"
+                />
+
+                <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveEvent}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Add event
+                </Button>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Part name</Label>
-                  <Input
-                    value={eventDraft.partName}
-                    onChange={(event) =>
-                      setEventDraft((current) => ({ ...current, partName: event.target.value }))
-                    }
-                    placeholder="Fuser sleeve"
-                    className="h-12 border-white/10 bg-slate-950/70 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Quantity</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={eventDraft.quantity}
-                    onChange={(event) =>
-                      setEventDraft((current) => ({ ...current, quantity: event.target.value }))
-                    }
-                    className="h-12 border-white/10 bg-slate-950/70 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Condition</Label>
-                  <Input
-                    value={eventDraft.condition}
-                    onChange={(event) =>
-                      setEventDraft((current) => ({ ...current, condition: event.target.value }))
-                    }
-                    placeholder="Good / damaged / missing"
-                    className="h-12 border-white/10 bg-slate-950/70 text-white"
-                  />
-                </div>
-              </div>
-
-              <Textarea
-                value={eventDraft.note}
-                onChange={(event) => setEventDraft((current) => ({ ...current, note: event.target.value }))}
-                placeholder="Add a short note about what happened."
-                className="min-h-28 border-white/10 bg-slate-950/70 text-white"
-              />
-
-              <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveEvent}>
-                <Send className="mr-2 h-4 w-4" />
-                Add event
-              </Button>
-            </div>
+            )}
 
             <ScrollArea className="h-[24rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
               <div className="space-y-3">

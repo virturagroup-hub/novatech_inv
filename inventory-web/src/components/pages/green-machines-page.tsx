@@ -7,6 +7,7 @@ import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Sparkles, Wrench } from 
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
+import { MachineModelPicker } from "@/components/machine-model-picker";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -21,6 +22,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/inventory-utils";
+import { getModelDisplayName } from "@/lib/model-search";
+import type { DeviceModel } from "@/lib/inventory-types";
 import type { GreenMachineDraft } from "@/lib/workspace-content-types";
 
 function statusTone(status: string) {
@@ -54,13 +57,8 @@ function statusLabel(status: GreenMachineDraft["status"]) {
   }
 }
 
-export function GreenMachinesPage() {
-  const router = useRouter();
-  const { permissions } = useAuth();
-  const { bins, models } = useInventory();
-  const { greenMachines, greenMachineEventsFor, saveGreenMachine, archiveGreenMachine } =
-    useWorkspaceContent();
-  const [draft, setDraft] = useState<GreenMachineDraft>({
+function createEmptyMachineDraft(): GreenMachineDraft {
+  return {
     modelId: null,
     modelName: "",
     seriesFamily: "",
@@ -68,7 +66,17 @@ export function GreenMachinesPage() {
     locationId: null,
     status: "active",
     notes: "",
-  });
+  };
+}
+
+export function GreenMachinesPage() {
+  const router = useRouter();
+  const { permissions } = useAuth();
+  const { bins, models } = useInventory();
+  const { greenMachines, greenMachineEventsFor, saveGreenMachine, archiveGreenMachine } =
+    useWorkspaceContent();
+  const [draft, setDraft] = useState<GreenMachineDraft>(() => createEmptyMachineDraft());
+  const canManageGreenMachines = permissions.canManageGreenMachines;
 
   const activeMachines = greenMachines.filter((machine) => machine.status !== "archived").length;
   const archivedMachines = greenMachines.filter((machine) => machine.status === "archived").length;
@@ -77,35 +85,35 @@ export function GreenMachinesPage() {
   ).length;
   const totalEvents = greenMachines.reduce((sum, machine) => sum + greenMachineEventsFor(machine.id).length, 0);
 
-  const modelOptions = useMemo(
-    () =>
-      [...models].sort((left, right) =>
-        `${left.manufacturer} ${left.name}`.localeCompare(`${right.manufacturer} ${right.name}`),
-      ),
-    [models],
-  );
-
   const locationOptions = useMemo(
     () => [...bins].sort((left, right) => left.code.localeCompare(right.code)),
     [bins],
   );
 
-  const handleModelChange = (modelId: string) => {
-    if (modelId === "manual") {
-      setDraft((current) => ({ ...current, modelId: null }));
-      return;
-    }
+  const handleModelChange = (model: DeviceModel | null) => {
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
 
-    const selectedModel = models.find((model) => model.id === modelId) ?? null;
-    setDraft((current) => ({
-      ...current,
-      modelId,
-      modelName: selectedModel ? `${selectedModel.manufacturer} ${selectedModel.name}` : current.modelName,
-      seriesFamily: selectedModel?.series ?? current.seriesFamily,
-    }));
+      if (!model) {
+        return { ...current, modelId: null };
+      }
+
+      return {
+        ...current,
+        modelId: model.id,
+        modelName: getModelDisplayName(model),
+        seriesFamily: model.series.trim() || current.seriesFamily,
+      };
+    });
   };
 
   const saveMachine = () => {
+    if (!canManageGreenMachines) {
+      return;
+    }
+
     if (!draft.modelName.trim() || !draft.seriesFamily.trim()) {
       toast.error("Add a model name and series/family before saving the machine.");
       return;
@@ -120,15 +128,7 @@ export function GreenMachinesPage() {
     });
 
     toast.success("Machine saved");
-    setDraft({
-      modelId: null,
-      modelName: "",
-      seriesFamily: "",
-      serialNumber: "",
-      locationId: null,
-      status: "active",
-      notes: "",
-    });
+    setDraft(createEmptyMachineDraft());
 
     router.push(`/green-machines/${machineId}`);
   };
@@ -196,140 +196,149 @@ export function GreenMachinesPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="border-white/10 bg-white/5">
-          <CardHeader>
-            <CardTitle className="text-white">New machine</CardTitle>
-            <CardDescription className="text-slate-400">
-              Add a stripped or salvage machine, then open the detail page to log each pull.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-slate-200">Inventory model</Label>
-              <Select
-                value={draft.modelId ?? "manual"}
-                onValueChange={(value) => handleModelChange(value ?? "manual")}
+        {canManageGreenMachines ? (
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">New machine</CardTitle>
+              <CardDescription className="text-slate-400">
+                Add a stripped or salvage machine, then open the detail page to log each pull.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Inventory model</Label>
+                <MachineModelPicker
+                  models={models}
+                  value={draft.modelId}
+                  onChange={handleModelChange}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Model name</Label>
+                  <Input
+                    value={draft.modelName}
+                    onChange={(event) => setDraft((current) => ({ ...current, modelName: event.target.value }))}
+                    placeholder="imageRUNNER ADVANCE DX C5840"
+                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Series / family</Label>
+                  <Input
+                    value={draft.seriesFamily}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, seriesFamily: event.target.value }))
+                    }
+                    placeholder="C5800"
+                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Serial number</Label>
+                  <Input
+                    value={draft.serialNumber}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, serialNumber: event.target.value }))
+                    }
+                    placeholder="Optional"
+                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Location</Label>
+                  <Select
+                    value={draft.locationId ?? "unassigned"}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        locationId: value === "unassigned" ? null : value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {locationOptions.map((bin) => (
+                        <SelectItem key={bin.id} value={bin.id}>
+                          {bin.code} · {bin.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Status</Label>
+                  <Select
+                    value={draft.status}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        status: value as GreenMachineDraft["status"],
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="partially_stripped">Partially stripped</SelectItem>
+                      <SelectItem value="depleted">Depleted</SelectItem>
+                      <SelectItem value="scrapped">Scrapped</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Notes</Label>
+                  <Textarea
+                    value={draft.notes}
+                    onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                    placeholder="What has been removed already, what still remains, and anything else the next tech needs to know."
+                    className="min-h-28 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <Button
+                className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                onClick={saveMachine}
               >
-                <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                  <SelectValue placeholder="Choose a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual entry</SelectItem>
-                  {modelOptions.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.manufacturer} {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Model name</Label>
-                <Input
-                  value={draft.modelName}
-                  onChange={(event) => setDraft((current) => ({ ...current, modelName: event.target.value }))}
-                  placeholder="imageRUNNER ADVANCE DX C5840"
-                  className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                />
+                <Plus className="mr-2 h-4 w-4" />
+                Save machine
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">Machine intake</CardTitle>
+              <CardDescription className="text-slate-400">
+                Managers create and update machine records from here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-3xl border border-dashed border-white/10 bg-slate-950/50 p-4">
+                <div className="flex items-center gap-2">
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">Read only</Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  Open any machine in the index to review its QR record and timeline.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label className="text-slate-200">Series / family</Label>
-                <Input
-                  value={draft.seriesFamily}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, seriesFamily: event.target.value }))
-                  }
-                  placeholder="C5800"
-                  className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Serial number</Label>
-                <Input
-                  value={draft.serialNumber}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, serialNumber: event.target.value }))
-                  }
-                  placeholder="Optional"
-                  className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-200">Location</Label>
-                <Select
-                  value={draft.locationId ?? "unassigned"}
-                  onValueChange={(value) =>
-                    setDraft((current) => ({
-                      ...current,
-                      locationId: value === "unassigned" ? null : value,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {locationOptions.map((bin) => (
-                      <SelectItem key={bin.id} value={bin.id}>
-                        {bin.code} · {bin.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Status</Label>
-                <Select
-                  value={draft.status}
-                  onValueChange={(value) =>
-                    setDraft((current) => ({
-                      ...current,
-                      status: value as GreenMachineDraft["status"],
-                    }))
-                  }
-                >
-                  <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="partially_stripped">Partially stripped</SelectItem>
-                    <SelectItem value="depleted">Depleted</SelectItem>
-                    <SelectItem value="scrapped">Scrapped</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-200">Notes</Label>
-                <Textarea
-                  value={draft.notes}
-                  onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-                  placeholder="What has been removed already, what still remains, and anything else the next tech needs to know."
-                  className="min-h-28 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                />
-              </div>
-            </div>
-
-            <Button
-              className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
-              onClick={saveMachine}
-              disabled={!permissions.canManageGreenMachines}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Save machine
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
