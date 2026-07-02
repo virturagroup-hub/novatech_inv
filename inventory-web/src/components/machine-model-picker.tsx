@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +51,7 @@ export function MachineModelPicker({
 }: Readonly<MachineModelPickerProps>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedModel = useMemo(
     () => models.find((model) => model.id === value) ?? null,
@@ -83,6 +84,7 @@ export function MachineModelPicker({
   return (
     <Popover
       open={open}
+      modal={false}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
         if (!nextOpen) {
@@ -112,6 +114,7 @@ export function MachineModelPicker({
       <PopoverContent
         align="start"
         sideOffset={8}
+        initialFocus={(openType) => (openType === "keyboard" ? searchInputRef.current : false)}
         className="w-[min(92vw,34rem)] gap-3 border border-white/10 bg-slate-950/95 p-3 text-slate-100 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
@@ -135,7 +138,7 @@ export function MachineModelPicker({
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
-            autoFocus
+            ref={searchInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search manufacturer, model, series, or notes"

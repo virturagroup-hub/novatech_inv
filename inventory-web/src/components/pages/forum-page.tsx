@@ -121,6 +121,22 @@ export function ForumPage({
       return;
     }
 
+    if (selectedThread.status === nextStatus) {
+      return;
+    }
+
+    if (nextStatus === "archived" || nextStatus === "deleted") {
+      const action = nextStatus === "archived" ? "Archive" : "Delete";
+
+      if (
+        !window.confirm(
+          `${action} this discussion? It will be hidden from non-admins and purged after 30 days.`,
+        )
+      ) {
+        return;
+      }
+    }
+
     setForumThreadStatus(selectedThread.id, nextStatus);
     toast.success("Thread status updated");
   };

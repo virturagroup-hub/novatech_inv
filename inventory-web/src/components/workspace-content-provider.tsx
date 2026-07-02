@@ -74,6 +74,7 @@ type WorkspaceContentContextValue = WorkspaceContentState & {
   markAllNotificationsRead: () => void;
   saveGreenMachine: (draft: GreenMachineDraft) => string;
   archiveGreenMachine: (machineId: string) => void;
+  deleteGreenMachine: (machineId: string) => void;
   restoreGreenMachine: (machineId: string) => void;
   addGreenMachineEvent: (machineId: string, draft: GreenMachineEventDraft) => void;
 };
@@ -666,6 +667,18 @@ export function WorkspaceContentProvider({
     }));
   };
 
+  const deleteGreenMachine = (machineId: string) => {
+    if (!canManageGreenMachines) {
+      return;
+    }
+
+    updateGreenMachineState((current) => ({
+      ...current,
+      greenMachines: current.greenMachines.filter((item) => item.id !== machineId),
+      greenMachineEvents: current.greenMachineEvents.filter((event) => event.machineId !== machineId),
+    }));
+  };
+
   const restoreGreenMachine = (machineId: string) => {
     if (!canManageGreenMachines) {
       return;
@@ -854,6 +867,7 @@ export function WorkspaceContentProvider({
     markAllNotificationsRead,
     saveGreenMachine,
     archiveGreenMachine,
+    deleteGreenMachine,
     restoreGreenMachine,
     addGreenMachineEvent,
   };

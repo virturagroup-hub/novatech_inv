@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
@@ -13,6 +14,7 @@ import {
   Send,
   RotateCcw,
   Sparkles,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -131,10 +133,12 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     greenMachineEventsFor,
     saveGreenMachine,
     archiveGreenMachine,
+    deleteGreenMachine,
     restoreGreenMachine,
     addGreenMachineEvent,
   } = useWorkspaceContent();
 
+  const router = useRouter();
   const machine = getGreenMachineById(machineId);
   const [draft, setDraft] = useState<GreenMachineDraft | null>(null);
   const [eventDraft, setEventDraft] = useState<GreenMachineEventDraft>({
@@ -226,6 +230,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
 
   const eventCount = events.length;
   const pulledCount = events.filter((event) => event.eventType === "taken" || event.eventType === "transferred_to_inventory").length;
+  const machineLabel = `${machine.modelName}${machine.serialNumber ? ` · SN ${machine.serialNumber}` : ""}`;
 
   const saveMachine = () => {
     if (!canManageGreenMachines || !draft) {
@@ -341,6 +346,29 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     toast.success("Event added");
   };
 
+  const confirmArchiveMachine = () => {
+    if (!window.confirm(`Archive ${machineLabel}? It will be hidden for 30 days.`)) {
+      return;
+    }
+
+    archiveGreenMachine(machine.id);
+    toast.success("Machine archived for 30 days");
+  };
+
+  const confirmDeleteMachine = () => {
+    if (
+      !window.confirm(
+        `Delete ${machineLabel} permanently? This removes the machine and its timeline.`,
+      )
+    ) {
+      return;
+    }
+
+    deleteGreenMachine(machine.id);
+    toast.success("Machine deleted");
+    router.replace("/green-machines");
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
@@ -387,15 +415,20 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
                   <Button
                     variant="outline"
                     className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                    onClick={() => {
-                      archiveGreenMachine(machine.id);
-                      toast.success("Machine archived for 30 days");
-                    }}
+                    onClick={confirmArchiveMachine}
                   >
                     <Archive className="mr-2 h-4 w-4" />
                     Archive
                   </Button>
                 )}
+                <Button
+                  variant="destructive"
+                  className="bg-rose-500 text-white hover:bg-rose-400"
+                  onClick={confirmDeleteMachine}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
               </>
             )}
           </>

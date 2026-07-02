@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Printer, RotateCcw, Sparkles, Wrench } from "lucide-react";
+import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Printer, RotateCcw, Sparkles, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -76,7 +76,14 @@ export function GreenMachinesPage() {
   const router = useRouter();
   const { permissions } = useAuth();
   const { bins, models } = useInventory();
-  const { greenMachines, greenMachineEventsFor, saveGreenMachine, archiveGreenMachine, restoreGreenMachine } =
+  const {
+    greenMachines,
+    greenMachineEventsFor,
+    saveGreenMachine,
+    archiveGreenMachine,
+    deleteGreenMachine,
+    restoreGreenMachine,
+  } =
     useWorkspaceContent();
   const [draft, setDraft] = useState<GreenMachineDraft>(() => createEmptyMachineDraft());
   const [createMachineOpen, setCreateMachineOpen] = useState(false);
@@ -275,6 +282,9 @@ export function GreenMachinesPage() {
                   const location = machine.locationId
                     ? bins.find((bin) => bin.id === machine.locationId) ?? null
                     : null;
+                  const machineLabel = machine.serialNumber
+                    ? `${machine.modelName} · SN ${machine.serialNumber}`
+                    : machine.modelName;
 
                   return (
                     <div
@@ -349,6 +359,14 @@ export function GreenMachinesPage() {
                               variant="outline"
                               className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                               onClick={() => {
+                                if (
+                                  !window.confirm(
+                                    `Archive ${machineLabel}? It will be hidden for 30 days.`,
+                                  )
+                                ) {
+                                  return;
+                                }
+
                                 archiveGreenMachine(machine.id);
                                 toast.success("Machine archived for 30 days");
                               }}
@@ -357,6 +375,27 @@ export function GreenMachinesPage() {
                               Archive
                             </Button>
                           ) : null}
+                          {permissions.canManageGreenMachines && (
+                            <Button
+                              variant="destructive"
+                              className="bg-rose-500 text-white hover:bg-rose-400"
+                              onClick={() => {
+                                if (
+                                  !window.confirm(
+                                    `Delete ${machineLabel} permanently? This removes the machine and its timeline.`,
+                                  )
+                                ) {
+                                  return;
+                                }
+
+                                deleteGreenMachine(machine.id);
+                                toast.success("Machine deleted");
+                              }}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
