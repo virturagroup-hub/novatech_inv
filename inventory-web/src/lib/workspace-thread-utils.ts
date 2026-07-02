@@ -30,6 +30,11 @@ export function formatThreadStatusLabel(
     case "rejected":
       return "Rejected";
     case "closed":
+      return "Closed";
+    case "archived":
+      return "Archived";
+    case "deleted":
+      return "Deleted";
     default:
       return "Closed";
   }
@@ -46,8 +51,16 @@ export function getThreadStatusBadgeClass(status: ForumThreadStatus) {
     case "planned":
     case "in_progress":
       return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+    case "archived":
+      return "border-slate-400/20 bg-slate-400/10 text-slate-100";
+    case "deleted":
+      return "border-rose-500/20 bg-rose-500/10 text-rose-100";
     case "open":
     default:
       return "border-sky-400/20 bg-sky-400/10 text-sky-100";
   }
+}
+
+export function isArchivedOrDeletedThreadStatus(status: ForumThreadStatus) {
+  return status === "archived" || status === "deleted";
 }

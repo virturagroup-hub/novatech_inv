@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
 import type { Faq, FaqDraft, ForumThreadStatus } from "@/lib/workspace-content-types";
+import { getForumThreadArchiveRetentionLabel } from "@/lib/workspace-thread-retention";
+import { isArchivedOrDeletedThreadStatus } from "@/lib/workspace-thread-utils";
 import { formatThreadStatusLabel, getThreadStatusBadgeClass } from "@/lib/workspace-thread-utils";
 
 function emptyFaqDraft(): FaqDraft {
@@ -72,23 +74,38 @@ export function SupportPage({
   const [faqDraft, setFaqDraft] = useState<FaqDraft>(emptyFaqDraft());
 
   const visibleSupportThreads = useMemo(() => {
-    if (permissions.canModerateSupport) {
-      return supportThreads;
+    const activeThreads = supportThreads.filter((thread) => !isArchivedOrDeletedThreadStatus(thread.status));
+
+    if (effectiveRole === "admin") {
+      return activeThreads;
     }
 
-    return supportThreads.filter((thread) => thread.createdBy === session?.id);
-  }, [permissions.canModerateSupport, session?.id, supportThreads]);
+    return activeThreads.filter((thread) => thread.createdBy === session?.id);
+  }, [effectiveRole, session?.id, supportThreads]);
+
+  const archivedSupportThreads = useMemo(
+    () => supportThreads.filter((thread) => isArchivedOrDeletedThreadStatus(thread.status)),
+    [supportThreads],
+  );
+  const selectableSupportThreads = useMemo(
+    () =>
+      effectiveRole === "admin"
+        ? [...visibleSupportThreads, ...archivedSupportThreads]
+        : visibleSupportThreads,
+    [archivedSupportThreads, effectiveRole, visibleSupportThreads],
+  );
 
   const selectedThread = useMemo(() => {
     if (selectedThreadId) {
-      return visibleSupportThreads.find((thread) => thread.id === selectedThreadId) ?? null;
+      return selectableSupportThreads.find((thread) => thread.id === selectedThreadId) ?? null;
     }
 
     return visibleSupportThreads[0] ?? null;
-  }, [selectedThreadId, visibleSupportThreads]);
+  }, [selectedThreadId, selectableSupportThreads, visibleSupportThreads]);
 
   const selectedThreadPosts = selectedThread ? getThreadPosts(selectedThread.id) : [];
   const openSupportCount = supportThreads.filter((thread) => thread.status === "open").length;
+  const selectedThreadEditable = Boolean(selectedThread && !isArchivedOrDeletedThreadStatus(selectedThread.status));
 
   const selectFaq = (faq: Faq) => {
     setSelectedFaqId(faq.id);
@@ -115,7 +132,7 @@ export function SupportPage({
   };
 
   const submitReply = () => {
-    if (!selectedThread || !replyBody.trim()) {
+    if (!selectedThread || !replyBody.trim() || !selectedThreadEditable) {
       toast.error("Write a reply before sending it.");
       return;
     }
@@ -354,6 +371,12 @@ export function SupportPage({
                       <SelectItem value="completed">Completed</SelectItem>
                       <SelectItem value="rejected">Rejected</SelectItem>
                       <SelectItem value="closed">Closed</SelectItem>
+                      {effectiveRole === "admin" && (
+                        <>
+                          <SelectItem value="archived">Archived</SelectItem>
+                          <SelectItem value="deleted">Deleted</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -380,13 +403,13 @@ export function SupportPage({
                     onChange={(event) => setReplyBody(event.target.value)}
                     placeholder="Add the next update for the team."
                     className="min-h-28 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                    disabled={selectedThread.isLocked}
+                    disabled={selectedThread.isLocked || !selectedThreadEditable}
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
                       onClick={submitReply}
-                      disabled={selectedThread.isLocked}
+                      disabled={selectedThread.isLocked || !selectedThreadEditable}
                     >
                       <Send className="mr-2 h-4 w-4" />
                       Post reply
@@ -451,6 +474,48 @@ export function SupportPage({
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {effectiveRole === "admin" && archivedSupportThreads.length > 0 && (
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Archived and deleted support</CardTitle>
+            <CardDescription className="text-slate-400">
+              Review the threads that are hidden from the floor before they purge automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[20rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
+              <div className="space-y-3">
+                {archivedSupportThreads.map((thread) => (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => setSelectedThreadId(thread.id)}
+                    className={cn(
+                      "w-full rounded-2xl border p-4 text-left transition-colors",
+                      selectedThread?.id === thread.id
+                        ? "border-emerald-400/30 bg-emerald-400/10"
+                        : "border-white/10 bg-slate-950/60 hover:bg-white/10",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="border-white/10 bg-white/5 text-slate-200">Support</Badge>
+                      <Badge className={cn("border", getThreadStatusBadgeClass(thread.status))}>
+                        {formatThreadStatusLabel(thread.status, "support")}
+                      </Badge>
+                      <Badge className="border-white/10 bg-white/5 text-slate-200">
+                        {getForumThreadArchiveRetentionLabel(thread) ?? "Archived"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-white">{thread.title}</p>
+                    <p className="mt-1 text-sm text-slate-300">{thread.body}</p>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-white/10 bg-white/5">
         <CardHeader>

@@ -15,12 +15,13 @@ import {
   Sparkles,
   Wrench,
 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
+import { MachinePartPicker } from "@/components/machine-part-picker";
 import { MachineModelPicker } from "@/components/machine-model-picker";
 import { useInventory } from "@/components/inventory-provider";
+import { ModelFamilyPicker } from "@/components/model-family-picker";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -32,10 +33,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { buildAbsoluteAppUrl } from "@/lib/navigation";
 import { buildMachinePrintHref } from "@/lib/labels";
 import { getGreenMachineArchiveRetentionLabel } from "@/lib/green-machine-retention";
 import { formatDateTime, formatRelative } from "@/lib/inventory-utils";
+import { categories, defaultCategory, manufacturers, type Part } from "@/lib/inventory-types";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import type { GreenMachineDraft, GreenMachineEventDraft } from "@/lib/workspace-content-types";
 
@@ -70,9 +71,61 @@ function statusLabel(status: GreenMachineDraft["status"]) {
   }
 }
 
+type MachineTransferDraft = {
+  selectedPartId: string | null;
+  partNumber: string;
+  isNpn: boolean;
+  partName: string;
+  manufacturer: string;
+  category: (typeof categories)[number];
+  binId: string;
+  quantityOnHand: string;
+  reorderPoint: string;
+  reorderTarget: string;
+  notes: string;
+  universal: boolean;
+  compatibleModelIds: string[];
+};
+
+function createBlankTransferDraft(): MachineTransferDraft {
+  return {
+    selectedPartId: null,
+    partNumber: "",
+    isNpn: false,
+    partName: "",
+    manufacturer: "Canon",
+    category: defaultCategory,
+    binId: "",
+    quantityOnHand: "1",
+    reorderPoint: "5",
+    reorderTarget: "12",
+    notes: "",
+    universal: false,
+    compatibleModelIds: [],
+  };
+}
+
+function createTransferDraftFromPart(part: Part): MachineTransferDraft {
+  return {
+    selectedPartId: part.id,
+    partNumber: part.isNpn ? "" : part.partNumber,
+    isNpn: Boolean(part.isNpn),
+    partName: part.partName,
+    manufacturer: part.manufacturer,
+    category: part.category,
+    binId: part.binId ?? "",
+    quantityOnHand: "1",
+    reorderPoint: String(part.reorderPoint),
+    reorderTarget: String(part.reorderTarget),
+    notes: part.notes,
+    universal: part.universal,
+    compatibleModelIds: part.compatibleModelIds,
+  };
+}
+
 export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: string }>) {
   const { permissions } = useAuth();
-  const { bins, getBinById, getDisplayPartNumber, models, parts } = useInventory();
+  const { bins, getBinById, getDisplayPartNumber, models, parts, addPart } = useInventory();
   const {
     getGreenMachineById,
     greenMachineEventsFor,
@@ -88,10 +141,12 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     eventType: "taken",
     partId: null,
     partName: "",
+    partCategory: defaultCategory,
     quantity: "1",
     condition: "",
     note: "",
   });
+  const [transferDraft, setTransferDraft] = useState<MachineTransferDraft>(() => createBlankTransferDraft());
   const canManageGreenMachines = permissions.canManageGreenMachines;
   const canRecordGreenMachineEvents = permissions.canRecordGreenMachineEvents;
 
@@ -109,11 +164,15 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
         status: machine.status,
         notes: machine.notes,
       });
+      setTransferDraft(createBlankTransferDraft());
     });
   }, [machine]);
 
   const location = useMemo(() => (machine ? getBinById(machine.locationId ?? "") : null), [getBinById, machine]);
   const events = machine ? greenMachineEventsFor(machine.id) : [];
+  const selectedTransferPart = transferDraft.selectedPartId
+    ? parts.find((part) => part.id === transferDraft.selectedPartId) ?? null
+    : null;
   const handleModelChange = (model: (typeof models)[number] | null) => {
     setDraft((current) => {
       if (!current) {
@@ -167,7 +226,6 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
 
   const eventCount = events.length;
   const pulledCount = events.filter((event) => event.eventType === "taken" || event.eventType === "transferred_to_inventory").length;
-  const qrValue = buildAbsoluteAppUrl(`/green-machines/${machine.id}`);
 
   const saveMachine = () => {
     if (!canManageGreenMachines || !draft) {
@@ -189,25 +247,97 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     toast.success("Machine updated");
   };
 
+  const resetEventDraft = () => {
+    setEventDraft({
+      eventType: "taken",
+      partId: null,
+      partName: "",
+      partCategory: defaultCategory,
+      quantity: "1",
+      condition: "",
+      note: "",
+    });
+    setTransferDraft(createBlankTransferDraft());
+  };
+
   const saveEvent = () => {
     if (!canRecordGreenMachineEvents) {
       return;
     }
 
+    if (eventDraft.eventType === "transferred_to_inventory") {
+      const normalizedPartName = transferDraft.partName.trim();
+      const normalizedPartNumber = transferDraft.isNpn ? "" : transferDraft.partNumber.trim().toUpperCase();
+      const transferQuantity = Math.max(1, Number(transferDraft.quantityOnHand) || 1);
+      const matchedPartByNumber = transferDraft.isNpn
+        ? null
+        : parts.find(
+            (part) =>
+              !part.isNpn &&
+              part.partNumber.trim().toUpperCase() === normalizedPartNumber,
+          ) ?? null;
+
+      if (!normalizedPartName) {
+        toast.error("Add a part name before transferring it to inventory.");
+        return;
+      }
+
+      if (!transferDraft.isNpn && !normalizedPartNumber) {
+        toast.error("Add a part number or mark the item as NPN.");
+        return;
+      }
+
+      const quantityBasePart = selectedTransferPart ?? matchedPartByNumber;
+      const nextPartId = quantityBasePart?.id ?? crypto.randomUUID();
+      const nextQuantity = (quantityBasePart?.quantityOnHand ?? 0) + transferQuantity;
+
+      addPart({
+        id: nextPartId,
+        partNumber: normalizedPartNumber,
+        isNpn: transferDraft.isNpn,
+        partName: normalizedPartName,
+        manufacturer: transferDraft.manufacturer.trim(),
+        category: transferDraft.category,
+        binId: transferDraft.binId || null,
+        quantityOnHand: nextQuantity,
+        reorderPoint: Math.max(0, Number(transferDraft.reorderPoint) || 0),
+        reorderTarget: Math.max(0, Number(transferDraft.reorderTarget) || 0),
+        compatibleModelIds: transferDraft.compatibleModelIds,
+        universal: transferDraft.universal,
+        notes: transferDraft.notes.trim(),
+      });
+
+      addGreenMachineEvent(machine.id, {
+        eventType: "transferred_to_inventory",
+        partId: nextPartId,
+        partName: normalizedPartName,
+        partCategory: transferDraft.category,
+        quantity: String(transferQuantity),
+        condition: "",
+        note: eventDraft.note.trim(),
+      });
+      resetEventDraft();
+      toast.success("Part transferred to inventory");
+      return;
+    }
+
+    const normalizedPartName = eventDraft.partName.trim();
+    const requiresPartContext =
+      eventDraft.eventType === "taken" || eventDraft.eventType === "status_change";
+
+    if (requiresPartContext && !normalizedPartName) {
+      toast.error("Add a part name before saving the event.");
+      return;
+    }
+
     addGreenMachineEvent(machine.id, {
       ...eventDraft,
-      partName: eventDraft.partName.trim(),
+      partName: normalizedPartName,
+      partCategory: eventDraft.partCategory.trim() || defaultCategory,
       note: eventDraft.note.trim(),
       condition: eventDraft.condition.trim(),
     });
-    setEventDraft({
-      eventType: "taken",
-      partId: null,
-      partName: "",
-      quantity: "1",
-      condition: "",
-      note: "",
-    });
+    resetEventDraft();
     toast.success("Event added");
   };
 
@@ -490,170 +620,367 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
 
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
-            <CardTitle className="text-white">QR and timeline</CardTitle>
+            <CardTitle className="text-white">Timeline and part transfer</CardTitle>
             <CardDescription className="text-slate-400">
-              The QR code opens this machine record, and the timeline records every pull.
+              Add a taken note, transfer reusable parts back into inventory, and keep the machine log easy to read on mobile.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-[160px_1fr]">
-              <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                <QRCodeSVG
-                  value={qrValue}
-                  includeMargin
-                  size={128}
-                  className="w-full rounded-2xl bg-white p-2"
-                />
-              </div>
-              <div className="space-y-3 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className={cn("border", statusTone(machine.status))}>
-                    {statusLabel(machine.status)}
-                  </Badge>
-                  {location && (
-                    <Badge className="border-white/10 bg-white/5 text-slate-200">
-                      {location.code} · {location.name}
-                    </Badge>
-                  )}
-                  {machine.modelId && (
-                    <Badge className="border-slate-500/30 bg-slate-900/60 text-slate-200">
-                      {machine.modelName}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm leading-6 text-slate-300">{machine.notes || "No machine notes yet."}</p>
-              </div>
-            </div>
-
+          <CardContent className="space-y-5">
             {canRecordGreenMachineEvents && (
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">Log an event</p>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Event type</Label>
-                    <Select
-                      value={eventDraft.eventType}
-                      onValueChange={(value) =>
-                        setEventDraft((current) => ({ ...current, eventType: value as GreenMachineEventDraft["eventType"] }))
-                      }
-                    >
-                      <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="taken">Taken</SelectItem>
-                        <SelectItem value="transferred_to_inventory">Transferred to inventory</SelectItem>
-                        <SelectItem value="note">Note</SelectItem>
-                        <SelectItem value="status_change">Status change</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Part</Label>
-                    <Select
-                      value={eventDraft.partId ?? "manual"}
-                      onValueChange={(value) => {
-                        const part = parts.find((item) => item.id === value) ?? null;
-                        setEventDraft((current) => ({
-                          ...current,
-                          partId: value === "manual" ? null : value,
-                          partName: part ? getDisplayPartNumber(part) : current.partName,
-                        }));
-                      }}
-                    >
-                      <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                        <SelectValue placeholder="Manual entry" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manual">Manual entry</SelectItem>
-                        {parts.map((part) => (
-                          <SelectItem key={part.id} value={part.id}>
-                            {getDisplayPartNumber(part)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="space-y-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Event type</Label>
+                  <Select
+                    value={eventDraft.eventType}
+                    onValueChange={(value) =>
+                      setEventDraft((current) => ({
+                        ...current,
+                        eventType: value as GreenMachineEventDraft["eventType"],
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="taken">Taken</SelectItem>
+                      <SelectItem value="transferred_to_inventory">Transferred to inventory</SelectItem>
+                      <SelectItem value="note">Note</SelectItem>
+                      <SelectItem value="status_change">Status change</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Part name</Label>
-                    <Input
-                      value={eventDraft.partName}
-                      onChange={(event) =>
-                        setEventDraft((current) => ({ ...current, partName: event.target.value }))
+                {eventDraft.eventType === "transferred_to_inventory" ? (
+                  <div className="space-y-5">
+                    <MachinePartPicker
+                      parts={parts}
+                      bins={bins}
+                      models={models}
+                      value={transferDraft.selectedPartId}
+                      onChange={(part) =>
+                        setTransferDraft(part ? createTransferDraftFromPart(part) : createBlankTransferDraft())
                       }
-                      placeholder="Fuser sleeve"
-                      className="h-12 border-white/10 bg-slate-950/70 text-white"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Quantity</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={eventDraft.quantity}
-                      onChange={(event) =>
-                        setEventDraft((current) => ({ ...current, quantity: event.target.value }))
-                      }
-                      className="h-12 border-white/10 bg-slate-950/70 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-200">Condition</Label>
-                    <Input
-                      value={eventDraft.condition}
-                      onChange={(event) =>
-                        setEventDraft((current) => ({ ...current, condition: event.target.value }))
-                      }
-                      placeholder="Good / damaged / missing"
-                      className="h-12 border-white/10 bg-slate-950/70 text-white"
-                    />
-                  </div>
-                </div>
 
-                <Textarea
-                  value={eventDraft.note}
-                  onChange={(event) => setEventDraft((current) => ({ ...current, note: event.target.value }))}
-                  placeholder="Add a short note about what happened."
-                  className="min-h-28 border-white/10 bg-slate-950/70 text-white"
-                />
+                    {selectedTransferPart && (
+                      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+                        {getDisplayPartNumber(selectedTransferPart)} will be updated and the entered quantity
+                        will be added to the current stock count.
+                      </div>
+                    )}
 
-                <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveEvent}>
-                  <Send className="mr-2 h-4 w-4" />
-                  Add event
-                </Button>
-              </div>
-            )}
-
-            <ScrollArea className="h-[24rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
-              <div className="space-y-3">
-                {events.map((event) => (
-                  <div key={event.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className="border-white/10 bg-white/5 text-slate-200">
-                        {event.eventType.replace(/_/g, " ")}
-                      </Badge>
-                      {event.partName && (
-                        <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
-                          {event.partName}
-                        </Badge>
-                      )}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Part number</Label>
+                        <Input
+                          value={transferDraft.partNumber}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({ ...current, partNumber: event.target.value }))
+                          }
+                          placeholder="FM1-D581"
+                          className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Part name</Label>
+                        <Input
+                          value={transferDraft.partName}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({ ...current, partName: event.target.value }))
+                          }
+                          placeholder="Fixing Assembly"
+                          className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                        />
+                      </div>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">{event.note || "No note added."}</p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {formatDateTime(event.createdAt)}
-                    </p>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Manufacturer</Label>
+                        <Select
+                          value={transferDraft.manufacturer}
+                          onValueChange={(value) =>
+                            setTransferDraft((current) => ({
+                              ...current,
+                              manufacturer: value ?? current.manufacturer,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                            <SelectValue placeholder="Manufacturer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {manufacturers.map((manufacturer) => (
+                              <SelectItem key={manufacturer} value={manufacturer}>
+                                {manufacturer}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Category</Label>
+                        <Select
+                          value={transferDraft.category}
+                          onValueChange={(value) =>
+                            setTransferDraft((current) => ({
+                              ...current,
+                              category: value as MachineTransferDraft["category"],
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                            <SelectValue placeholder="Category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Quantity</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={transferDraft.quantityOnHand}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({ ...current, quantityOnHand: event.target.value }))
+                          }
+                          className="h-12 border-white/10 bg-slate-950/70 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Reorder point</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={transferDraft.reorderPoint}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({ ...current, reorderPoint: event.target.value }))
+                          }
+                          className="h-12 border-white/10 bg-slate-950/70 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Reorder target</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={transferDraft.reorderTarget}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({ ...current, reorderTarget: event.target.value }))
+                          }
+                          className="h-12 border-white/10 bg-slate-950/70 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Storage bin</Label>
+                        <Select
+                          value={transferDraft.binId || "unassigned"}
+                          onValueChange={(value) =>
+                            setTransferDraft((current) => ({
+                              ...current,
+                              binId: value === "unassigned" ? "" : value ?? "",
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {bins.map((bin) => (
+                              <SelectItem key={bin.id} value={bin.id}>
+                                {bin.code} · {bin.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Notes</Label>
+                        <Textarea
+                          value={transferDraft.notes}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({ ...current, notes: event.target.value }))
+                          }
+                          placeholder="Shelf notes, handling notes, or anything a tech needs to know."
+                          className="min-h-32 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Compatible models</Label>
+                        {transferDraft.compatibleModelIds.length > 0 && !transferDraft.universal && (
+                          <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                            {transferDraft.compatibleModelIds.map((modelId) => {
+                              const model = models.find((item) => item.id === modelId);
+                              if (!model) {
+                                return null;
+                              }
+
+                              return (
+                                <Badge key={model.id} className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                                  {model.manufacturer} {model.name}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <ModelFamilyPicker
+                          models={models}
+                          selectedModelIds={transferDraft.compatibleModelIds}
+                          onSelectionChange={(nextIds) =>
+                            setTransferDraft((current) => ({
+                              ...current,
+                              compatibleModelIds: nextIds,
+                              universal: false,
+                            }))
+                          }
+                          disabled={transferDraft.universal}
+                          compact
+                        />
+                      </div>
+                    </div>
+
+                    <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveEvent}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Transfer to inventory
+                    </Button>
                   </div>
-                ))}
-                {events.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
-                    No events logged yet.
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Part name</Label>
+                        <Input
+                          value={eventDraft.partName}
+                          onChange={(event) =>
+                            setEventDraft((current) => ({ ...current, partName: event.target.value }))
+                          }
+                          placeholder="Fuser sleeve"
+                          className="h-12 border-white/10 bg-slate-950/70 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Part category</Label>
+                        <Select
+                          value={eventDraft.partCategory}
+                          onValueChange={(value) =>
+                            setEventDraft((current) => ({
+                              ...current,
+                              partCategory: value ?? current.partCategory,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                            <SelectValue placeholder="Category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Condition</Label>
+                        <Input
+                          value={eventDraft.condition}
+                          onChange={(event) =>
+                            setEventDraft((current) => ({ ...current, condition: event.target.value }))
+                          }
+                          placeholder="Good / damaged / missing"
+                          className="h-12 border-white/10 bg-slate-950/70 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-200">Notes</Label>
+                        <Textarea
+                          value={eventDraft.note}
+                          onChange={(event) =>
+                            setEventDraft((current) => ({ ...current, note: event.target.value }))
+                          }
+                          placeholder="Add a short note about what happened."
+                          className="min-h-32 border-white/10 bg-slate-950/70 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveEvent}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Add event
+                    </Button>
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">Timeline</p>
+                <Badge className="border-white/10 bg-white/5 text-slate-200">
+                  {events.length} event{events.length === 1 ? "" : "s"}
+                </Badge>
+              </div>
+              <ScrollArea className="h-[24rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
+                <div className="space-y-3">
+                  {events.map((event) => (
+                    <div key={event.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="border-white/10 bg-white/5 text-slate-200">
+                          {event.eventType.replace(/_/g, " ")}
+                        </Badge>
+                        {event.partCategory && (
+                          <Badge className="border-white/10 bg-white/5 text-slate-200">
+                            {event.partCategory}
+                          </Badge>
+                        )}
+                        {event.partName && (
+                          <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                            {event.partName}
+                          </Badge>
+                        )}
+                        {event.quantity !== null && (
+                          <Badge className="border-sky-400/20 bg-sky-400/10 text-sky-100">
+                            Qty {event.quantity}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{event.note || "No note added."}</p>
+                      {event.condition && (
+                        <p className="mt-2 text-xs text-slate-500">Condition: {event.condition}</p>
+                      )}
+                      <p className="mt-2 text-xs text-slate-500">{formatDateTime(event.createdAt)}</p>
+                    </div>
+                  ))}
+                  {events.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
+                      No events logged yet.
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       </div>

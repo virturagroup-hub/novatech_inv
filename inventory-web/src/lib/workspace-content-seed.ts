@@ -83,6 +83,8 @@ export const seedForumThreads: ForumThread[] = [
     isLocked: false,
     createdAt: "2026-06-21T10:20:00.000Z",
     updatedAt: "2026-06-21T10:20:00.000Z",
+    archivedAt: null,
+    deletedAt: null,
   },
   {
     id: "thread-feature-single-labels",
@@ -97,6 +99,8 @@ export const seedForumThreads: ForumThread[] = [
     isLocked: false,
     createdAt: "2026-06-22T08:10:00.000Z",
     updatedAt: "2026-06-25T12:00:00.000Z",
+    archivedAt: null,
+    deletedAt: null,
   },
   {
     id: "thread-general-green-machines",
@@ -111,6 +115,8 @@ export const seedForumThreads: ForumThread[] = [
     isLocked: false,
     createdAt: "2026-06-23T13:00:00.000Z",
     updatedAt: "2026-06-23T13:30:00.000Z",
+    archivedAt: null,
+    deletedAt: null,
   },
 ];
 
@@ -350,6 +356,7 @@ export const seedGreenMachineEvents: GreenMachineEvent[] = [
     eventType: "taken",
     partId: null,
     partName: "Power supply",
+    partCategory: "Power Supplies",
     quantity: 1,
     condition: "Burn marks on board",
     note: "Power supply removed and set aside for inspection.",
@@ -362,6 +369,7 @@ export const seedGreenMachineEvents: GreenMachineEvent[] = [
     eventType: "transferred_to_inventory",
     partId: "part-fm1-d581",
     partName: "Fixing Assembly",
+    partCategory: "Fusers",
     quantity: 1,
     condition: "Tested good",
     note: "Transferred a matching fixing assembly back into the normal parts inventory.",
@@ -374,6 +382,7 @@ export const seedGreenMachineEvents: GreenMachineEvent[] = [
     eventType: "note",
     partId: null,
     partName: null,
+    partCategory: null,
     quantity: null,
     condition: null,
     note: "Scanner cable and tray assembly still need a quick check before the next teardown.",

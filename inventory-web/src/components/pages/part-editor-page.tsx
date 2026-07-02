@@ -302,8 +302,8 @@ export function PartEditorPage({
         </Card>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-        <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <div className="min-w-0 space-y-6">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
               <CardTitle className="text-white">1. Part identity</CardTitle>
@@ -652,7 +652,7 @@ export function PartEditorPage({
           </Card>
         </div>
 
-        <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
+        <div className="min-w-0 space-y-6 xl:sticky xl:top-24 xl:h-fit">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
             <CardTitle className="text-white">Part summary</CardTitle>
@@ -754,7 +754,7 @@ export function PartEditorPage({
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-30 -mx-4 border-t border-white/10 bg-slate-950/95 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sticky bottom-0 z-30 border-t border-white/10 bg-slate-950/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs leading-5 text-slate-400">
             {attentionPreview

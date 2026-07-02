@@ -18,6 +18,7 @@ import {
   getGreenMachineRestoreStatus,
   purgeExpiredGreenMachines,
 } from "@/lib/green-machine-retention";
+import { purgeExpiredForumThreads } from "@/lib/workspace-thread-retention";
 import type {
   ComingSoonItem,
   ComingSoonItemDraft,
@@ -151,7 +152,9 @@ export function WorkspaceContentProvider({
       }
 
       const stored = safeParseWorkspaceContentState(window.localStorage.getItem(workspaceContentStorageKey));
-      const nextState = purgeExpiredGreenMachines(stored ?? createSeedWorkspaceContentState());
+      const nextState = purgeExpiredForumThreads(
+        purgeExpiredGreenMachines(stored ?? createSeedWorkspaceContentState()),
+      );
       setState(nextState);
       setHydrated(true);
     });
@@ -175,7 +178,7 @@ export function WorkspaceContentProvider({
     }
 
     const intervalId = window.setInterval(() => {
-      setState((current) => purgeExpiredGreenMachines(current));
+      setState((current) => purgeExpiredForumThreads(purgeExpiredGreenMachines(current)));
     }, 60 * 60 * 1000);
 
     return () => {
@@ -188,7 +191,9 @@ export function WorkspaceContentProvider({
   const canRecordGreenMachineEvents = canManageGreenMachines || effectiveRole === "technician";
   const updateGreenMachineState = useCallback(
     (updater: (current: WorkspaceContentState) => WorkspaceContentState) => {
-      setState((current: WorkspaceContentState) => purgeExpiredGreenMachines(updater(current)));
+      setState((current: WorkspaceContentState) =>
+        purgeExpiredForumThreads(purgeExpiredGreenMachines(updater(current))),
+      );
     },
     [],
   );
@@ -351,6 +356,8 @@ export function WorkspaceContentProvider({
   const saveForumThread = (draft: ForumThreadDraft) => {
     const now = timestamp();
     const threadId = draft.id ?? crypto.randomUUID();
+    const nextArchivedAt = draft.status === "archived" ? now : null;
+    const nextDeletedAt = draft.status === "deleted" ? now : null;
     const thread: ForumThread = {
       id: threadId,
       title: normalizeText(draft.title),
@@ -363,12 +370,35 @@ export function WorkspaceContentProvider({
       isLocked: Boolean(draft.isLocked),
       createdAt: now,
       updatedAt: now,
+      archivedAt: nextArchivedAt,
+      deletedAt: nextDeletedAt,
     };
 
     setState((current) => {
       const existing = current.forumThreads.find((item) => item.id === thread.id);
       const nextThreads = existing
-        ? current.forumThreads.map((item) => (item.id === thread.id ? { ...item, ...thread, createdAt: item.createdAt, createdBy: item.createdBy } : item))
+        ? current.forumThreads.map((item) =>
+            item.id === thread.id
+              ? {
+                  ...item,
+                  ...thread,
+                  createdAt: item.createdAt,
+                  createdBy: item.createdBy,
+                  archivedAt:
+                    draft.status === "archived"
+                      ? item.status === "archived"
+                        ? item.archivedAt ?? now
+                        : now
+                      : null,
+                  deletedAt:
+                    draft.status === "deleted"
+                      ? item.status === "deleted"
+                        ? item.deletedAt ?? now
+                        : now
+                      : null,
+                }
+              : item,
+          )
         : [thread, ...current.forumThreads];
 
       return { ...current, forumThreads: nextThreads };
@@ -418,6 +448,10 @@ export function WorkspaceContentProvider({
         return current;
       }
 
+      if (thread.status === "archived" || thread.status === "deleted") {
+        return current;
+      }
+
       const nextThreads = current.forumThreads.map((item) =>
         item.id === threadId ? { ...item, updatedAt: now } : item,
       );
@@ -430,7 +464,7 @@ export function WorkspaceContentProvider({
     });
 
     const thread = state.forumThreads.find((item) => item.id === threadId);
-    if (!thread) {
+    if (!thread || thread.status === "archived" || thread.status === "deleted") {
       return;
     }
 
@@ -470,7 +504,17 @@ export function WorkspaceContentProvider({
       return {
         ...current,
         forumThreads: current.forumThreads.map((item) =>
-          item.id === threadId ? { ...item, status, updatedAt: now } : item,
+          item.id === threadId
+            ? {
+                ...item,
+                status,
+                updatedAt: now,
+                archivedAt:
+                  status === "archived" ? (item.status === "archived" ? item.archivedAt ?? now : now) : null,
+                deletedAt:
+                  status === "deleted" ? (item.status === "deleted" ? item.deletedAt ?? now : now) : null,
+              }
+            : item,
         ),
       };
     });
@@ -657,6 +701,7 @@ export function WorkspaceContentProvider({
       eventType: draft.eventType,
       partId: draft.partId || null,
       partName: normalizeText(draft.partName) || null,
+      partCategory: normalizeText(draft.partCategory) || null,
       quantity: draft.quantity ? Math.max(1, Number(draft.quantity) || 1) : null,
       condition: normalizeText(draft.condition) || null,
       note: normalizeText(draft.note),

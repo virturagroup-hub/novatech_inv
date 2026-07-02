@@ -14,6 +14,7 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -78,6 +79,7 @@ export function GreenMachinesPage() {
   const { greenMachines, greenMachineEventsFor, saveGreenMachine, archiveGreenMachine, restoreGreenMachine } =
     useWorkspaceContent();
   const [draft, setDraft] = useState<GreenMachineDraft>(() => createEmptyMachineDraft());
+  const [createMachineOpen, setCreateMachineOpen] = useState(false);
   const canManageGreenMachines = permissions.canManageGreenMachines;
 
   const activeMachines = greenMachines.filter((machine) => machine.status !== "archived").length;
@@ -131,6 +133,7 @@ export function GreenMachinesPage() {
 
     toast.success("Machine saved");
     setDraft(createEmptyMachineDraft());
+    setCreateMachineOpen(false);
 
     router.push(`/green-machines/${machineId}`);
   };
@@ -140,9 +143,18 @@ export function GreenMachinesPage() {
       <PageHero
         eyebrow="Machines"
         title="Track stripped machines, pull reusable parts, and keep the fleet moving."
-        description="This workspace gives each machine a QR-linked record, a teardown timeline, and a clean place to log parts removed from the chassis."
+        description="This workspace gives each machine a tracked record, a teardown timeline, and a clean place to log parts removed from the chassis."
         actions={
           <>
+            {canManageGreenMachines && (
+              <Button
+                className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                onClick={() => setCreateMachineOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add machine
+              </Button>
+            )}
             <Link
               href="/support"
               className={cn(
@@ -203,121 +215,27 @@ export function GreenMachinesPage() {
             <CardHeader>
               <CardTitle className="text-white">New machine</CardTitle>
               <CardDescription className="text-slate-400">
-                Add a stripped or salvage machine, then open the detail page to log each pull.
+                Keep intake quick on mobile. Open the form only when a new machine arrives.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Inventory model</Label>
-                <MachineModelPicker
-                  models={models}
-                  value={draft.modelId}
-                  onChange={handleModelChange}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Model name</Label>
-                  <Input
-                    value={draft.modelName}
-                    onChange={(event) => setDraft((current) => ({ ...current, modelName: event.target.value }))}
-                    placeholder="imageRUNNER ADVANCE DX C5840"
-                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Series / family</Label>
-                  <Input
-                    value={draft.seriesFamily}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, seriesFamily: event.target.value }))
-                    }
-                    placeholder="C5800"
-                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                  />
+              <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-sm font-semibold text-white">Mobile-first intake</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Capture the model, serial, location, and teardown notes in a single modal so the page stays open for the machine list.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">Model search</Badge>
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">Serial capture</Badge>
+                  <Badge className="border-white/10 bg-white/5 text-slate-200">Location assignment</Badge>
                 </div>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Serial number</Label>
-                  <Input
-                    value={draft.serialNumber}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, serialNumber: event.target.value }))
-                    }
-                    placeholder="Optional"
-                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Location</Label>
-                  <Select
-                    value={draft.locationId ?? "unassigned"}
-                    onValueChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        locationId: value === "unassigned" ? null : value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                      <SelectValue placeholder="Unassigned" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {locationOptions.map((bin) => (
-                        <SelectItem key={bin.id} value={bin.id}>
-                          {bin.code} · {bin.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Status</Label>
-                  <Select
-                    value={draft.status}
-                    onValueChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        status: value as GreenMachineDraft["status"],
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="partially_stripped">Partially stripped</SelectItem>
-                      <SelectItem value="depleted">Depleted</SelectItem>
-                      <SelectItem value="scrapped">Scrapped</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Notes</Label>
-                  <Textarea
-                    value={draft.notes}
-                    onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-                    placeholder="What has been removed already, what still remains, and anything else the next tech needs to know."
-                    className="min-h-28 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                  />
-                </div>
-              </div>
-
               <Button
                 className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
-                onClick={saveMachine}
+                onClick={() => setCreateMachineOpen(true)}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Save machine
+                Open intake form
               </Button>
             </CardContent>
           </Card>
@@ -335,7 +253,7 @@ export function GreenMachinesPage() {
                   <Badge className="border-white/10 bg-white/5 text-slate-200">Read only</Badge>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  Open any machine in the index to review its QR record and timeline.
+                  Open any machine in the index to review the timeline and print its label.
                 </p>
               </div>
             </CardContent>
@@ -454,6 +372,127 @@ export function GreenMachinesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={createMachineOpen} onOpenChange={setCreateMachineOpen}>
+        <DialogContent className="!w-[min(94vw,56rem)] !max-w-[56rem] max-h-[calc(100vh-2rem)] overflow-hidden border-white/10 bg-slate-950 p-0 text-slate-50">
+          <DialogHeader className="border-b border-white/10 px-6 py-5">
+            <DialogTitle className="text-white">New machine</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Add a stripped or salvage machine, then open the detail page to log each pull.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[calc(100vh-9rem)]">
+            <div className="space-y-4 px-6 py-6">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Inventory model</Label>
+                <MachineModelPicker models={models} value={draft.modelId} onChange={handleModelChange} />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Model name</Label>
+                  <Input
+                    value={draft.modelName}
+                    onChange={(event) => setDraft((current) => ({ ...current, modelName: event.target.value }))}
+                    placeholder="imageRUNNER ADVANCE DX C5840"
+                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Series / family</Label>
+                  <Input
+                    value={draft.seriesFamily}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, seriesFamily: event.target.value }))
+                    }
+                    placeholder="C5800"
+                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Serial number</Label>
+                  <Input
+                    value={draft.serialNumber}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, serialNumber: event.target.value }))
+                    }
+                    placeholder="Optional"
+                    className="h-12 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Location</Label>
+                  <Select
+                    value={draft.locationId ?? "unassigned"}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        locationId: value === "unassigned" ? null : value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {locationOptions.map((bin) => (
+                        <SelectItem key={bin.id} value={bin.id}>
+                          {bin.code} · {bin.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Status</Label>
+                  <Select
+                    value={draft.status}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        status: value as GreenMachineDraft["status"],
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-12 border-white/10 bg-slate-950/70 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="partially_stripped">Partially stripped</SelectItem>
+                      <SelectItem value="depleted">Depleted</SelectItem>
+                      <SelectItem value="scrapped">Scrapped</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-200">Notes</Label>
+                  <Textarea
+                    value={draft.notes}
+                    onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                    placeholder="What has been removed already, what still remains, and anything else the next tech needs to know."
+                    className="min-h-32 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveMachine}>
+                <Plus className="mr-2 h-4 w-4" />
+                Save machine
+              </Button>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

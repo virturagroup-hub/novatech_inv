@@ -11,7 +11,9 @@ export type ForumThreadStatus =
   | "in_progress"
   | "completed"
   | "rejected"
-  | "closed";
+  | "closed"
+  | "archived"
+  | "deleted";
 
 export type GreenMachineStatus =
   | "active"
@@ -53,6 +55,8 @@ export interface ForumThread {
   isLocked: boolean;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
+  deletedAt: string | null;
 }
 
 export interface ForumPost {
@@ -149,6 +153,7 @@ export interface GreenMachineEvent {
   eventType: GreenMachineEventType;
   partId: string | null;
   partName: string | null;
+  partCategory: string | null;
   quantity: number | null;
   condition: string | null;
   note: string;
@@ -224,6 +229,7 @@ export interface GreenMachineEventDraft {
   eventType: GreenMachineEventType;
   partId: string | null;
   partName: string;
+  partCategory: string;
   quantity: string;
   condition: string;
   note: string;

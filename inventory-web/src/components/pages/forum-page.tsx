@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
 import type { ForumThreadStatus } from "@/lib/workspace-content-types";
+import { getForumThreadArchiveRetentionLabel } from "@/lib/workspace-thread-retention";
+import { isArchivedOrDeletedThreadStatus } from "@/lib/workspace-thread-utils";
 import { formatThreadStatusLabel, getThreadStatusBadgeClass } from "@/lib/workspace-thread-utils";
 
 export function ForumPage({
@@ -50,20 +52,37 @@ export function ForumPage({
     () => forumThreads.filter((thread) => thread.type === "general"),
     [forumThreads],
   );
+  const visibleDiscussionThreads = useMemo(
+    () => discussionThreads.filter((thread) => !isArchivedOrDeletedThreadStatus(thread.status)),
+    [discussionThreads],
+  );
+  const archivedDiscussionThreads = useMemo(
+    () => discussionThreads.filter((thread) => isArchivedOrDeletedThreadStatus(thread.status)),
+    [discussionThreads],
+  );
+  const selectableDiscussionThreads = useMemo(
+    () =>
+      effectiveRole === "admin"
+        ? [...visibleDiscussionThreads, ...archivedDiscussionThreads]
+        : visibleDiscussionThreads,
+    [archivedDiscussionThreads, effectiveRole, visibleDiscussionThreads],
+  );
 
   const selectedThread = useMemo(() => {
     if (selectedThreadId) {
-      return discussionThreads.find((thread) => thread.id === selectedThreadId) ?? null;
+      return selectableDiscussionThreads.find((thread) => thread.id === selectedThreadId) ?? null;
     }
 
-    return discussionThreads[0] ?? null;
-  }, [discussionThreads, selectedThreadId]);
+    return visibleDiscussionThreads[0] ?? null;
+  }, [selectedThreadId, selectableDiscussionThreads, visibleDiscussionThreads]);
 
   const selectedThreadPosts = selectedThread ? getThreadPosts(selectedThread.id) : [];
   const replyCount = useMemo(
-    () => forumPosts.filter((post) => discussionThreads.some((thread) => thread.id === post.threadId)).length,
-    [discussionThreads, forumPosts],
+    () =>
+      forumPosts.filter((post) => visibleDiscussionThreads.some((thread) => thread.id === post.threadId)).length,
+    [forumPosts, visibleDiscussionThreads],
   );
+  const selectedThreadEditable = Boolean(selectedThread && !isArchivedOrDeletedThreadStatus(selectedThread.status));
 
   const submitThread = () => {
     if (!threadTitle.trim() || !threadBody.trim()) {
@@ -85,7 +104,7 @@ export function ForumPage({
   };
 
   const submitReply = () => {
-    if (!selectedThread || !replyBody.trim()) {
+    if (!selectedThread || !replyBody.trim() || !selectedThreadEditable) {
       toast.error("Write a reply before sending it.");
       return;
     }
@@ -149,7 +168,7 @@ export function ForumPage({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Threads"
-          value={discussionThreads.length}
+          value={visibleDiscussionThreads.length}
           hint="General discussions"
           icon={<MessageSquareMore className="h-5 w-5" />}
           tone="sky"
@@ -212,9 +231,9 @@ export function ForumPage({
               Post discussion
             </Button>
           </CardContent>
-        </Card>
+      </Card>
 
-        <Card className="border-white/10 bg-white/5">
+      <Card className="border-white/10 bg-white/5">
           <CardHeader>
             <CardTitle className="text-white">
               {permissions.canModerateSupport ? "Forum moderation" : "Discussion detail"}
@@ -275,6 +294,12 @@ export function ForumPage({
                     <SelectContent>
                       <SelectItem value="open">Open</SelectItem>
                       <SelectItem value="closed">Closed</SelectItem>
+                      {effectiveRole === "admin" && (
+                        <>
+                          <SelectItem value="archived">Archived</SelectItem>
+                          <SelectItem value="deleted">Deleted</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -301,13 +326,13 @@ export function ForumPage({
                     onChange={(event) => setReplyBody(event.target.value)}
                     placeholder="Add a clarification or a helpful answer."
                     className="min-h-28 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                    disabled={selectedThread.isLocked}
+                    disabled={selectedThread.isLocked || !selectedThreadEditable}
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
                       onClick={submitReply}
-                      disabled={selectedThread.isLocked}
+                      disabled={selectedThread.isLocked || !selectedThreadEditable}
                     >
                       <Send className="mr-2 h-4 w-4" />
                       Post reply
@@ -341,7 +366,7 @@ export function ForumPage({
         <CardContent>
           <ScrollArea className="h-[24rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
             <div className="space-y-3">
-              {discussionThreads.map((thread) => (
+              {visibleDiscussionThreads.map((thread) => (
                 <button
                   key={thread.id}
                   type="button"
@@ -363,7 +388,7 @@ export function ForumPage({
                   <p className="mt-1 text-sm text-slate-300">{thread.body}</p>
                 </button>
               ))}
-              {discussionThreads.length === 0 && (
+              {visibleDiscussionThreads.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
                   No forum threads yet.
                 </div>
@@ -372,6 +397,48 @@ export function ForumPage({
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {effectiveRole === "admin" && archivedDiscussionThreads.length > 0 && (
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Archived and deleted forum</CardTitle>
+            <CardDescription className="text-slate-400">
+              Review hidden discussions before they purge automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[20rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
+              <div className="space-y-3">
+                {archivedDiscussionThreads.map((thread) => (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => setSelectedThreadId(thread.id)}
+                    className={cn(
+                      "w-full rounded-2xl border p-4 text-left transition-colors",
+                      selectedThread?.id === thread.id
+                        ? "border-emerald-400/30 bg-emerald-400/10"
+                        : "border-white/10 bg-slate-950/60 hover:bg-white/10",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="border-white/10 bg-white/5 text-slate-200">Forum</Badge>
+                      <Badge className={cn("border", getThreadStatusBadgeClass(thread.status))}>
+                        {formatThreadStatusLabel(thread.status, "forum")}
+                      </Badge>
+                      <Badge className="border-white/10 bg-white/5 text-slate-200">
+                        {getForumThreadArchiveRetentionLabel(thread) ?? "Archived"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-white">{thread.title}</p>
+                    <p className="mt-1 text-sm text-slate-300">{thread.body}</p>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

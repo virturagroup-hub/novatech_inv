@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
 import type { ForumThreadStatus } from "@/lib/workspace-content-types";
+import { getForumThreadArchiveRetentionLabel } from "@/lib/workspace-thread-retention";
+import { isArchivedOrDeletedThreadStatus } from "@/lib/workspace-thread-utils";
 import { formatThreadStatusLabel, getThreadStatusBadgeClass } from "@/lib/workspace-thread-utils";
 
 export function FeatureRequestsPage({
@@ -51,24 +53,41 @@ export function FeatureRequestsPage({
     () => forumThreads.filter((thread) => thread.type === "feature_request"),
     [forumThreads],
   );
+  const visibleRequestThreads = useMemo(
+    () => requestThreads.filter((thread) => !isArchivedOrDeletedThreadStatus(thread.status)),
+    [requestThreads],
+  );
+  const archivedRequestThreads = useMemo(
+    () => requestThreads.filter((thread) => isArchivedOrDeletedThreadStatus(thread.status)),
+    [requestThreads],
+  );
+  const selectableRequestThreads = useMemo(
+    () =>
+      effectiveRole === "admin"
+        ? [...visibleRequestThreads, ...archivedRequestThreads]
+        : visibleRequestThreads,
+    [archivedRequestThreads, effectiveRole, visibleRequestThreads],
+  );
 
   const selectedThread = useMemo(() => {
     if (selectedThreadId) {
-      return requestThreads.find((thread) => thread.id === selectedThreadId) ?? null;
+      return selectableRequestThreads.find((thread) => thread.id === selectedThreadId) ?? null;
     }
 
-    return requestThreads[0] ?? null;
-  }, [requestThreads, selectedThreadId]);
+    return visibleRequestThreads[0] ?? null;
+  }, [selectedThreadId, selectableRequestThreads, visibleRequestThreads]);
 
   const selectedThreadPosts = selectedThread ? getThreadPosts(selectedThread.id) : [];
-  const activeRequestCount = requestThreads.filter(
+  const activeRequestCount = visibleRequestThreads.filter(
     (thread) => thread.status === "open" || thread.status === "under_review",
   ).length;
-  const totalVotes = requestThreads.reduce((sum, thread) => sum + getFeatureRequestScore(thread.id), 0);
+  const totalVotes = visibleRequestThreads.reduce((sum, thread) => sum + getFeatureRequestScore(thread.id), 0);
   const replyCount = useMemo(
-    () => forumPosts.filter((post) => requestThreads.some((thread) => thread.id === post.threadId)).length,
-    [forumPosts, requestThreads],
+    () =>
+      forumPosts.filter((post) => visibleRequestThreads.some((thread) => thread.id === post.threadId)).length,
+    [forumPosts, visibleRequestThreads],
   );
+  const selectedThreadEditable = Boolean(selectedThread && !isArchivedOrDeletedThreadStatus(selectedThread.status));
 
   const submitRequest = () => {
     if (!requestTitle.trim() || !requestBody.trim()) {
@@ -90,7 +109,7 @@ export function FeatureRequestsPage({
   };
 
   const submitReply = () => {
-    if (!selectedThread || !replyBody.trim()) {
+    if (!selectedThread || !replyBody.trim() || !selectedThreadEditable) {
       toast.error("Write a reply before sending it.");
       return;
     }
@@ -154,7 +173,7 @@ export function FeatureRequestsPage({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="Requests"
-          value={requestThreads.length}
+          value={visibleRequestThreads.length}
           hint="Submitted ideas"
           icon={<Sparkles className="h-5 w-5" />}
           tone="emerald"
@@ -290,6 +309,12 @@ export function FeatureRequestsPage({
                       <SelectItem value="in_progress">In progress</SelectItem>
                       <SelectItem value="completed">Completed</SelectItem>
                       <SelectItem value="rejected">Rejected</SelectItem>
+                      {effectiveRole === "admin" && (
+                        <>
+                          <SelectItem value="archived">Archived</SelectItem>
+                          <SelectItem value="deleted">Deleted</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -335,13 +360,13 @@ export function FeatureRequestsPage({
                     onChange={(event) => setReplyBody(event.target.value)}
                     placeholder="Add the next update for the team."
                     className="min-h-28 border-white/10 bg-slate-950/70 text-white placeholder:text-slate-500"
-                    disabled={selectedThread.isLocked}
+                    disabled={selectedThread.isLocked || !selectedThreadEditable}
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
                       onClick={submitReply}
-                      disabled={selectedThread.isLocked}
+                      disabled={selectedThread.isLocked || !selectedThreadEditable}
                     >
                       <Send className="mr-2 h-4 w-4" />
                       Post reply
@@ -375,7 +400,7 @@ export function FeatureRequestsPage({
         <CardContent>
           <ScrollArea className="h-[24rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
             <div className="space-y-3">
-              {requestThreads.map((thread) => (
+              {visibleRequestThreads.map((thread) => (
                 <button
                   key={thread.id}
                   type="button"
@@ -399,7 +424,7 @@ export function FeatureRequestsPage({
                   <p className="mt-1 text-sm text-slate-300">{thread.body}</p>
                 </button>
               ))}
-              {requestThreads.length === 0 && (
+              {visibleRequestThreads.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
                   No feature requests yet.
                 </div>
@@ -408,6 +433,50 @@ export function FeatureRequestsPage({
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {effectiveRole === "admin" && archivedRequestThreads.length > 0 && (
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Archived and deleted requests</CardTitle>
+            <CardDescription className="text-slate-400">
+              Review hidden requests before they purge automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[20rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
+              <div className="space-y-3">
+                {archivedRequestThreads.map((thread) => (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => setSelectedThreadId(thread.id)}
+                    className={cn(
+                      "w-full rounded-2xl border p-4 text-left transition-colors",
+                      selectedThread?.id === thread.id
+                        ? "border-emerald-400/30 bg-emerald-400/10"
+                        : "border-white/10 bg-slate-950/60 hover:bg-white/10",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                        {getFeatureRequestScore(thread.id)} votes
+                      </Badge>
+                      <Badge className={cn("border", getThreadStatusBadgeClass(thread.status))}>
+                        {formatThreadStatusLabel(thread.status, "feature_request")}
+                      </Badge>
+                      <Badge className="border-white/10 bg-white/5 text-slate-200">
+                        {getForumThreadArchiveRetentionLabel(thread) ?? "Archived"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-white">{thread.title}</p>
+                    <p className="mt-1 text-sm text-slate-300">{thread.body}</p>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
