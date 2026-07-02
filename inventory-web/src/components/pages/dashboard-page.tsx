@@ -246,7 +246,7 @@ export function DashboardPage() {
       <div className="grid items-start gap-6 xl:grid-cols-[1.5fr_0.95fr]">
         <div className="space-y-6">
           <Card className="border-white/10 bg-white/5">
-            <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
               <div>
                 <CardTitle className="text-white">Low-stock watchlist</CardTitle>
                 <CardDescription className="text-slate-400">

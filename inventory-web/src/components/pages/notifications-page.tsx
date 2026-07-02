@@ -125,7 +125,7 @@ export function NotificationsPage() {
       </div>
 
       <Card className="border-white/10 bg-white/5">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
           <div>
             <CardTitle className="text-white">Notification inbox</CardTitle>
             <CardDescription className="text-slate-400">
@@ -133,7 +133,7 @@ export function NotificationsPage() {
             </CardDescription>
           </div>
           <Button
-            className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+            className="w-full bg-emerald-400 text-slate-950 hover:bg-emerald-300 sm:w-auto"
             onClick={markAllNotificationsRead}
             disabled={unreadNotificationCount === 0}
           >
@@ -157,7 +157,7 @@ export function NotificationsPage() {
                         : "border-emerald-400/20 bg-emerald-400/10",
                     )}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge className="border-white/10 bg-white/5 text-slate-200">
@@ -172,13 +172,13 @@ export function NotificationsPage() {
                         <p className="text-sm font-semibold text-white">{notification.title}</p>
                         <p className="text-sm leading-6 text-slate-300">{notification.body}</p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                         {href && (
                           <Link
                             href={href}
                             className={cn(
                               buttonVariants({ variant: "outline", size: "default" }),
-                              "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                              "w-full border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white sm:w-auto",
                             )}
                           >
                             Open
@@ -188,7 +188,7 @@ export function NotificationsPage() {
                         {!notification.isRead && (
                           <Button
                             variant="outline"
-                            className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                            className="w-full border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white sm:w-auto"
                             onClick={() => markNotificationRead(notification.id)}
                           >
                             Mark read

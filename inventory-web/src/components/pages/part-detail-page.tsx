@@ -176,7 +176,7 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="xl:col-span-2 border-white/10 bg-white/5">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
             <div className="min-w-0">
             <CardTitle className="text-white">Part overview</CardTitle>
             <CardDescription className="text-slate-400">

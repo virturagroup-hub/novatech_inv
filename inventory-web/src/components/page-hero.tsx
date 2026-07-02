@@ -38,7 +38,11 @@ export function PageHero({
             </p>
           </div>
         </div>
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex flex-wrap gap-2 [&>*]:w-full sm:[&>*]:w-auto">
+            {actions}
+          </div>
+        )}
       </div>
     </section>
   );
