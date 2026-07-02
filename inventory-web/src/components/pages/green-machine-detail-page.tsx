@@ -111,7 +111,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
               <div>
                 <h1 className="text-2xl font-semibold text-white">Machine not found</h1>
                 <p className="text-sm text-slate-400">
-                  The Green Machine record is not available in the current workspace.
+                  The machine record is not available in the current workspace.
                 </p>
               </div>
             </div>
@@ -123,7 +123,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
               )}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Green Machines
+              Back to Machines
             </Link>
           </CardContent>
         </Card>
@@ -173,7 +173,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
-        eyebrow="Green Machine detail"
+        eyebrow="Machine detail"
         title={machine.modelName}
         description={`${machine.seriesFamily}${machine.serialNumber ? ` · SN ${machine.serialNumber}` : ""}${location ? ` · ${location.code}` : ""}`}
         actions={

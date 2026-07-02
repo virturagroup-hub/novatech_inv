@@ -43,10 +43,10 @@ export const seedFaqs: Faq[] = [
   },
   {
     id: "faq-machines",
-    question: "What is a Green Machine?",
+    question: "What is a machine record?",
     answer:
-      "A Green Machine is a broken or stripped machine that still has useful parts. Technicians can scan the QR label, log parts taken, and move reusable parts back into inventory.",
-    category: "Green Machines",
+      "A machine record tracks a broken or stripped machine that still has useful parts. Technicians can scan the QR label, log parts taken, and move reusable parts back into inventory.",
+    category: "Machines",
     sortOrder: 3,
     isPublished: true,
     createdBy: "seed-admin",
@@ -90,7 +90,7 @@ export const seedForumThreads: ForumThread[] = [
     body:
       "The sheet layout works well for staging, but it would help to print one label at a time for label printers at the counter or in the shop.",
     type: "feature_request",
-    status: "planned",
+    status: "under_review",
     createdBy: "seed-viewer",
     assignedTo: "seed-admin",
     isPinned: true,
@@ -180,7 +180,7 @@ export const seedUpdateLogs: UpdateLog[] = [
   },
   {
     id: "update-log-green-machines",
-    title: "Green Machines workflow started",
+    title: "Machines workflow started",
     body:
       "A new machine record flow is being added for stripped units, technician notes, and parts pulled back into inventory.",
     version: "0.2.1",
@@ -196,7 +196,7 @@ export const seedComingSoonItems: ComingSoonItem[] = [
     id: "coming-soon-notifications",
     title: "Notifications center",
     description:
-      "One place to review support replies, feature request changes, and admin mentions.",
+      "One place to review support replies, forum activity, feature request changes, and admin mentions.",
     status: "in_progress",
     targetDate: "2026-07-10",
     sortOrder: 1,
@@ -210,7 +210,7 @@ export const seedComingSoonItems: ComingSoonItem[] = [
     id: "coming-soon-machine-transfer",
     title: "Machine-to-inventory transfer flow",
     description:
-      "Turn green machine pulls into reusable parts with a direct transfer workflow instead of a second manual entry.",
+      "Turn machine pulls into reusable parts with a direct transfer workflow instead of a second manual entry.",
     status: "planned",
     targetDate: "2026-07-18",
     sortOrder: 2,
@@ -239,7 +239,7 @@ export const seedComingSoonItems: ComingSoonItem[] = [
 export const seedSops: Sop[] = [
   {
     id: "sop-green-machines",
-    title: "Green machine teardown checklist",
+    title: "Machine teardown checklist",
     body:
       "1. Scan the machine QR label.\n2. Review the notes and event timeline.\n3. Add a taken event before removing any part.\n4. Transfer reusable parts into inventory.\n5. Leave a final note when the machine is empty or scrapped.",
     category: "Operations",

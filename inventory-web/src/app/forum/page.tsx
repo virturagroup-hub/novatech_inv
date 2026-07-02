@@ -1,4 +1,4 @@
-import { SupportPage } from "@/components/pages/support-page";
+import { ForumPage } from "@/components/pages/forum-page";
 import { requireAppSession } from "@/lib/supabase/route-guards";
 
 export default async function Page({
@@ -8,6 +8,6 @@ export default async function Page({
     threadId?: string;
   };
 }>) {
-  await requireAppSession({ nextPath: "/support" });
-  return <SupportPage searchParams={searchParams} />;
+  await requireAppSession({ nextPath: "/forum" });
+  return <ForumPage searchParams={searchParams} />;
 }

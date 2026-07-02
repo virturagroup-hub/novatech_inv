@@ -636,7 +636,7 @@ export function WorkspaceContentProvider({
   const supportThreads = useMemo(
     () =>
       [...state.forumThreads]
-        .filter((thread) => thread.type !== "feature_request")
+        .filter((thread) => thread.type === "support")
         .sort((left, right) => {
           if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
           return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();

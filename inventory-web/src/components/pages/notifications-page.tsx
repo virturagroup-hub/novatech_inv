@@ -12,14 +12,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
+import { appRoutes } from "@/lib/app-navigation";
 
-function notificationLink(notification: { entityType: string; entityId: string }) {
+function notificationLink(
+  notification: { entityType: string; entityId: string },
+  getThreadById: (threadId: string) => { type: string } | null,
+) {
   if (notification.entityType === "forum_thread") {
-    return `/support?threadId=${encodeURIComponent(notification.entityId)}`;
+    const thread = getThreadById(notification.entityId);
+
+    if (thread?.type === "feature_request") {
+      return `${appRoutes.featureRequests}?threadId=${encodeURIComponent(notification.entityId)}`;
+    }
+
+    if (thread?.type === "general") {
+      return `${appRoutes.forum}?threadId=${encodeURIComponent(notification.entityId)}`;
+    }
+
+    return `${appRoutes.support}?threadId=${encodeURIComponent(notification.entityId)}`;
   }
 
   if (notification.entityType === "green_machine") {
-    return `/green-machines/${encodeURIComponent(notification.entityId)}`;
+    return `${appRoutes.machines}/${encodeURIComponent(notification.entityId)}`;
+  }
+
+  if (notification.entityType === "update_log") {
+    return appRoutes.updates;
   }
 
   return null;
@@ -27,36 +45,50 @@ function notificationLink(notification: { entityType: string; entityId: string }
 
 export function NotificationsPage() {
   const { permissions } = useAuth();
-  const { visibleNotifications, unreadNotificationCount, markNotificationRead, markAllNotificationsRead } =
-    useWorkspaceContent();
+  const {
+    visibleNotifications,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
+    getThreadById,
+  } = useWorkspaceContent();
 
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
         eyebrow="Notifications"
-        title="One inbox for support replies, feature changes, and content updates."
-        description="Use this inbox to keep up with the latest workspace activity without hunting through each module."
+        title="One inbox for support replies, forum activity, feature changes, and updates."
+        description="Use this inbox to keep up with the latest workspace activity without hunting through each section."
         actions={
           <>
             <Link
-              href="/support"
+              href={appRoutes.support}
               className={cn(
                 buttonVariants({ variant: "outline", size: "default" }),
                 "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
               )}
             >
               <MessageSquareMore className="mr-2 h-4 w-4" />
-              Support hub
+              Support
             </Link>
             <Link
-              href="/green-machines"
+              href={appRoutes.forum}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "default" }),
+                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              Forum
+            </Link>
+            <Link
+              href={appRoutes.featureRequests}
               className={cn(
                 buttonVariants({ variant: "default", size: "default" }),
                 "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
               )}
             >
               <Sparkles className="mr-2 h-4 w-4" />
-              Green Machines
+              Feature requests
             </Link>
           </>
         }
@@ -113,7 +145,7 @@ export function NotificationsPage() {
           <ScrollArea className="h-[34rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
             <div className="space-y-3">
               {visibleNotifications.map((notification) => {
-                const href = notificationLink(notification);
+                const href = notificationLink(notification, getThreadById);
 
                 return (
                   <div

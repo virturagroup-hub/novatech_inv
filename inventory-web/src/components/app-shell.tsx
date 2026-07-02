@@ -4,21 +4,10 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  ArrowUpRight,
-  Boxes,
   ChevronRight,
-  Bell,
-  FileClock,
-  Home,
-  LayoutGrid,
-  MapPinned,
+  Menu,
   Gauge,
   PackageSearch,
-  Printer,
-  MessagesSquare,
-  Recycle,
-  Users,
-  Settings2,
   LogOut,
 } from "lucide-react";
 
@@ -40,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { useInventory } from "@/components/inventory-provider";
 import { useAuth } from "@/components/auth-provider";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
+import { buildAppNavigation } from "@/lib/app-navigation";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/brand";
 import { getRoleLabel } from "@/lib/auth";
 import {
@@ -124,7 +114,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const { summary, refreshInventory, isSupabaseMode } = useInventory();
-  const { unreadNotificationCount } = useWorkspaceContent();
+  const { featureRequests, supportThreads, unreadNotificationCount } = useWorkspaceContent();
   const {
     session,
     hydrated,
@@ -143,47 +133,22 @@ export function AppShell({
     pathname === "/access-denied" ||
     pathname.startsWith("/print");
   const isLogoutRoute = pathname === "/logout";
-  const primaryNav = [
-    { href: "/", label: "Home", icon: Home, visible: true },
-    { href: "/lookup", label: "Lookup", icon: PackageSearch, visible: permissions.canViewParts },
-    { href: "/inventory", label: "Parts", icon: Boxes, visible: permissions.canViewParts },
-    { href: "/tags", label: "Labels", icon: Printer, visible: permissions.canPrintLabels },
-  ].filter((item) => item.visible);
-
-  const secondaryNav = [
-    {
-      href: "/support",
-      label: "Support",
-      icon: MessagesSquare,
-      visible: permissions.canAccessSupport,
-      badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
-    },
-    {
-      href: "/notifications",
-      label: "Notifications",
-      icon: Bell,
-      visible: permissions.canViewNotifications,
-      badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
-    },
-    {
-      href: "/green-machines",
-      label: "Green Machines",
-      icon: Recycle,
-      visible: permissions.canViewGreenMachines,
-    },
-    { href: "/admin/users", label: "Users", icon: Users, visible: effectiveRole === "admin" },
-    { href: "/admin/health", label: "Health", icon: Gauge, visible: permissions.canAccessSettings },
-    { href: "/locations", label: "Locations", icon: MapPinned, visible: permissions.canViewLocations },
-    { href: "/models", label: "Models", icon: Boxes, visible: permissions.canViewModels },
-    {
-      href: "/import-export",
-      label: "Reports / Exports",
-      icon: ArrowUpRight,
-      visible: permissions.canViewReports,
-    },
-    { href: "/activity", label: "Activity", icon: FileClock, visible: permissions.canViewActivity },
-    { href: "/settings", label: "Settings", icon: Settings2, visible: effectiveRole === "admin" },
-  ].filter((item) => item.visible);
+  const supportQueueCount = supportThreads.filter((thread) => thread.status === "open").length;
+  const featureRequestQueueCount = featureRequests.filter(
+    (thread) => thread.status === "open" || thread.status === "under_review",
+  ).length;
+  const {
+    desktopPrimaryNav,
+    desktopSecondaryNav,
+    mobilePrimaryNav,
+    mobileMenuNav,
+  } = buildAppNavigation({
+    permissions,
+    effectiveRole,
+    supportQueueCount,
+    featureRequestQueueCount,
+    unreadNotificationCount,
+  });
 
   useEffect(() => {
     if (!hydrated) return;
@@ -376,7 +341,7 @@ export function AppShell({
           )}
 
           <div className="mt-6 space-y-2">
-            {primaryNav.map((item) => (
+            {desktopPrimaryNav.map((item) => (
               <AppLink
                 key={item.href}
                 href={item.href}
@@ -390,7 +355,7 @@ export function AppShell({
           <Separator className="my-6 bg-white/10" />
 
           <div className="space-y-2">
-            {secondaryNav.map((item) => (
+            {desktopSecondaryNav.map((item) => (
               <AppLink
                 key={item.href}
                 href={item.href}
@@ -536,11 +501,11 @@ export function AppShell({
           <main className="min-w-0 flex-1 pb-24 lg:pb-8">{children}</main>
 
           <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 px-2 py-2 backdrop-blur-xl lg:hidden">
-            <div
-              className="grid gap-1"
-              style={{ gridTemplateColumns: `repeat(${primaryNav.length + 1}, minmax(0, 1fr))` }}
+              <div
+                className="grid gap-1"
+              style={{ gridTemplateColumns: `repeat(${mobilePrimaryNav.length + 1}, minmax(0, 1fr))` }}
             >
-              {primaryNav.map((item) => {
+              {mobilePrimaryNav.map((item) => {
                 const Icon = item.icon;
                 const active = isActiveRoute(pathname, item.href);
 
@@ -564,10 +529,10 @@ export function AppShell({
               <Sheet key={pathname}>
                 <SheetTrigger
                   className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-                  aria-label="Open more navigation items"
+                  aria-label="Open menu"
                 >
-                  <LayoutGrid className="h-4 w-4" />
-                  <span className="leading-none">More</span>
+                  <Menu className="h-4 w-4" />
+                  <span className="leading-none">Menu</span>
                 </SheetTrigger>
                 <SheetContent
                   side="bottom"
@@ -576,9 +541,9 @@ export function AppShell({
                 >
                   <SheetHeader className="flex-row items-start justify-between gap-4 px-4 pb-0 pt-4">
                     <div className="space-y-1">
-                      <SheetTitle className="text-white">More sections</SheetTitle>
+                      <SheetTitle className="text-white">Menu</SheetTitle>
                       <SheetDescription className="text-slate-400">
-                        Open support, notifications, green machines, locations, models, reports, activity, health, and settings.
+                        Open labels, support, forum, feature requests, updates, notifications, locations, models, reports, activity, health, and settings.
                       </SheetDescription>
                     </div>
                     <SheetClose
@@ -598,7 +563,7 @@ export function AppShell({
                     {permissions.canPreviewRoles && (
                       <RolePreviewPanel compact className="mb-2" />
                     )}
-                    {secondaryNav.map((item) => (
+                    {mobileMenuNav.map((item) => (
                       <AppLink
                         key={item.href}
                         href={item.href}

@@ -119,7 +119,7 @@ export function GreenMachinesPage() {
       notes: draft.notes.trim(),
     });
 
-    toast.success("Green Machine saved");
+    toast.success("Machine saved");
     setDraft({
       modelId: null,
       modelName: "",
@@ -136,7 +136,7 @@ export function GreenMachinesPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
-        eyebrow="Green Machines"
+        eyebrow="Machines"
         title="Track stripped machines, pull reusable parts, and keep the fleet moving."
         description="This workspace gives each machine a QR-linked record, a teardown timeline, and a clean place to log parts removed from the chassis."
         actions={
@@ -148,7 +148,7 @@ export function GreenMachinesPage() {
                 "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
               )}
             >
-              Support hub
+              Support
             </Link>
             <Link
               href="/notifications"
@@ -406,7 +406,7 @@ export function GreenMachinesPage() {
                 })}
                 {greenMachines.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
-                    No Green Machines yet.
+                    No machines yet.
                   </div>
                 )}
               </div>

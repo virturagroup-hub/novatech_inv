@@ -6,6 +6,7 @@ export type ForumThreadType = "support" | "general" | "feature_request";
 
 export type ForumThreadStatus =
   | "open"
+  | "under_review"
   | "planned"
   | "in_progress"
   | "completed"
