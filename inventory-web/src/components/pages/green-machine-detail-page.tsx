@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Archive,
   ArrowLeft,
@@ -12,6 +11,7 @@ import {
   Printer,
   Save,
   Send,
+  RotateCcw,
   Sparkles,
   Wrench,
 } from "lucide-react";
@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { buildAbsoluteAppUrl } from "@/lib/navigation";
 import { buildMachinePrintHref } from "@/lib/labels";
+import { getGreenMachineArchiveRetentionLabel } from "@/lib/green-machine-retention";
 import { formatDateTime, formatRelative } from "@/lib/inventory-utils";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import type { GreenMachineDraft, GreenMachineEventDraft } from "@/lib/workspace-content-types";
@@ -70,7 +71,6 @@ function statusLabel(status: GreenMachineDraft["status"]) {
 }
 
 export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: string }>) {
-  const router = useRouter();
   const { permissions } = useAuth();
   const { bins, getBinById, getDisplayPartNumber, models, parts } = useInventory();
   const {
@@ -78,6 +78,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     greenMachineEventsFor,
     saveGreenMachine,
     archiveGreenMachine,
+    restoreGreenMachine,
     addGreenMachineEvent,
   } = useWorkspaceContent();
 
@@ -229,30 +230,43 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
               All machines
             </Link>
             {permissions.canManageGreenMachines && (
-              <Link
-                href={buildMachinePrintHref({ machineId: machine.id, layout: "thermal" })}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "default" }),
-                  "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+              <>
+                <Link
+                  href={buildMachinePrintHref({ machineId: machine.id, layout: "thermal" })}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print label
+                </Link>
+                {machine.status === "archived" ? (
+                  <Button
+                    variant="outline"
+                    className="border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20 hover:text-white"
+                    onClick={() => {
+                      restoreGreenMachine(machine.id);
+                      toast.success("Machine restored");
+                    }}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Restore
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                    onClick={() => {
+                      archiveGreenMachine(machine.id);
+                      toast.success("Machine archived for 30 days");
+                    }}
+                  >
+                    <Archive className="mr-2 h-4 w-4" />
+                    Archive
+                  </Button>
                 )}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print label
-              </Link>
-            )}
-            {permissions.canManageGreenMachines && machine.status !== "archived" && (
-              <Button
-                variant="outline"
-                className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                onClick={() => {
-                  archiveGreenMachine(machine.id);
-                  toast.success("Machine archived");
-                  router.refresh();
-                }}
-              >
-                <Archive className="mr-2 h-4 w-4" />
-                Archive
-              </Button>
+              </>
             )}
           </>
         }
@@ -276,7 +290,11 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
         <StatCard
           label="Status"
           value={statusLabel(machine.status)}
-          hint="Current machine state"
+          hint={
+            machine.status === "archived"
+              ? getGreenMachineArchiveRetentionLabel(machine) ?? "Archived machine"
+              : "Current machine state"
+          }
           icon={<Sparkles className="h-5 w-5" />}
           tone="emerald"
         />

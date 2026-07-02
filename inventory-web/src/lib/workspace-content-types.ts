@@ -20,6 +20,8 @@ export type GreenMachineStatus =
   | "scrapped"
   | "archived";
 
+export type RestorableGreenMachineStatus = Exclude<GreenMachineStatus, "archived">;
+
 export type GreenMachineEventType =
   | "taken"
   | "transferred_to_inventory"
@@ -138,6 +140,7 @@ export interface GreenMachine {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  archivedStatus: RestorableGreenMachineStatus | null;
 }
 
 export interface GreenMachineEvent {

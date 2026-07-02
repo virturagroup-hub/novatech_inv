@@ -321,6 +321,7 @@ export const seedGreenMachines: GreenMachine[] = [
     createdAt: "2026-06-18T09:00:00.000Z",
     updatedAt: "2026-06-28T11:15:00.000Z",
     archivedAt: null,
+    archivedStatus: null,
   },
   {
     id: "machine-hp-m607-core",
@@ -338,6 +339,7 @@ export const seedGreenMachines: GreenMachine[] = [
     createdAt: "2026-06-19T08:30:00.000Z",
     updatedAt: "2026-06-29T13:00:00.000Z",
     archivedAt: null,
+    archivedStatus: null,
   },
 ];
 

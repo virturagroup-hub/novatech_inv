@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -13,6 +14,10 @@ import {
   createSeedWorkspaceContentState,
   workspaceContentStorageKey,
 } from "@/lib/workspace-content-seed";
+import {
+  getGreenMachineRestoreStatus,
+  purgeExpiredGreenMachines,
+} from "@/lib/green-machine-retention";
 import type {
   ComingSoonItem,
   ComingSoonItemDraft,
@@ -68,6 +73,7 @@ type WorkspaceContentContextValue = WorkspaceContentState & {
   markAllNotificationsRead: () => void;
   saveGreenMachine: (draft: GreenMachineDraft) => string;
   archiveGreenMachine: (machineId: string) => void;
+  restoreGreenMachine: (machineId: string) => void;
   addGreenMachineEvent: (machineId: string, draft: GreenMachineEventDraft) => void;
 };
 
@@ -145,9 +151,8 @@ export function WorkspaceContentProvider({
       }
 
       const stored = safeParseWorkspaceContentState(window.localStorage.getItem(workspaceContentStorageKey));
-      if (stored) {
-        setState(stored);
-      }
+      const nextState = purgeExpiredGreenMachines(stored ?? createSeedWorkspaceContentState());
+      setState(nextState);
       setHydrated(true);
     });
 
@@ -164,9 +169,29 @@ export function WorkspaceContentProvider({
     window.localStorage.setItem(workspaceContentStorageKey, JSON.stringify(state));
   }, [hydrated, state]);
 
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setState((current) => purgeExpiredGreenMachines(current));
+    }, 60 * 60 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [hydrated]);
+
   const currentUserId = session?.id ?? "system";
   const canManageGreenMachines = effectiveRole === "admin" || effectiveRole === "manager";
   const canRecordGreenMachineEvents = canManageGreenMachines || effectiveRole === "technician";
+  const updateGreenMachineState = useCallback(
+    (updater: (current: WorkspaceContentState) => WorkspaceContentState) => {
+      setState((current: WorkspaceContentState) => purgeExpiredGreenMachines(updater(current)));
+    },
+    [],
+  );
 
   const pushNotification = (notification: Omit<Notification, "id" | "createdAt" | "isRead"> & { isRead?: boolean }) => {
     const now = timestamp();
@@ -537,6 +562,8 @@ export function WorkspaceContentProvider({
     const machineId = draft.id ?? crypto.randomUUID();
     const existing = state.greenMachines.find((item) => item.id === machineId);
     const nextStatus = draft.status;
+    const existingRestorableStatus =
+      existing?.status === "archived" ? existing.archivedStatus ?? "active" : existing?.status ?? "active";
     const machine: GreenMachine = {
       id: machineId,
       modelId: draft.modelId || null,
@@ -551,10 +578,16 @@ export function WorkspaceContentProvider({
       updatedBy: currentUserId,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
-      archivedAt: nextStatus === "archived" ? existing?.archivedAt ?? now : null,
+      archivedAt:
+        nextStatus === "archived"
+          ? existing?.status === "archived"
+            ? existing.archivedAt ?? now
+            : now
+          : null,
+      archivedStatus: nextStatus === "archived" ? existingRestorableStatus : null,
     };
 
-    setState((current) => {
+    updateGreenMachineState((current) => {
       const nextMachines = existing
         ? current.greenMachines.map((item) => (item.id === machineId ? machine : item))
         : [machine, ...current.greenMachines];
@@ -571,11 +604,42 @@ export function WorkspaceContentProvider({
     }
 
     const now = timestamp();
-    setState((current) => ({
+    updateGreenMachineState((current) => ({
       ...current,
       greenMachines: current.greenMachines.map((item) =>
         item.id === machineId
-          ? { ...item, status: "archived", archivedAt: now, updatedAt: now, updatedBy: currentUserId }
+          ? {
+              ...item,
+              status: "archived",
+              archivedAt: now,
+              archivedStatus:
+                item.status === "archived" ? item.archivedStatus ?? "active" : item.status,
+              updatedAt: now,
+              updatedBy: currentUserId,
+            }
+          : item,
+      ),
+    }));
+  };
+
+  const restoreGreenMachine = (machineId: string) => {
+    if (!canManageGreenMachines) {
+      return;
+    }
+
+    const now = timestamp();
+    updateGreenMachineState((current) => ({
+      ...current,
+      greenMachines: current.greenMachines.map((item) =>
+        item.id === machineId
+          ? {
+              ...item,
+              status: getGreenMachineRestoreStatus(item),
+              archivedAt: null,
+              archivedStatus: null,
+              updatedAt: now,
+              updatedBy: currentUserId,
+            }
           : item,
       ),
     }));
@@ -600,7 +664,7 @@ export function WorkspaceContentProvider({
       createdAt: now,
     };
 
-    setState((current) => ({
+    updateGreenMachineState((current) => ({
       ...current,
       greenMachineEvents: [event, ...current.greenMachineEvents],
       greenMachines: current.greenMachines.map((machine) =>
@@ -745,6 +809,7 @@ export function WorkspaceContentProvider({
     markAllNotificationsRead,
     saveGreenMachine,
     archiveGreenMachine,
+    restoreGreenMachine,
     addGreenMachineEvent,
   };
 

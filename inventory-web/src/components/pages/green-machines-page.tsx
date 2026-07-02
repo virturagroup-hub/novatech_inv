@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Printer, Sparkles, Wrench } from "lucide-react";
+import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Printer, RotateCcw, Sparkles, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
 import { buildMachinePrintHref } from "@/lib/labels";
+import { getGreenMachineArchiveRetentionLabel } from "@/lib/green-machine-retention";
 import { formatRelative } from "@/lib/inventory-utils";
 import { getModelDisplayName } from "@/lib/model-search";
 import type { DeviceModel } from "@/lib/inventory-types";
@@ -74,7 +75,7 @@ export function GreenMachinesPage() {
   const router = useRouter();
   const { permissions } = useAuth();
   const { bins, models } = useInventory();
-  const { greenMachines, greenMachineEventsFor, saveGreenMachine, archiveGreenMachine } =
+  const { greenMachines, greenMachineEventsFor, saveGreenMachine, archiveGreenMachine, restoreGreenMachine } =
     useWorkspaceContent();
   const [draft, setDraft] = useState<GreenMachineDraft>(() => createEmptyMachineDraft());
   const canManageGreenMachines = permissions.canManageGreenMachines;
@@ -384,6 +385,11 @@ export function GreenMachinesPage() {
                               Latest event: {latestEvent.eventType.replace(/_/g, " ")} · {formatRelative(latestEvent.createdAt)}
                             </p>
                           )}
+                          {machine.status === "archived" && machine.archivedAt && (
+                            <p className="text-xs text-amber-200/90">
+                              {getGreenMachineArchiveRetentionLabel(machine)} · Archived {formatRelative(machine.archivedAt)}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Link
@@ -403,24 +409,36 @@ export function GreenMachinesPage() {
                                 buttonVariants({ variant: "outline", size: "default" }),
                                 "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
                               )}
-                            >
-                              <Printer className="mr-2 h-4 w-4" />
-                              Print label
-                            </Link>
+                              >
+                                <Printer className="mr-2 h-4 w-4" />
+                                Print label
+                              </Link>
                           )}
-                          {permissions.canManageGreenMachines && machine.status !== "archived" && (
+                          {permissions.canManageGreenMachines && machine.status === "archived" ? (
+                            <Button
+                              variant="outline"
+                              className="border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20 hover:text-white"
+                              onClick={() => {
+                                restoreGreenMachine(machine.id);
+                                toast.success("Machine restored");
+                              }}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Restore
+                            </Button>
+                          ) : permissions.canManageGreenMachines ? (
                             <Button
                               variant="outline"
                               className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                               onClick={() => {
                                 archiveGreenMachine(machine.id);
-                                toast.success("Machine archived");
+                                toast.success("Machine archived for 30 days");
                               }}
                             >
                               <Archive className="mr-2 h-4 w-4" />
                               Archive
                             </Button>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </div>
