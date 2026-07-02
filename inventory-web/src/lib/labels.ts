@@ -105,3 +105,15 @@ export function buildBinPrintHref(options: { binId: string; copies?: number; lay
   const query = params.toString();
   return query ? `/print?${query}` : "/print";
 }
+
+export function buildMachinePrintHref(options: { machineId: string; layout?: LabelLayout }) {
+  const params = new URLSearchParams();
+  params.set("machineId", options.machineId);
+
+  if (options.layout && options.layout !== "sheet") {
+    params.set("layout", options.layout);
+  }
+
+  const query = params.toString();
+  return query ? `/print?${query}` : "/print";
+}

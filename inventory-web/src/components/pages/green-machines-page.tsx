@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Sparkles, Wrench } from "lucide-react";
+import { Archive, ArrowRight, Bike, CheckCircle2, Plus, Printer, Sparkles, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { cn } from "@/lib/utils";
+import { buildMachinePrintHref } from "@/lib/labels";
 import { formatRelative } from "@/lib/inventory-utils";
 import { getModelDisplayName } from "@/lib/model-search";
 import type { DeviceModel } from "@/lib/inventory-types";
@@ -395,6 +396,18 @@ export function GreenMachinesPage() {
                             Open
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </Link>
+                          {permissions.canManageGreenMachines && (
+                            <Link
+                              href={buildMachinePrintHref({ machineId: machine.id, layout: "thermal" })}
+                              className={cn(
+                                buttonVariants({ variant: "outline", size: "default" }),
+                                "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                              )}
+                            >
+                              <Printer className="mr-2 h-4 w-4" />
+                              Print label
+                            </Link>
+                          )}
                           {permissions.canManageGreenMachines && machine.status !== "archived" && (
                             <Button
                               variant="outline"

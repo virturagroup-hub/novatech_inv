@@ -7,21 +7,23 @@ import { QRCodeSVG } from "qrcode.react";
 
 import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
+import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { Bin, Part } from "@/lib/inventory-types";
+import type { Bin, DeviceModel, Part } from "@/lib/inventory-types";
 import { buildAbsoluteAppUrl } from "@/lib/navigation";
 import {
   LABELS_PER_SHEET,
   type LabelLayout,
   normalizePrintCopies,
-  parseIdList,
   parseCopiesByPart,
+  parseIdList,
   type LabelMode,
 } from "@/lib/labels";
 import { getBinById } from "@/lib/inventory-utils";
+import type { GreenMachine } from "@/lib/workspace-content-types";
 
 type PrintLabel =
   | {
@@ -31,7 +33,76 @@ type PrintLabel =
   | {
       type: "bin";
       bin: Bin;
+    }
+  | {
+      type: "machine";
+      machine: GreenMachine;
+      manufacturer: string;
+      model: string;
+      serialLine: string;
+      qrValue: string;
     };
+
+type MachinePrintLabel = Extract<PrintLabel, { type: "machine" }>;
+
+const knownManufacturers = [
+  "Konica Minolta",
+  "Universal",
+  "Canon",
+  "Xerox",
+  "Ricoh",
+  "Sharp",
+  "Riso",
+  "HP",
+];
+
+function stripManufacturerPrefix(value: string, manufacturer: string) {
+  const trimmed = value.trim();
+  const prefix = manufacturer.trim();
+
+  if (!trimmed || !prefix) {
+    return trimmed;
+  }
+
+  const lowerValue = trimmed.toLowerCase();
+  const lowerPrefix = prefix.toLowerCase();
+
+  if (lowerValue === lowerPrefix) {
+    return "";
+  }
+
+  if (lowerValue.startsWith(`${lowerPrefix} `)) {
+    return trimmed.slice(prefix.length).trim();
+  }
+
+  return trimmed;
+}
+
+function getMachineLabelIdentity(machine: GreenMachine, model: DeviceModel | null) {
+  const displayName = machine.modelName.trim();
+  const manufacturer =
+    model?.manufacturer?.trim() ||
+    knownManufacturers.find((candidate) => {
+      const lowerDisplayName = displayName.toLowerCase();
+      const lowerCandidate = candidate.toLowerCase();
+      return lowerDisplayName === lowerCandidate || lowerDisplayName.startsWith(`${lowerCandidate} `);
+    }) ||
+    "Unlisted";
+
+  const modelLine =
+    stripManufacturerPrefix(displayName, manufacturer) ||
+    model?.name?.trim() ||
+    displayName ||
+    "Unlisted model";
+
+  const serial = machine.serialNumber?.trim() || "";
+
+  return {
+    manufacturer,
+    modelLine,
+    serialLine: serial ? `S/N: ${serial}` : "S/N: Unlisted",
+  };
+}
 
 function getBinLocationText(bin: Bin) {
   return `${bin.aisle}-${bin.row}-${bin.column}`;
@@ -66,9 +137,7 @@ function buildPartLabels(
   return parts.flatMap((part) =>
     Array.from(
       {
-        length: hasPerPartCopies
-          ? copiesByPart[part.id] ?? 1
-          : copies,
+        length: hasPerPartCopies ? copiesByPart[part.id] ?? 1 : copies,
       },
       () => ({ type: "part" as const, part }),
     ),
@@ -86,6 +155,7 @@ export function PrintPage({
     partId?: string;
     partIds?: string;
     binId?: string;
+    machineId?: string;
     copies?: string;
     labelMode?: string;
     includeZero?: string;
@@ -94,7 +164,8 @@ export function PrintPage({
   };
 }>) {
   const { permissions } = useAuth();
-  const { bins, getDisplayPartNumber, getPartById, recordLabelPrint } = useInventory();
+  const { bins, getDisplayPartNumber, getModelById, getPartById, recordLabelPrint } = useInventory();
+  const { getGreenMachineById } = useWorkspaceContent();
 
   const selectedPartIds = useMemo(
     () => parseIdList(searchParams.partIds ?? searchParams.partId),
@@ -113,6 +184,14 @@ export function PrintPage({
     () => (searchParams.binId ? getBinById(bins, searchParams.binId) : null),
     [bins, searchParams.binId],
   );
+  const selectedMachine = useMemo(
+    () => (searchParams.machineId ? getGreenMachineById(searchParams.machineId) : null),
+    [getGreenMachineById, searchParams.machineId],
+  );
+  const selectedMachineModel = useMemo(
+    () => (selectedMachine?.modelId ? getModelById(selectedMachine.modelId) ?? null : null),
+    [getModelById, selectedMachine],
+  );
 
   const labelMode: LabelMode =
     searchParams.labelMode === "copies" || searchParams.labelMode === "quantity"
@@ -126,8 +205,28 @@ export function PrintPage({
     () => parseCopiesByPart(searchParams.copiesByPart),
     [searchParams.copiesByPart],
   );
+  const machineLabel = useMemo<MachinePrintLabel | null>(() => {
+    if (!selectedMachine) {
+      return null;
+    }
+
+    const identity = getMachineLabelIdentity(selectedMachine, selectedMachineModel);
+
+    return {
+      type: "machine",
+      machine: selectedMachine,
+      manufacturer: identity.manufacturer,
+      model: identity.modelLine,
+      serialLine: identity.serialLine,
+      qrValue: buildAbsoluteAppUrl(`/green-machines/${selectedMachine.id}`),
+    };
+  }, [selectedMachine, selectedMachineModel]);
 
   const labels = useMemo<PrintLabel[]>(() => {
+    if (machineLabel) {
+      return [machineLabel];
+    }
+
     if (selectedParts.length > 0) {
       return buildPartLabels(selectedParts, labelMode, copies, includeZero, copiesByPart);
     }
@@ -137,18 +236,25 @@ export function PrintPage({
     }
 
     return [];
-  }, [copies, copiesByPart, includeZero, labelMode, selectedBin, selectedParts]);
+  }, [copies, copiesByPart, includeZero, labelMode, machineLabel, selectedBin, selectedParts]);
 
-  const mode: "part" | "bin" | null = selectedParts.length > 0 ? "part" : selectedBin ? "bin" : null;
+  const mode: "part" | "bin" | "machine" | null = machineLabel
+    ? "machine"
+    : selectedParts.length > 0
+      ? "part"
+      : selectedBin
+        ? "bin"
+        : null;
   const sheetCount = labels.length > 0 ? Math.ceil(labels.length / LABELS_PER_SHEET) : 0;
   const selectedSummary =
-    mode === "part"
-      ? `${selectedParts.length} part${selectedParts.length === 1 ? "" : "s"} selected`
-      : selectedBin
-        ? `Bin ${selectedBin.code}`
-        : "No selection";
-  const queueSummary =
-    labels.length === 1 ? "1 label queued" : `${labels.length} labels queued`;
+    mode === "machine"
+      ? `Machine label${machineLabel ? ` · ${machineLabel.machine.modelName}` : ""}`
+      : mode === "part"
+        ? `${selectedParts.length} part${selectedParts.length === 1 ? "" : "s"} selected`
+        : selectedBin
+          ? `Bin ${selectedBin.code}`
+          : "No selection";
+  const queueSummary = labels.length === 1 ? "1 label queued" : `${labels.length} labels queued`;
 
   const handlePrint = () => {
     if (mode === "part" && selectedParts.length > 0) {
@@ -178,7 +284,7 @@ export function PrintPage({
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Printable labels</p>
                 <CardTitle className="text-slate-950">Green NVentory</CardTitle>
                 <CardDescription className="text-slate-600">
-                  Clean scan labels that open the inventory record after the QR code is scanned.
+                  Clean scan labels that open the part, machine, or location record after the QR code is scanned.
                 </CardDescription>
               </div>
               <Button
@@ -253,9 +359,9 @@ export function PrintPage({
             <CardContent className="flex min-h-[28rem] flex-col items-center justify-center gap-4 p-8 text-center">
               <Tag className="h-12 w-12 text-slate-400" />
               <div className="space-y-1">
-                <h2 className="text-lg font-semibold text-slate-950">Choose a part or bin label</h2>
+                <h2 className="text-lg font-semibold text-slate-950">Choose a part, machine, or bin label</h2>
                 <p className="max-w-xl text-sm text-slate-600">
-                  Open the label builder, select one or more parts, then print the clean scan labels.
+                  Open the label builder, select the record you want, then print the clean scan labels.
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -303,8 +409,10 @@ export function PrintPage({
                     bins={bins}
                     layout="thermal"
                   />
+                ) : label.type === "machine" ? (
+                  <MachineLabelCard machineLabel={label} layout="thermal" />
                 ) : (
-                  <BinLabelCard key={`${label.type}-${index}`} bin={label.bin} layout="thermal" />
+                  <BinLabelCard bin={label.bin} layout="thermal" />
                 )}
               </section>
             ))}
@@ -312,10 +420,7 @@ export function PrintPage({
         ) : (
           <div className="space-y-6">
             {Array.from({ length: sheetCount }, (_, sheetIndex) => {
-              const pageLabels = labels.slice(
-                sheetIndex * LABELS_PER_SHEET,
-                (sheetIndex + 1) * LABELS_PER_SHEET,
-              );
+              const pageLabels = labels.slice(sheetIndex * LABELS_PER_SHEET, (sheetIndex + 1) * LABELS_PER_SHEET);
 
               return (
                 <section
@@ -337,6 +442,8 @@ export function PrintPage({
                           displayPartNumber={getDisplayPartNumber(label.part)}
                           bins={bins}
                         />
+                      ) : label.type === "machine" ? (
+                        <MachineLabelCard key={`${sheetIndex}-${slotIndex}`} machineLabel={label} />
                       ) : (
                         <BinLabelCard key={`${sheetIndex}-${slotIndex}`} bin={label.bin} />
                       );
@@ -397,9 +504,7 @@ function PartLabelCard({
     <div
       className={cn(
         "overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-950 print:border-slate-300",
-        layout === "thermal"
-          ? "flex h-[1.75in] w-full items-center gap-3 p-2"
-          : "flex h-[2in] flex-col justify-between p-1.5",
+        layout === "thermal" ? "flex h-[1.75in] w-full items-center gap-3 p-2" : "flex h-[2in] flex-col justify-between p-1.5",
       )}
     >
       <div className={layout === "thermal" ? "shrink-0" : "flex justify-center"}>
@@ -411,11 +516,7 @@ function PartLabelCard({
         />
       </div>
       <div
-        className={cn(
-          layout === "thermal"
-            ? "min-w-0 flex-1 space-y-1"
-            : "mt-2 space-y-0.5 text-center",
-        )}
+        className={cn(layout === "thermal" ? "min-w-0 flex-1 space-y-1" : "mt-2 space-y-0.5 text-center")}
       >
         <p className={cn("font-mono font-semibold leading-4", layout === "thermal" ? "text-[12px]" : "text-[13px]")}>
           {displayPartNumber}
@@ -445,9 +546,7 @@ function BinLabelCard({
     <div
       className={cn(
         "overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-950 print:border-slate-300",
-        layout === "thermal"
-          ? "flex h-[1.75in] w-full items-center gap-3 p-2"
-          : "flex h-[2in] flex-col justify-between p-1.5",
+        layout === "thermal" ? "flex h-[1.75in] w-full items-center gap-3 p-2" : "flex h-[2in] flex-col justify-between p-1.5",
       )}
     >
       <div className={layout === "thermal" ? "shrink-0" : "flex justify-center"}>
@@ -459,11 +558,7 @@ function BinLabelCard({
         />
       </div>
       <div
-        className={cn(
-          layout === "thermal"
-            ? "min-w-0 flex-1 space-y-1"
-            : "mt-2 space-y-0.5 text-center",
-        )}
+        className={cn(layout === "thermal" ? "min-w-0 flex-1 space-y-1" : "mt-2 space-y-0.5 text-center")}
       >
         <p className={cn("font-mono font-semibold leading-4", layout === "thermal" ? "text-[12px]" : "text-[13px]")}>
           {bin.code}
@@ -476,6 +571,51 @@ function BinLabelCard({
             {bin.description}
           </p>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MachineLabelCard({
+  machineLabel,
+  layout = "sheet",
+}: Readonly<{
+  machineLabel: MachinePrintLabel;
+  layout?: LabelLayout;
+}>) {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-950 print:border-slate-300",
+        layout === "thermal" ? "flex h-[1.75in] w-full items-center gap-3 p-2" : "flex h-[2in] w-full items-center gap-4 p-2",
+      )}
+    >
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p
+          className={cn(
+            "uppercase tracking-[0.24em] text-slate-500",
+            layout === "thermal" ? "text-[8px]" : "text-[9px]",
+          )}
+        >
+          Machine
+        </p>
+        <p className={cn("font-semibold leading-4", layout === "thermal" ? "text-[11px]" : "text-[12px]")}>
+          {machineLabel.manufacturer}
+        </p>
+        <p className={cn("break-words font-medium leading-4", layout === "thermal" ? "text-[10px]" : "text-[11px]")}>
+          {machineLabel.model}
+        </p>
+        <p className={cn("leading-4 text-slate-700", layout === "thermal" ? "text-[9px]" : "text-[10px]")}>
+          {machineLabel.serialLine}
+        </p>
+      </div>
+      <div className="shrink-0">
+        <QRCodeSVG
+          value={machineLabel.qrValue}
+          includeMargin
+          size={layout === "thermal" ? 64 : 88}
+          className="rounded-lg bg-white p-1"
+        />
       </div>
     </div>
   );

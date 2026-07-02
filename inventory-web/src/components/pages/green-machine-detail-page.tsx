@@ -3,7 +3,18 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Camera, CheckCircle2, MapPin, Save, Send, Sparkles, Wrench } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  MapPin,
+  Printer,
+  Save,
+  Send,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
@@ -22,6 +33,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { buildAbsoluteAppUrl } from "@/lib/navigation";
+import { buildMachinePrintHref } from "@/lib/labels";
 import { formatDateTime, formatRelative } from "@/lib/inventory-utils";
 import { useWorkspaceContent } from "@/components/workspace-content-provider";
 import type { GreenMachineDraft, GreenMachineEventDraft } from "@/lib/workspace-content-types";
@@ -216,6 +228,18 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
               <ArrowLeft className="mr-2 h-4 w-4" />
               All machines
             </Link>
+            {permissions.canManageGreenMachines && (
+              <Link
+                href={buildMachinePrintHref({ machineId: machine.id, layout: "thermal" })}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "default" }),
+                  "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print label
+              </Link>
+            )}
             {permissions.canManageGreenMachines && machine.status !== "archived" && (
               <Button
                 variant="outline"
