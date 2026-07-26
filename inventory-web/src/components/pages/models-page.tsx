@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Archive, Boxes, Layers3, PackageSearch, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, Boxes, Layers3, PackageSearch, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -21,11 +21,15 @@ import {
   getModelSearchReason,
   groupModelsForSearch,
 } from "@/lib/model-search";
+import { parseModelCsv, type ModelCsvPreview } from "@/lib/model-csv";
 
 export function ModelsPage() {
-  const { permissions } = useAuth();
-  const { models, parts, deleteModel, setModelStatus } = useInventory();
+  const { permissions, effectiveRole } = useAuth();
+  const { models, parts, deleteModel, setModelStatus, refreshInventory } = useInventory();
   const [query, setQuery] = useState("");
+  const [modelImportPreview, setModelImportPreview] = useState<ModelCsvPreview | null>(null);
+  const [modelImportText, setModelImportText] = useState("");
+  const [modelImportBusy, setModelImportBusy] = useState(false);
 
   const groupedModels = useMemo(() => groupModelsForSearch(models, query), [models, query]);
 
@@ -51,6 +55,61 @@ export function ModelsPage() {
     toast.success("Model deleted");
   };
 
+  const canImportModels = effectiveRole === "admin";
+
+  const handleModelImportFile = async (file: File | undefined) => {
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const preview = parseModelCsv(text);
+      setModelImportText(text);
+      setModelImportPreview(preview);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not read the model CSV.");
+    }
+  };
+
+  const commitModelImport = async () => {
+    if (!canImportModels || !modelImportText || !modelImportPreview || modelImportPreview.readyRows === 0) {
+      return;
+    }
+
+    if (!window.confirm(`Import ${modelImportPreview.readyRows} valid model rows? Existing models will not be deleted.`)) {
+      return;
+    }
+
+    setModelImportBusy(true);
+    try {
+      const response = await fetch("/api/models/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ csvText: modelImportText }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        modelsCreated?: number;
+        modelsUpdated?: number;
+        invalidRows?: number;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message ?? "Model import failed.");
+      }
+
+      await refreshInventory();
+      toast.success(
+        `Model import complete: ${payload.modelsCreated ?? 0} created, ${payload.modelsUpdated ?? 0} updated, ${payload.invalidRows ?? 0} invalid.`,
+      );
+      setModelImportPreview(null);
+      setModelImportText("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Model import failed.");
+    } finally {
+      setModelImportBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
       <PageHero
@@ -58,20 +117,69 @@ export function ModelsPage() {
         title="Manage printer and copier compatibility."
         description="Keep manufacturer, model, and series records clean so parts stay easy to match. Archive retired devices instead of deleting them when parts still depend on them."
         actions={
-          permissions.canManageModels ? (
-            <Link
-              href="/models/new"
-              className={cn(
-                buttonVariants({ variant: "default", size: "default" }),
-                "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
-              )}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              New model
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            {permissions.canManageModels && (
+              <Link
+                href="/models/new"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "default" }),
+                  "bg-emerald-400 text-slate-950 hover:bg-emerald-300",
+                )}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New model
+              </Link>
+            )}
+            {canImportModels && (
+              <label
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "default" }),
+                  "cursor-pointer border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Import CSV
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="sr-only"
+                  onChange={(event) => void handleModelImportFile(event.target.files?.[0])}
+                />
+              </label>
+            )}
+          </div>
         }
       />
+
+      {canImportModels && modelImportPreview && (
+        <Card className="border-sky-400/20 bg-sky-400/10">
+          <CardHeader>
+            <CardTitle className="text-white">Model import preview</CardTitle>
+            <CardDescription className="text-slate-300">
+              {modelImportPreview.totalRows} rows · {modelImportPreview.readyRows} ready · {modelImportPreview.invalidRows} invalid · {modelImportPreview.duplicateRows} duplicate CSV rows skipped
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button
+              className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+              onClick={() => void commitModelImport()}
+              disabled={modelImportBusy || modelImportPreview.readyRows === 0}
+            >
+              {modelImportBusy ? "Importing..." : "Commit import"}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+              onClick={() => {
+                setModelImportPreview(null);
+                setModelImportText("");
+              }}
+            >
+              Cancel
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         <StatCard

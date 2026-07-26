@@ -67,6 +67,9 @@ export interface Bin {
   manufacturer: string | null;
   status: "active" | "inactive";
   notes?: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export type ModelStatus = "active" | "inactive";
@@ -80,6 +83,9 @@ export interface DeviceModel {
   series: string;
   status: ModelStatus;
   notes?: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface Part {
@@ -99,6 +105,9 @@ export interface Part {
   receivedAt: string;
   updatedAt: string;
   lastCountedAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface ActivityEntry {
@@ -130,6 +139,11 @@ export interface ActivityEntry {
     itemManufacturer?: string | null;
     itemCategory?: Category | null;
     metadata?: Record<string, unknown> | null;
+    quantityAdded?: number | null;
+    source?: string | null;
+    machineId?: string | null;
+    machineEventId?: string | null;
+    batchId?: string | null;
   };
 }
 

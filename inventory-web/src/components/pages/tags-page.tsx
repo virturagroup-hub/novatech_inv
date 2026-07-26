@@ -31,7 +31,10 @@ import { buildBinPrintHref, buildPartPrintHref, normalizePrintCopies, parseIdLis
 import {
   filterParts,
   filterPartsByLabelRecency,
+  formatDateTime,
   getPartLocationLabel,
+  getLatestLabelAddition,
+  getSuggestedLabelQuantity,
   type LabelRecencyFilter,
 } from "@/lib/inventory-utils";
 
@@ -182,8 +185,19 @@ export function TagsPage({
   const selectedBin = selectedBinId ? bins.find((bin) => bin.id === selectedBinId) ?? null : null;
 
   const getPartCopyCount = useCallback(
-    (partId: string) => partCopyCounts[partId] ?? (labelMode === "copies" ? normalizedCopies : 1),
-    [labelMode, normalizedCopies, partCopyCounts],
+    (partId: string) => {
+      if (partCopyCounts[partId] !== undefined) {
+        return partCopyCounts[partId];
+      }
+
+      const part = parts.find((item) => item.id === partId);
+      if (part && labelRecencyFilter !== "all") {
+        return getSuggestedLabelQuantity(part, activity, labelRecencyFilter);
+      }
+
+      return labelMode === "copies" ? normalizedCopies : 1;
+    },
+    [activity, labelMode, labelRecencyFilter, normalizedCopies, partCopyCounts, parts],
   );
 
   const clearFilters = () => {
@@ -208,7 +222,7 @@ export function TagsPage({
 
       partMatches.forEach((part) => {
         if (!next[part.id]) {
-          next[part.id] = labelMode === "copies" ? normalizedCopies : 1;
+          next[part.id] = getPartCopyCount(part.id);
         }
       });
 
@@ -750,6 +764,15 @@ export function TagsPage({
                             <p className="mt-2 text-xs text-slate-400">
                               {formatPartLocation(part, bins)}
                             </p>
+                            {labelRecencyFilter !== "all" &&
+                              (() => {
+                                const recent = getLatestLabelAddition(part, activity, labelRecencyFilter);
+                                return recent ? (
+                                  <p className="mt-2 text-xs text-emerald-200">
+                                    +{recent.audit?.quantityAdded ?? Math.max(recent.audit?.delta ?? 0, 0)} added · {formatDateTime(recent.occurredAt)}
+                                  </p>
+                                ) : null;
+                              })()}
                           </div>
                           {selected && <Badge className="border-white/10 bg-white/5 text-slate-200">Selected</Badge>}
                         </div>
@@ -836,6 +859,15 @@ export function TagsPage({
                         </p>
                         <p className="mt-1 text-sm text-slate-200">{part.partName}</p>
                         <p className="mt-2 text-xs text-slate-400">{formatPartLocation(part, bins)}</p>
+                        {labelRecencyFilter !== "all" && (() => {
+                          const recent = getLatestLabelAddition(part, activity, labelRecencyFilter);
+                          return recent ? (
+                            <p className="mt-2 text-xs text-emerald-200">
+                              +{recent.audit?.quantityAdded ?? Math.max(recent.audit?.delta ?? 0, 0)} added · {formatDateTime(recent.occurredAt)} · {recent.audit?.source?.replace(/_/g, " ") ?? "inventory"}
+                              {permissions.canViewActivity && recent.audit?.actorLabel ? ` · ${recent.audit.actorLabel}` : ""}
+                            </p>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="w-full sm:w-32">
                         <Label className="text-xs uppercase tracking-[0.22em] text-slate-500">

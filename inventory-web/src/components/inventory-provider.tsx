@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useAuth } from "@/components/auth-provider";
 import { normalizeCategory } from "@/lib/category-normalization";
 import { createEmptyState, createSeedState, inventoryStorageKey } from "@/lib/inventory-seed";
 import { inventoryReducer, type PartImportRow } from "@/lib/inventory-reducer";
@@ -50,7 +51,7 @@ type InventoryContextValue = InventoryState & {
   getCompatibleModels: (part: Part) => DeviceModel[];
   getPartStockStatus: (part: Part) => ReturnType<typeof getPartStockStatus>;
   requiresAttention: (part: Part) => boolean;
-  addPart: (draft: PartDraft) => void;
+  addPart: (draft: PartDraft) => Promise<void>;
   deletePart: (partId: string) => void;
   adjustPart: (partId: string, delta: number) => void;
   recordLabelPrint: (
@@ -87,7 +88,7 @@ function isSupabaseConfigured() {
 }
 
 function isDemoDataExplicitlyEnabled() {
-  return process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "true";
+  return process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "true";
 }
 
 function safeParseState(raw: string | null): InventoryState | null {
@@ -142,13 +143,15 @@ export function InventoryProvider({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { session } = useAuth();
   const supabaseConfigured = isSupabaseConfigured();
   const demoModeEnabled = isDemoDataExplicitlyEnabled();
+  const localDemoModeEnabled = process.env.NODE_ENV !== "production" && (!supabaseConfigured || demoModeEnabled);
   const isSupabaseMode = supabaseConfigured && !demoModeEnabled;
-  const dataSource: InventoryDataSource = isSupabaseMode ? "supabase" : "demo";
+  const dataSource: InventoryDataSource = isSupabaseMode || !localDemoModeEnabled ? "supabase" : "demo";
   const [state, dispatch] = useReducer(
     inventoryReducer,
-    isSupabaseMode ? createEmptyState("supabase") : createSeedState(),
+    localDemoModeEnabled ? createSeedState() : createEmptyState("supabase"),
   );
   const [hydrated, setHydrated] = useState(false);
   const [browserSupabase] = useState(() =>
@@ -173,7 +176,7 @@ export function InventoryProvider({
     let active = true;
 
     const bootstrap = async () => {
-      if (!isSupabaseMode) {
+        if (!isSupabaseMode && localDemoModeEnabled) {
         const stored = safeParseState(window.localStorage.getItem(inventoryStorageKey));
         if (stored && active) {
           dispatch({ type: "hydrate", state: stored });
@@ -204,18 +207,18 @@ export function InventoryProvider({
     return () => {
       active = false;
     };
-  }, [isSupabaseMode]);
+  }, [isSupabaseMode, localDemoModeEnabled]);
 
   useEffect(() => {
-    if (!hydrated || isSupabaseMode) return;
+    if (!hydrated || isSupabaseMode || !localDemoModeEnabled) return;
     window.localStorage.setItem(inventoryStorageKey, JSON.stringify(state));
-  }, [hydrated, isSupabaseMode, state]);
+  }, [hydrated, isSupabaseMode, localDemoModeEnabled, state]);
 
   const syncRemote = useCallback(
     (task: () => Promise<void>) => {
-      if (!browserSupabase) return;
+      if (!browserSupabase) return Promise.resolve();
 
-      void (async () => {
+      return (async () => {
         try {
           await task();
         } catch (error) {
@@ -250,21 +253,39 @@ export function InventoryProvider({
       requiresAttention: (part: Part) => requiresAttention(part),
       addPart: (draft: PartDraft) => {
         const isNpn = Boolean(draft.isNpn);
+        const normalizedPartNumber = normalizeText(draft.partNumber).toUpperCase();
+        const existingById = draft.id ? state.parts.find((part) => part.id === draft.id) : null;
+        const existingByNumber =
+          !isNpn && normalizedPartNumber
+            ? state.parts.find(
+                (part) =>
+                  !part.isNpn &&
+                  part.partNumber.trim().toUpperCase() === normalizedPartNumber,
+              ) ?? null
+            : null;
+        const existing = existingById ?? existingByNumber;
+        const incomingQuantity = Math.max(0, Number(draft.quantityOnHand) || 0);
+        const shouldAddToExistingStock = Boolean(
+          existingByNumber && existingById?.id !== existingByNumber.id,
+        );
         const partDraft: PartDraft = {
           ...draft,
-          id: draft.id ?? crypto.randomUUID(),
+          id: existing?.id ?? draft.id ?? crypto.randomUUID(),
           isNpn,
-          partNumber: isNpn ? "" : normalizeText(draft.partNumber).toUpperCase(),
+          partNumber: isNpn ? "" : normalizedPartNumber,
           partName: normalizeText(draft.partName),
           manufacturer: normalizeText(draft.manufacturer),
+          quantityOnHand: shouldAddToExistingStock
+            ? existingByNumber!.quantityOnHand + incomingQuantity
+            : incomingQuantity,
           notes: normalizeText(draft.notes),
         };
 
         dispatch({ type: "upsertPart", part: partDraft });
 
-        if (!browserSupabase) return;
+        if (!browserSupabase) return Promise.resolve();
 
-        syncRemote(async () => {
+        return syncRemote(async () => {
           const { error: partError } = await browserSupabase.from("parts").upsert(
             [
               {
@@ -309,10 +330,20 @@ export function InventoryProvider({
       deletePart: (partId: string) => {
         dispatch({ type: "deletePart", partId });
 
-        if (!browserSupabase) return;
+        if (!browserSupabase) return Promise.resolve();
 
-        syncRemote(async () => {
-          const { error } = await browserSupabase.from("parts").delete().eq("id", partId);
+        return syncRemote(async () => {
+          const deletedAt = new Date().toISOString();
+          const { error } = await browserSupabase
+            .from("parts")
+            .update({
+              deleted_at: deletedAt,
+              deleted_by: session?.id ?? null,
+              purge_after: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              archived_at: null,
+              archived_by: null,
+            })
+            .eq("id", partId);
           if (error) throw error;
         });
       },
@@ -445,10 +476,19 @@ export function InventoryProvider({
       deleteBin: (binId: string) => {
         dispatch({ type: "deleteBin", binId });
 
-        if (!browserSupabase) return;
+        if (!browserSupabase) return Promise.resolve();
 
-        syncRemote(async () => {
-          const { error } = await browserSupabase.from("locations").delete().eq("id", binId);
+        return syncRemote(async () => {
+          const { error } = await browserSupabase
+            .from("locations")
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: session?.id ?? null,
+              purge_after: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              archived_at: null,
+              archived_by: null,
+            })
+            .eq("id", binId);
           if (error) throw error;
         });
       },
@@ -460,7 +500,14 @@ export function InventoryProvider({
         syncRemote(async () => {
           const { error } = await browserSupabase
             .from("locations")
-            .update({ status })
+            .update({
+              status,
+              archived_at: status === "inactive" ? new Date().toISOString() : null,
+              archived_by: status === "inactive" ? session?.id ?? null : null,
+              deleted_at: null,
+              deleted_by: null,
+              purge_after: status === "inactive" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
+            })
             .eq("id", binId);
 
           if (error) throw error;
@@ -504,7 +551,16 @@ export function InventoryProvider({
         if (!browserSupabase) return;
 
         syncRemote(async () => {
-          const { error } = await browserSupabase.from("models").delete().eq("id", modelId);
+          const { error } = await browserSupabase
+            .from("models")
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: session?.id ?? null,
+              purge_after: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              archived_at: null,
+              archived_by: null,
+            })
+            .eq("id", modelId);
           if (error) throw error;
         });
       },
@@ -516,7 +572,14 @@ export function InventoryProvider({
         syncRemote(async () => {
           const { error } = await browserSupabase
             .from("models")
-            .update({ status })
+            .update({
+              status,
+              archived_at: status === "inactive" ? new Date().toISOString() : null,
+              archived_by: status === "inactive" ? session?.id ?? null : null,
+              deleted_at: null,
+              deleted_by: null,
+              purge_after: status === "inactive" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
+            })
             .eq("id", modelId);
 
           if (error) throw error;
@@ -529,7 +592,7 @@ export function InventoryProvider({
           settings,
         }),
       resetDemoData: () => {
-        if (isSupabaseMode) {
+        if (dataSource !== "demo") {
           return;
         }
 
@@ -537,7 +600,7 @@ export function InventoryProvider({
       },
       refreshInventory,
     };
-  }, [browserSupabase, dataSource, hydrated, isSupabaseMode, refreshInventory, state, syncRemote]);
+  }, [browserSupabase, dataSource, hydrated, isSupabaseMode, refreshInventory, session?.id, state, syncRemote]);
 
   return (
     <InventoryContext.Provider value={value}>

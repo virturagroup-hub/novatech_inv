@@ -41,6 +41,9 @@ export interface Faq {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface ForumThread {
@@ -57,6 +60,7 @@ export interface ForumThread {
   updatedAt: string;
   archivedAt: string | null;
   deletedAt: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface ForumPost {
@@ -68,6 +72,9 @@ export interface ForumPost {
   createdAt: string;
   updatedAt: string;
   taggedTarget?: NotificationTarget | "thread_creator" | null;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface FeatureRequestVote {
@@ -76,6 +83,9 @@ export interface FeatureRequestVote {
   userId: string;
   vote: 1 | -1;
   createdAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface UpdateLog {
@@ -87,6 +97,11 @@ export interface UpdateLog {
   isPublished: boolean;
   createdBy: string;
   updatedBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface ComingSoonItem {
@@ -101,6 +116,9 @@ export interface ComingSoonItem {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface Sop {
@@ -114,6 +132,9 @@ export interface Sop {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface Notification {
@@ -127,6 +148,9 @@ export interface Notification {
   entityId: string;
   isRead: boolean;
   createdAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface GreenMachine {
@@ -145,6 +169,8 @@ export interface GreenMachine {
   updatedAt: string;
   archivedAt: string | null;
   archivedStatus: RestorableGreenMachineStatus | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface GreenMachineEvent {
@@ -159,6 +185,10 @@ export interface GreenMachineEvent {
   note: string;
   createdBy: string;
   createdAt: string;
+  batchId?: string | null;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface FaqDraft {
@@ -233,6 +263,7 @@ export interface GreenMachineEventDraft {
   quantity: string;
   condition: string;
   note: string;
+  batchId?: string;
 }
 
 export interface WorkspaceContentState {

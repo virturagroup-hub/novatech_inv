@@ -35,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { buildMachinePrintHref } from "@/lib/labels";
+import { buildMachinePrintHref, buildPartPrintHref } from "@/lib/labels";
 import { getGreenMachineArchiveRetentionLabel } from "@/lib/green-machine-retention";
 import { formatDateTime, formatRelative } from "@/lib/inventory-utils";
 import { categories, defaultCategory, manufacturers, type Part } from "@/lib/inventory-types";
@@ -151,6 +151,8 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     note: "",
   });
   const [transferDraft, setTransferDraft] = useState<MachineTransferDraft>(() => createBlankTransferDraft());
+  const [transferMode, setTransferMode] = useState<"single" | "multiple">("single");
+  const [pendingTransfers, setPendingTransfers] = useState<MachineTransferDraft[]>([]);
   const canManageGreenMachines = permissions.canManageGreenMachines;
   const canRecordGreenMachineEvents = permissions.canRecordGreenMachineEvents;
 
@@ -265,64 +267,99 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     setTransferDraft(createBlankTransferDraft());
   };
 
-  const saveEvent = () => {
+  const transferDraftIsValid = (draftToCheck: MachineTransferDraft) => {
+    const partName = draftToCheck.partName.trim();
+    const partNumber = draftToCheck.isNpn ? "" : draftToCheck.partNumber.trim().toUpperCase();
+    if (!partName) {
+      toast.error("Add a part name before transferring it to inventory.");
+      return false;
+    }
+    if (!draftToCheck.isNpn && !partNumber) {
+      toast.error("Add a part number or mark the item as NPN.");
+      return false;
+    }
+    if (Math.max(0, Number(draftToCheck.quantityOnHand) || 0) < 1) {
+      toast.error("Transfer quantity must be at least 1.");
+      return false;
+    }
+    return true;
+  };
+
+  const commitTransfer = async (draftToCommit: MachineTransferDraft, batchId?: string) => {
+    const normalizedPartName = draftToCommit.partName.trim();
+    const normalizedPartNumber = draftToCommit.isNpn
+      ? ""
+      : draftToCommit.partNumber.trim().toUpperCase();
+    const transferQuantity = Math.max(1, Number(draftToCommit.quantityOnHand) || 1);
+    const matchedPartByNumber = draftToCommit.isNpn
+      ? null
+      : parts.find(
+          (part) =>
+            !part.isNpn && part.partNumber.trim().toUpperCase() === normalizedPartNumber,
+        ) ?? null;
+    const quantityBasePart =
+      draftToCommit.selectedPartId
+        ? parts.find((part) => part.id === draftToCommit.selectedPartId) ?? matchedPartByNumber
+        : matchedPartByNumber;
+    const nextPartId = quantityBasePart?.id ?? crypto.randomUUID();
+    const nextQuantity = (quantityBasePart?.quantityOnHand ?? 0) + transferQuantity;
+
+    await addPart({
+      id: quantityBasePart ? quantityBasePart.id : nextPartId,
+      partNumber: normalizedPartNumber,
+      isNpn: draftToCommit.isNpn,
+      partName: normalizedPartName,
+      manufacturer: draftToCommit.manufacturer.trim(),
+      category: draftToCommit.category,
+      binId: draftToCommit.binId || null,
+      quantityOnHand: nextQuantity,
+      reorderPoint: Math.max(0, Number(draftToCommit.reorderPoint) || 0),
+      reorderTarget: Math.max(0, Number(draftToCommit.reorderTarget) || 0),
+      compatibleModelIds: draftToCommit.compatibleModelIds,
+      universal: draftToCommit.universal,
+      notes: draftToCommit.notes.trim(),
+    });
+
+    await addGreenMachineEvent(machine.id, {
+      eventType: "transferred_to_inventory",
+      partId: nextPartId,
+      partName: normalizedPartName,
+      partCategory: draftToCommit.category,
+      quantity: String(transferQuantity),
+      condition: "",
+      note: eventDraft.note.trim(),
+      batchId,
+    });
+
+    return { partId: nextPartId, quantity: transferQuantity };
+  };
+
+  const saveEvent = async () => {
     if (!canRecordGreenMachineEvents) {
       return;
     }
 
     if (eventDraft.eventType === "transferred_to_inventory") {
-      const normalizedPartName = transferDraft.partName.trim();
-      const normalizedPartNumber = transferDraft.isNpn ? "" : transferDraft.partNumber.trim().toUpperCase();
-      const transferQuantity = Math.max(1, Number(transferDraft.quantityOnHand) || 1);
-      const matchedPartByNumber = transferDraft.isNpn
-        ? null
-        : parts.find(
-            (part) =>
-              !part.isNpn &&
-              part.partNumber.trim().toUpperCase() === normalizedPartNumber,
-          ) ?? null;
+      if (!transferDraftIsValid(transferDraft)) return;
 
-      if (!normalizedPartName) {
-        toast.error("Add a part name before transferring it to inventory.");
+      if (transferMode === "multiple") {
+        setPendingTransfers((current) => [...current, transferDraft]);
+        resetEventDraft();
+        toast.success("Part added to transfer batch. Add another part or finish.");
         return;
       }
 
-      if (!transferDraft.isNpn && !normalizedPartNumber) {
-        toast.error("Add a part number or mark the item as NPN.");
-        return;
-      }
-
-      const quantityBasePart = selectedTransferPart ?? matchedPartByNumber;
-      const nextPartId = quantityBasePart?.id ?? crypto.randomUUID();
-      const nextQuantity = (quantityBasePart?.quantityOnHand ?? 0) + transferQuantity;
-
-      addPart({
-        id: nextPartId,
-        partNumber: normalizedPartNumber,
-        isNpn: transferDraft.isNpn,
-        partName: normalizedPartName,
-        manufacturer: transferDraft.manufacturer.trim(),
-        category: transferDraft.category,
-        binId: transferDraft.binId || null,
-        quantityOnHand: nextQuantity,
-        reorderPoint: Math.max(0, Number(transferDraft.reorderPoint) || 0),
-        reorderTarget: Math.max(0, Number(transferDraft.reorderTarget) || 0),
-        compatibleModelIds: transferDraft.compatibleModelIds,
-        universal: transferDraft.universal,
-        notes: transferDraft.notes.trim(),
-      });
-
-      addGreenMachineEvent(machine.id, {
-        eventType: "transferred_to_inventory",
-        partId: nextPartId,
-        partName: normalizedPartName,
-        partCategory: transferDraft.category,
-        quantity: String(transferQuantity),
-        condition: "",
-        note: eventDraft.note.trim(),
-      });
+      const result = await commitTransfer(transferDraft);
       resetEventDraft();
       toast.success("Part transferred to inventory");
+      router.push(
+        buildPartPrintHref({
+          partIds: [result.partId],
+          labelMode: "copies",
+          copiesByPart: { [result.partId]: result.quantity },
+          layout: "thermal",
+        }),
+      );
       return;
     }
 
@@ -344,6 +381,44 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     });
     resetEventDraft();
     toast.success("Event added");
+  };
+
+  const finishTransferBatch = async () => {
+    if (pendingTransfers.length === 0) {
+      toast.error("Add at least one part to the transfer batch.");
+      return;
+    }
+
+    const summary = pendingTransfers
+      .map((item) => `${item.partNumber || "NPN"} · ${item.partName} · Qty ${item.quantityOnHand}`)
+      .join("\n");
+    if (!window.confirm(`Transfer all of these parts to inventory?\n\n${summary}`)) {
+      return;
+    }
+
+    const batchId = crypto.randomUUID();
+    const results = await Promise.all(pendingTransfers.map((item) => commitTransfer(item, batchId)));
+    setPendingTransfers([]);
+    resetEventDraft();
+    toast.success(`${results.length} parts transferred to inventory`);
+    router.push(
+      buildPartPrintHref({
+        partIds: results.map((result) => result.partId),
+        labelMode: "copies",
+        copiesByPart: results.reduce<Record<string, number>>((copies, result) => {
+          copies[result.partId] = result.quantity;
+          return copies;
+        }, {}),
+        layout: "thermal",
+      }),
+    );
+  };
+
+  const editPendingTransfer = (index: number) => {
+    const pending = pendingTransfers[index];
+    if (!pending) return;
+    setTransferDraft(pending);
+    setPendingTransfers((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const confirmArchiveMachine = () => {
@@ -686,6 +761,90 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
 
                 {eventDraft.eventType === "transferred_to_inventory" ? (
                   <div className="space-y-5">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button
+                        type="button"
+                        variant={transferMode === "single" ? "default" : "outline"}
+                        className={cn(
+                          "h-11",
+                          transferMode === "single"
+                            ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                        )}
+                        onClick={() => setTransferMode("single")}
+                      >
+                        Transfer single part
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={transferMode === "multiple" ? "default" : "outline"}
+                        className={cn(
+                          "h-11",
+                          transferMode === "multiple"
+                            ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white",
+                        )}
+                        onClick={() => setTransferMode("multiple")}
+                      >
+                        Transfer multiple parts
+                      </Button>
+                    </div>
+
+                    {transferMode === "multiple" && pendingTransfers.length > 0 && (
+                      <div className="space-y-3 rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold text-white">Pending transfer batch</p>
+                          <Badge className="border-sky-400/20 bg-sky-400/10 text-sky-100">
+                            {pendingTransfers.length} part{pendingTransfers.length === 1 ? "" : "s"}
+                          </Badge>
+                        </div>
+                        {pendingTransfers.map((pending, index) => (
+                          <div
+                            key={`${pending.partNumber}-${index}`}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-mono text-sm font-semibold text-white">
+                                {pending.partNumber || "NPN"}
+                              </p>
+                              <p className="text-sm text-slate-300">
+                                {pending.partName} · Qty {pending.quantityOnHand} · {pending.category}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                                onClick={() => editPendingTransfer(index)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                className="h-9"
+                                onClick={() =>
+                                  setPendingTransfers((current) =>
+                                    current.filter((_, itemIndex) => itemIndex !== index),
+                                  )
+                                }
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          className="w-full bg-sky-400 text-slate-950 hover:bg-sky-300"
+                          onClick={finishTransferBatch}
+                        >
+                          Finish and transfer batch
+                        </Button>
+                      </div>
+                    )}
+
                     <MachinePartPicker
                       parts={parts}
                       bins={bins}
@@ -892,7 +1051,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
 
                     <Button className="bg-emerald-400 text-slate-950 hover:bg-emerald-300" onClick={saveEvent}>
                       <Send className="mr-2 h-4 w-4" />
-                      Transfer to inventory
+                      {transferMode === "multiple" ? "Add part to batch" : "Transfer to inventory"}
                     </Button>
                   </div>
                 ) : (

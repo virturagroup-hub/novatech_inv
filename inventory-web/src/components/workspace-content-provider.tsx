@@ -10,7 +10,18 @@ import {
 } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
+  archiveWorkspaceRecord,
+  fetchWorkspaceContentState,
+  markWorkspaceNotificationRead,
+  setWorkspaceNotificationLifecycle,
+  restoreWorkspaceRecord,
+  upsertWorkspaceRecord,
+  type WorkspaceContentPayload,
+} from "@/lib/supabase/workspace-content";
+import {
+  createDefaultWorkspaceContentState,
   createSeedWorkspaceContentState,
   workspaceContentStorageKey,
 } from "@/lib/workspace-content-seed";
@@ -72,11 +83,14 @@ type WorkspaceContentContextValue = WorkspaceContentState & {
   voteFeatureRequest: (threadId: string, vote: 1 | -1) => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
+  archiveNotification: (notificationId: string) => void;
+  deleteNotification: (notificationId: string) => void;
+  restoreNotification: (notificationId: string) => void;
   saveGreenMachine: (draft: GreenMachineDraft) => string;
   archiveGreenMachine: (machineId: string) => void;
   deleteGreenMachine: (machineId: string) => void;
   restoreGreenMachine: (machineId: string) => void;
-  addGreenMachineEvent: (machineId: string, draft: GreenMachineEventDraft) => void;
+  addGreenMachineEvent: (machineId: string, draft: GreenMachineEventDraft) => Promise<void>;
 };
 
 const WorkspaceContentContext = createContext<WorkspaceContentContextValue | null>(null);
@@ -89,27 +103,31 @@ function normalizeText(value: string) {
   return value.trim();
 }
 
-function safeParseWorkspaceContentState(raw: string | null): WorkspaceContentState | null {
+function isSupabaseConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()),
+  );
+}
+
+function isDemoDataExplicitlyEnabled() {
+  return process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "true";
+}
+
+function isWorkspaceContentDemoModeEnabled() {
+  return process.env.NODE_ENV !== "production" && (!isSupabaseConfigured() || isDemoDataExplicitlyEnabled());
+}
+
+function safeParseWorkspaceContentState(raw: string | null): Partial<WorkspaceContentState> | null {
   if (!raw) {
     return null;
   }
 
   try {
-    const parsed = JSON.parse(raw) as WorkspaceContentState;
+    const parsed = JSON.parse(raw) as Partial<WorkspaceContentState>;
 
-    if (
-      parsed &&
-      Array.isArray(parsed.faqs) &&
-      Array.isArray(parsed.forumThreads) &&
-      Array.isArray(parsed.forumPosts) &&
-      Array.isArray(parsed.featureRequestVotes) &&
-      Array.isArray(parsed.updateLogs) &&
-      Array.isArray(parsed.comingSoonItems) &&
-      Array.isArray(parsed.sops) &&
-      Array.isArray(parsed.notifications) &&
-      Array.isArray(parsed.greenMachines) &&
-      Array.isArray(parsed.greenMachineEvents)
-    ) {
+    if (parsed && typeof parsed === "object") {
       return parsed;
     }
   } catch {
@@ -117,6 +135,34 @@ function safeParseWorkspaceContentState(raw: string | null): WorkspaceContentSta
   }
 
   return null;
+}
+
+function hydrateWorkspaceContentState(
+  stored: Partial<WorkspaceContentState> | null,
+  fallback: WorkspaceContentState,
+): WorkspaceContentState {
+  if (!stored) {
+    return fallback;
+  }
+
+  return {
+    faqs: Array.isArray(stored.faqs) ? stored.faqs : fallback.faqs,
+    forumThreads: Array.isArray(stored.forumThreads) ? stored.forumThreads : fallback.forumThreads,
+    forumPosts: Array.isArray(stored.forumPosts) ? stored.forumPosts : fallback.forumPosts,
+    featureRequestVotes: Array.isArray(stored.featureRequestVotes)
+      ? stored.featureRequestVotes
+      : fallback.featureRequestVotes,
+    updateLogs: Array.isArray(stored.updateLogs) ? stored.updateLogs : fallback.updateLogs,
+    comingSoonItems: Array.isArray(stored.comingSoonItems)
+      ? stored.comingSoonItems
+      : fallback.comingSoonItems,
+    sops: Array.isArray(stored.sops) ? stored.sops : fallback.sops,
+    notifications: Array.isArray(stored.notifications) ? stored.notifications : fallback.notifications,
+    greenMachines: Array.isArray(stored.greenMachines) ? stored.greenMachines : fallback.greenMachines,
+    greenMachineEvents: Array.isArray(stored.greenMachineEvents)
+      ? stored.greenMachineEvents
+      : fallback.greenMachineEvents,
+  };
 }
 
 function sortByRecent<T extends { updatedAt?: string; createdAt?: string; publishedAt?: string }>(items: T[]) {
@@ -141,8 +187,16 @@ export function WorkspaceContentProvider({
   children: React.ReactNode;
 }>) {
   const { session, effectiveRole } = useAuth();
+  const demoModeEnabled = isWorkspaceContentDemoModeEnabled();
+  const initialState = useMemo(
+    () => (demoModeEnabled ? createSeedWorkspaceContentState() : createDefaultWorkspaceContentState()),
+    [demoModeEnabled],
+  );
   const [hydrated, setHydrated] = useState(false);
-  const [state, setState] = useState<WorkspaceContentState>(() => createSeedWorkspaceContentState());
+  const [state, setState] = useState<WorkspaceContentState>(() => initialState);
+  const [browserSupabase] = useState(() =>
+    demoModeEnabled ? null : createBrowserSupabaseClient(),
+  );
 
   useEffect(() => {
     let active = true;
@@ -152,29 +206,64 @@ export function WorkspaceContentProvider({
         return;
       }
 
-      const stored = safeParseWorkspaceContentState(window.localStorage.getItem(workspaceContentStorageKey));
-      const nextState = purgeExpiredForumThreads(
-        purgeExpiredGreenMachines(stored ?? createSeedWorkspaceContentState()),
-      );
-      setState(nextState);
-      setHydrated(true);
+      const hydrate = async () => {
+        if (demoModeEnabled) {
+          const stored = safeParseWorkspaceContentState(
+            window.localStorage.getItem(workspaceContentStorageKey),
+          );
+          const nextState = purgeExpiredForumThreads(
+            purgeExpiredGreenMachines(hydrateWorkspaceContentState(stored, initialState)),
+          );
+          setState(nextState);
+          setHydrated(true);
+          return;
+        }
+
+        try {
+          const remoteState = await fetchWorkspaceContentState(browserSupabase!, session?.id);
+          if (active) {
+            setState(remoteState);
+          }
+        } catch (error) {
+          console.warn(
+            error instanceof Error
+              ? error.message
+              : "Failed to load shared workspace content from Supabase.",
+          );
+          if (active) {
+            setState(createDefaultWorkspaceContentState());
+          }
+        } finally {
+          if (active) {
+            setHydrated(true);
+          }
+        }
+      };
+
+      void hydrate();
     });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [browserSupabase, demoModeEnabled, initialState, session?.id]);
 
   useEffect(() => {
     if (!hydrated) {
       return;
     }
 
-    window.localStorage.setItem(workspaceContentStorageKey, JSON.stringify(state));
-  }, [hydrated, state]);
+    if (demoModeEnabled) {
+      window.localStorage.setItem(workspaceContentStorageKey, JSON.stringify(state));
+    }
+  }, [demoModeEnabled, hydrated, state]);
 
   useEffect(() => {
     if (!hydrated) {
+      return;
+    }
+
+    if (!demoModeEnabled) {
       return;
     }
 
@@ -185,7 +274,7 @@ export function WorkspaceContentProvider({
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [hydrated]);
+  }, [demoModeEnabled, hydrated]);
 
   const currentUserId = session?.id ?? "system";
   const canManageGreenMachines = effectiveRole === "admin" || effectiveRole === "manager";
@@ -199,24 +288,75 @@ export function WorkspaceContentProvider({
     [],
   );
 
+  const syncWorkspaceRecord = useCallback(
+    (payload: WorkspaceContentPayload) => {
+      if (!browserSupabase || demoModeEnabled) {
+        return Promise.resolve();
+      }
+
+      return upsertWorkspaceRecord(browserSupabase, payload, currentUserId).catch((error) => {
+        console.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to save shared workspace content to Supabase.",
+        );
+      });
+    },
+    [browserSupabase, currentUserId, demoModeEnabled],
+  );
+
+  const archiveWorkspace = useCallback(
+    (recordId: string, mode: "archived" | "deleted") => {
+      if (!browserSupabase || demoModeEnabled) {
+        return Promise.resolve();
+      }
+
+      return archiveWorkspaceRecord(browserSupabase, recordId, currentUserId, mode).catch((error) => {
+        console.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to retain shared workspace content in Supabase.",
+        );
+      });
+    },
+    [browserSupabase, currentUserId, demoModeEnabled],
+  );
+
+  const restoreWorkspace = useCallback(
+    (recordId: string) => {
+      if (!browserSupabase || demoModeEnabled) {
+        return Promise.resolve();
+      }
+
+      return restoreWorkspaceRecord(browserSupabase, recordId, currentUserId).catch((error) => {
+        console.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to restore shared workspace content in Supabase.",
+        );
+      });
+    },
+    [browserSupabase, currentUserId, demoModeEnabled],
+  );
+
   const pushNotification = (notification: Omit<Notification, "id" | "createdAt" | "isRead"> & { isRead?: boolean }) => {
     const now = timestamp();
+    const nextNotification: Notification = {
+      id: crypto.randomUUID(),
+      createdAt: now,
+      isRead: notification.isRead ?? false,
+      ...notification,
+    };
     setState((current) => ({
       ...current,
-      notifications: [
-        {
-          id: crypto.randomUUID(),
-          createdAt: now,
-          isRead: notification.isRead ?? false,
-          ...notification,
-        },
-        ...current.notifications,
-      ],
+      notifications: [nextNotification, ...current.notifications],
     }));
+    syncWorkspaceRecord(nextNotification);
   };
 
   const saveFaq = (draft: FaqDraft) => {
     const now = timestamp();
+    const existingFaq = draft.id ? state.faqs.find((item) => item.id === draft.id) : null;
     const faq: Faq = {
       id: draft.id ?? crypto.randomUUID(),
       question: normalizeText(draft.question),
@@ -229,6 +369,9 @@ export function WorkspaceContentProvider({
       createdAt: now,
       updatedAt: now,
     };
+    const persistedFaq = existingFaq
+      ? { ...faq, createdAt: existingFaq.createdAt, createdBy: existingFaq.createdBy }
+      : faq;
 
     setState((current) => {
       const existing = current.faqs.some((item) => item.id === faq.id);
@@ -238,17 +381,23 @@ export function WorkspaceContentProvider({
 
       return { ...current, faqs: nextFaqs };
     });
+    syncWorkspaceRecord(persistedFaq);
   };
 
   const deleteFaq = (faqId: string) => {
+    const now = timestamp();
     setState((current) => ({
       ...current,
-      faqs: current.faqs.filter((faq) => faq.id !== faqId),
+      faqs: current.faqs.map((faq) =>
+        faq.id === faqId ? { ...faq, isPublished: false, deletedAt: now, archivedAt: null } : faq,
+      ),
     }));
+    archiveWorkspace(faqId, "deleted");
   };
 
   const saveUpdateLog = (draft: UpdateLogDraft) => {
     const now = timestamp();
+    const existingLog = draft.id ? state.updateLogs.find((item) => item.id === draft.id) : null;
     const log: UpdateLog = {
       id: draft.id ?? crypto.randomUUID(),
       title: normalizeText(draft.title),
@@ -259,6 +408,9 @@ export function WorkspaceContentProvider({
       createdBy: currentUserId,
       updatedBy: currentUserId,
     };
+    const persistedLog = existingLog
+      ? { ...log, createdBy: existingLog.createdBy, createdAt: existingLog.createdAt }
+      : log;
 
     setState((current) => {
       const existing = current.updateLogs.some((item) => item.id === log.id);
@@ -268,6 +420,7 @@ export function WorkspaceContentProvider({
 
       return { ...current, updateLogs: nextLogs };
     });
+    syncWorkspaceRecord(persistedLog);
 
     if (log.isPublished) {
       pushNotification({
@@ -283,14 +436,19 @@ export function WorkspaceContentProvider({
   };
 
   const deleteUpdateLog = (updateLogId: string) => {
+    const now = timestamp();
     setState((current) => ({
       ...current,
-      updateLogs: current.updateLogs.filter((item) => item.id !== updateLogId),
+      updateLogs: current.updateLogs.map((item) =>
+        item.id === updateLogId ? { ...item, isPublished: false, deletedAt: now, archivedAt: null } : item,
+      ),
     }));
+    archiveWorkspace(updateLogId, "deleted");
   };
 
   const saveComingSoonItem = (draft: ComingSoonItemDraft) => {
     const now = timestamp();
+    const existingItem = draft.id ? state.comingSoonItems.find((item) => item.id === draft.id) : null;
     const item: ComingSoonItem = {
       id: draft.id ?? crypto.randomUUID(),
       title: normalizeText(draft.title),
@@ -304,6 +462,9 @@ export function WorkspaceContentProvider({
       createdAt: now,
       updatedAt: now,
     };
+    const persistedItem = existingItem
+      ? { ...item, createdAt: existingItem.createdAt, createdBy: existingItem.createdBy }
+      : item;
 
     setState((current) => {
       const existing = current.comingSoonItems.some((entry) => entry.id === item.id);
@@ -314,17 +475,23 @@ export function WorkspaceContentProvider({
         : [item, ...current.comingSoonItems];
       return { ...current, comingSoonItems: nextItems };
     });
+    syncWorkspaceRecord(persistedItem);
   };
 
   const deleteComingSoonItem = (itemId: string) => {
+    const now = timestamp();
     setState((current) => ({
       ...current,
-      comingSoonItems: current.comingSoonItems.filter((item) => item.id !== itemId),
+      comingSoonItems: current.comingSoonItems.map((item) =>
+        item.id === itemId ? { ...item, isPublished: false, deletedAt: now, archivedAt: null } : item,
+      ),
     }));
+    archiveWorkspace(itemId, "deleted");
   };
 
   const saveSop = (draft: SopDraft) => {
     const now = timestamp();
+    const existingSop = draft.id ? state.sops.find((item) => item.id === draft.id) : null;
     const sop: Sop = {
       id: draft.id ?? crypto.randomUUID(),
       title: normalizeText(draft.title),
@@ -337,6 +504,9 @@ export function WorkspaceContentProvider({
       createdAt: now,
       updatedAt: now,
     };
+    const persistedSop = existingSop
+      ? { ...sop, createdAt: existingSop.createdAt, createdBy: existingSop.createdBy }
+      : sop;
 
     setState((current) => {
       const existing = current.sops.some((item) => item.id === sop.id);
@@ -345,18 +515,24 @@ export function WorkspaceContentProvider({
         : [sop, ...current.sops];
       return { ...current, sops: nextSops };
     });
+    syncWorkspaceRecord(persistedSop);
   };
 
   const deleteSop = (sopId: string) => {
+    const now = timestamp();
     setState((current) => ({
       ...current,
-      sops: current.sops.filter((item) => item.id !== sopId),
+      sops: current.sops.map((item) =>
+        item.id === sopId ? { ...item, isPublished: false, deletedAt: now, archivedAt: null } : item,
+      ),
     }));
+    archiveWorkspace(sopId, "deleted");
   };
 
   const saveForumThread = (draft: ForumThreadDraft) => {
     const now = timestamp();
     const threadId = draft.id ?? crypto.randomUUID();
+    const existingThread = draft.id ? state.forumThreads.find((item) => item.id === draft.id) : null;
     const nextArchivedAt = draft.status === "archived" ? now : null;
     const nextDeletedAt = draft.status === "deleted" ? now : null;
     const thread: ForumThread = {
@@ -374,6 +550,15 @@ export function WorkspaceContentProvider({
       archivedAt: nextArchivedAt,
       deletedAt: nextDeletedAt,
     };
+    const persistedThread = existingThread
+      ? {
+          ...thread,
+          createdAt: existingThread.createdAt,
+          createdBy: existingThread.createdBy,
+          archivedAt: draft.status === "archived" ? existingThread.archivedAt ?? now : null,
+          deletedAt: draft.status === "deleted" ? existingThread.deletedAt ?? now : null,
+        }
+      : thread;
 
     setState((current) => {
       const existing = current.forumThreads.find((item) => item.id === thread.id);
@@ -404,6 +589,7 @@ export function WorkspaceContentProvider({
 
       return { ...current, forumThreads: nextThreads };
     });
+    syncWorkspaceRecord(persistedThread);
 
     if (!draft.id && (thread.type === "support" || thread.type === "feature_request")) {
       pushNotification({
@@ -463,11 +649,12 @@ export function WorkspaceContentProvider({
         forumPosts: [post, ...current.forumPosts],
       };
     });
-
     const thread = state.forumThreads.find((item) => item.id === threadId);
     if (!thread || thread.status === "archived" || thread.status === "deleted") {
       return;
     }
+
+    syncWorkspaceRecord(post);
 
     const target = getNotificationTarget(draft.taggedTarget, thread.createdBy);
 
@@ -496,6 +683,16 @@ export function WorkspaceContentProvider({
 
   const setForumThreadStatus = (threadId: string, status: ForumThread["status"]) => {
     const now = timestamp();
+    const existingThread = state.forumThreads.find((item) => item.id === threadId);
+    const nextThread = existingThread
+      ? {
+          ...existingThread,
+          status,
+          updatedAt: now,
+          archivedAt: status === "archived" ? existingThread.archivedAt ?? now : null,
+          deletedAt: status === "deleted" ? existingThread.deletedAt ?? now : null,
+        }
+      : null;
     setState((current) => {
       const thread = current.forumThreads.find((item) => item.id === threadId);
       if (!thread) {
@@ -519,6 +716,9 @@ export function WorkspaceContentProvider({
         ),
       };
     });
+    if (nextThread) {
+      syncWorkspaceRecord(nextThread);
+    }
 
     const thread = state.forumThreads.find((item) => item.id === threadId);
     if (thread) {
@@ -536,26 +736,46 @@ export function WorkspaceContentProvider({
 
   const setForumThreadPinned = (threadId: string, pinned: boolean) => {
     const now = timestamp();
+    const thread = state.forumThreads.find((item) => item.id === threadId);
     setState((current) => ({
       ...current,
       forumThreads: current.forumThreads.map((item) =>
         item.id === threadId ? { ...item, isPinned: pinned, updatedAt: now } : item,
       ),
     }));
+    if (thread) {
+      syncWorkspaceRecord({ ...thread, isPinned: pinned, updatedAt: now });
+    }
   };
 
   const setForumThreadLocked = (threadId: string, locked: boolean) => {
     const now = timestamp();
+    const thread = state.forumThreads.find((item) => item.id === threadId);
     setState((current) => ({
       ...current,
       forumThreads: current.forumThreads.map((item) =>
         item.id === threadId ? { ...item, isLocked: locked, updatedAt: now } : item,
       ),
     }));
+    if (thread) {
+      syncWorkspaceRecord({ ...thread, isLocked: locked, updatedAt: now });
+    }
   };
 
   const voteFeatureRequest = (threadId: string, vote: 1 | -1) => {
     const now = timestamp();
+    const existingVote = state.featureRequestVotes.find(
+      (item) => item.featureRequestId === threadId && item.userId === currentUserId,
+    );
+    const nextVote = existingVote
+      ? { ...existingVote, vote }
+      : {
+          id: crypto.randomUUID(),
+          featureRequestId: threadId,
+          userId: currentUserId,
+          vote,
+          createdAt: now,
+        };
     setState((current) => {
       const nextVotes = [...current.featureRequestVotes];
       const existingIndex = nextVotes.findIndex(
@@ -563,39 +783,75 @@ export function WorkspaceContentProvider({
       );
 
       if (existingIndex >= 0) {
-        nextVotes[existingIndex] = {
-          ...nextVotes[existingIndex],
-          vote,
-          createdAt: nextVotes[existingIndex].createdAt,
-        };
+        nextVotes[existingIndex] = nextVote;
       } else {
-        nextVotes.unshift({
-          id: crypto.randomUUID(),
-          featureRequestId: threadId,
-          userId: currentUserId,
-          vote,
-          createdAt: now,
-        });
+        nextVotes.unshift(nextVote);
       }
 
       return { ...current, featureRequestVotes: nextVotes };
     });
+    syncWorkspaceRecord(nextVote);
   };
 
   const markNotificationRead = (notificationId: string) => {
+    const notification = state.notifications.find((item) => item.id === notificationId);
     setState((current) => ({
       ...current,
       notifications: current.notifications.map((item) =>
         item.id === notificationId ? { ...item, isRead: true } : item,
       ),
     }));
+    if (notification) {
+      if (browserSupabase && !demoModeEnabled && session?.id) {
+        void markWorkspaceNotificationRead(browserSupabase, notification.id, session.id).catch((error) => {
+          console.error(
+            error instanceof Error ? error.message : "Failed to mark notification read in Supabase.",
+          );
+        });
+      }
+    }
   };
 
   const markAllNotificationsRead = () => {
+    const notifications = state.notifications.map((item) => ({ ...item, isRead: true }));
     setState((current) => ({
       ...current,
       notifications: current.notifications.map((item) => ({ ...item, isRead: true })),
     }));
+    if (browserSupabase && !demoModeEnabled && session?.id) {
+      notifications.forEach((notification) => {
+        void markWorkspaceNotificationRead(browserSupabase, notification.id, session.id).catch((error) => {
+          console.error(
+            error instanceof Error ? error.message : "Failed to mark notification read in Supabase.",
+          );
+        });
+      });
+    }
+  };
+
+  const setNotificationLifecycle = (notificationId: string, mode: "archived" | "deleted" | "restored") => {
+    const now = timestamp();
+    setState((current) => ({
+      ...current,
+      notifications: current.notifications.map((notification) =>
+        notification.id === notificationId
+          ? {
+              ...notification,
+              archivedAt: mode === "archived" ? now : null,
+              deletedAt: mode === "deleted" ? now : null,
+              purgeAfter: mode === "restored" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            }
+          : notification,
+      ),
+    }));
+
+    if (browserSupabase && !demoModeEnabled && session?.id) {
+      void setWorkspaceNotificationLifecycle(browserSupabase, notificationId, session.id, mode).catch((error) => {
+        console.error(
+          error instanceof Error ? error.message : "Failed to update notification retention in Supabase.",
+        );
+      });
+    }
   };
 
   const saveGreenMachine = (draft: GreenMachineDraft) => {
@@ -639,6 +895,7 @@ export function WorkspaceContentProvider({
 
       return { ...current, greenMachines: nextMachines };
     });
+    syncWorkspaceRecord(machine);
 
     return machineId;
   };
@@ -665,6 +922,17 @@ export function WorkspaceContentProvider({
           : item,
       ),
     }));
+    const machine = state.greenMachines.find((item) => item.id === machineId);
+    if (machine) {
+      syncWorkspaceRecord({
+        ...machine,
+        status: "archived",
+        archivedAt: machine.archivedAt ?? now,
+        archivedStatus: machine.status === "archived" ? machine.archivedStatus ?? "active" : machine.status,
+        updatedAt: now,
+        updatedBy: currentUserId,
+      });
+    }
   };
 
   const deleteGreenMachine = (machineId: string) => {
@@ -672,11 +940,18 @@ export function WorkspaceContentProvider({
       return;
     }
 
+    const deletedAt = timestamp();
+    const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     updateGreenMachineState((current) => ({
       ...current,
-      greenMachines: current.greenMachines.filter((item) => item.id !== machineId),
+      greenMachines: current.greenMachines.map((item) =>
+        item.id === machineId
+          ? { ...item, status: "archived", archivedAt: null, deletedAt, purgeAfter }
+          : item,
+      ),
       greenMachineEvents: current.greenMachineEvents.filter((event) => event.machineId !== machineId),
     }));
+    archiveWorkspace(machineId, "deleted");
   };
 
   const restoreGreenMachine = (machineId: string) => {
@@ -700,11 +975,25 @@ export function WorkspaceContentProvider({
           : item,
       ),
     }));
+    const machine = state.greenMachines.find((item) => item.id === machineId);
+    if (machine) {
+      syncWorkspaceRecord({
+        ...machine,
+        status: getGreenMachineRestoreStatus(machine),
+        archivedAt: null,
+        deletedAt: null,
+        purgeAfter: null,
+        archivedStatus: null,
+        updatedAt: now,
+        updatedBy: currentUserId,
+      });
+      restoreWorkspace(machineId);
+    }
   };
 
   const addGreenMachineEvent = (machineId: string, draft: GreenMachineEventDraft) => {
     if (!canRecordGreenMachineEvents) {
-      return;
+      return Promise.resolve();
     }
 
     const now = timestamp();
@@ -720,6 +1009,7 @@ export function WorkspaceContentProvider({
       note: normalizeText(draft.note),
       createdBy: currentUserId,
       createdAt: now,
+      batchId: draft.batchId ?? null,
     };
 
     updateGreenMachineState((current) => ({
@@ -739,10 +1029,14 @@ export function WorkspaceContentProvider({
           : machine,
       ),
     }));
+    return syncWorkspaceRecord(event);
   };
 
   const publishedFaqs = useMemo(
-    () => sortByRecent(state.faqs.filter((faq) => faq.isPublished)).sort((left, right) => left.sortOrder - right.sortOrder),
+    () =>
+      sortByRecent(
+        state.faqs.filter((faq) => faq.isPublished && !faq.archivedAt && !faq.deletedAt),
+      ).sort((left, right) => left.sortOrder - right.sortOrder),
     [state.faqs],
   );
 
@@ -750,20 +1044,28 @@ export function WorkspaceContentProvider({
     () =>
       sortByRecent(
         state.sops.filter(
-          (sop) => sop.isPublished && (sop.roleVisibility === "all" || sop.roleVisibility === effectiveRole),
+          (sop) =>
+            sop.isPublished &&
+            !sop.archivedAt &&
+            !sop.deletedAt &&
+            (sop.roleVisibility === "all" || sop.roleVisibility === effectiveRole),
         ),
       ),
     [effectiveRole, state.sops],
   );
 
   const publishedUpdateLogs = useMemo(
-    () => sortByRecent(state.updateLogs.filter((log) => log.isPublished)),
+    () => sortByRecent(state.updateLogs.filter((log) => log.isPublished && !log.archivedAt && !log.deletedAt)),
     [state.updateLogs],
   );
 
   const publishedComingSoonItems = useMemo(
     () =>
-      sortByRecent(state.comingSoonItems.filter((item) => item.isPublished)).sort(
+      sortByRecent(
+        state.comingSoonItems.filter(
+          (item) => item.isPublished && !item.archivedAt && !item.deletedAt,
+        ),
+      ).sort(
         (left, right) => left.sortOrder - right.sortOrder,
       ),
     [state.comingSoonItems],
@@ -794,6 +1096,10 @@ export function WorkspaceContentProvider({
   const visibleNotifications = useMemo(() => {
     return [...state.notifications]
       .filter((notification) => {
+        if (notification.deletedAt || notification.archivedAt) {
+          return false;
+        }
+
         if (notification.userId && notification.userId === currentUserId) {
           return true;
         }
@@ -865,6 +1171,9 @@ export function WorkspaceContentProvider({
     voteFeatureRequest,
     markNotificationRead,
     markAllNotificationsRead,
+    archiveNotification: (notificationId: string) => setNotificationLifecycle(notificationId, "archived"),
+    deleteNotification: (notificationId: string) => setNotificationLifecycle(notificationId, "deleted"),
+    restoreNotification: (notificationId: string) => setNotificationLifecycle(notificationId, "restored"),
     saveGreenMachine,
     archiveGreenMachine,
     deleteGreenMachine,

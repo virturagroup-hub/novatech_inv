@@ -8,7 +8,8 @@ The current application uses Supabase for live inventory data when configured, w
 
 - live inventory state reads from Supabase when the public env vars are configured and a user is signed in
 - authentication and user management use real Supabase Auth
-- demo seed data is only shown when Supabase is unavailable or `NEXT_PUBLIC_ENABLE_DEMO_DATA=true`
+- demo seed data is only shown in non-production local development when Supabase is unavailable or `NEXT_PUBLIC_ENABLE_DEMO_DATA=true`
+- shared support, forum, request, notification, update, SOP, and Green Machine records are stored in Supabase when live mode is enabled; an empty table stays empty
 - part categories are normalized to one canonical list on load and write, with a migration for existing Supabase rows
 
 ## Tech Stack
@@ -97,7 +98,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 - `NEXT_PUBLIC_APP_URL` is used to build absolute QR-code links for printed labels. Set it to your production domain in Vercel and to `http://localhost:3000` for local development.
 - Only use `SUPABASE_SERVICE_ROLE_KEY` in server routes or server actions. Never expose it to client components.
 
-If you deploy to Vercel, add the public Supabase vars and `NEXT_PUBLIC_APP_URL` to both **Preview** and **Production** environments. If any required public env var is missing, the app stays in safe demo/no-data mode instead of silently mixing demo records with real data.
+If you deploy to Vercel, add the public Supabase vars and `NEXT_PUBLIC_APP_URL` to both **Preview** and **Production** environments. Production never falls back to demo records when configuration is missing; it shows an empty/no-data state and should be corrected before use.
 
 ### Required Supabase Settings
 
@@ -108,7 +109,7 @@ In your Supabase project:
 3. Keep password sign-in enabled.
 4. Run [`supabase/phase2_schema.sql`](./supabase/phase2_schema.sql).
 
-The SQL file is rerunnable. If an older `profiles.is_active` column exists, the script migrates it to `profiles.active`.
+The SQL file is rerunnable. If an older `profiles.is_active` column exists, the script migrates it to `profiles.active`. Apply the timestamped files in `supabase/migrations` after the base schema, including `20260725123000_workspace_content_retention.sql` for shared content persistence, soft retention, duplicate guards, transaction metadata, and the optional Supabase Cron purge job.
 
 That schema creates the `profiles` table and the supporting tables used by the app:
 
@@ -118,6 +119,7 @@ That schema creates the `profiles` table and the supporting tables used by the a
 - `models`
 - `part_model_links`
 - `inventory_transactions`
+- `workspace_records`
 
 ## First Admin Account
 

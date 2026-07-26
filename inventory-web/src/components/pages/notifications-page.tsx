@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bell, CheckCheck, MessageSquareMore, RefreshCw, Sparkles } from "lucide-react";
+import { Archive, ArrowRight, Bell, CheckCheck, MessageSquareMore, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { PageHero } from "@/components/page-hero";
@@ -50,6 +50,8 @@ export function NotificationsPage() {
     unreadNotificationCount,
     markNotificationRead,
     markAllNotificationsRead,
+    archiveNotification,
+    deleteNotification,
     getThreadById,
   } = useWorkspaceContent();
 
@@ -172,7 +174,7 @@ export function NotificationsPage() {
                         <p className="text-sm font-semibold text-white">{notification.title}</p>
                         <p className="text-sm leading-6 text-slate-300">{notification.body}</p>
                       </div>
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                      <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
                         {href && (
                           <Link
                             href={href}
@@ -194,6 +196,30 @@ export function NotificationsPage() {
                             Mark read
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          className="w-full border-amber-400/20 bg-amber-400/10 text-amber-100 hover:bg-amber-400/20 hover:text-white sm:w-auto"
+                          onClick={() => {
+                            if (window.confirm("Archive this notification? You can restore it from notification history.")) {
+                              archiveNotification(notification.id);
+                            }
+                          }}
+                        >
+                          <Archive className="mr-2 h-4 w-4" />
+                          Archive
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="w-full sm:w-auto"
+                          onClick={() => {
+                            if (window.confirm("Delete this notification? It will be retained for 30 days.")) {
+                              deleteNotification(notification.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </Button>
                       </div>
                     </div>
                   </div>

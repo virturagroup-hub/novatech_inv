@@ -472,6 +472,72 @@ export function filterPartsByLabelRecency(
   });
 }
 
+export function getSuggestedLabelQuantity(
+  part: Part,
+  activity: ActivityEntry[],
+  recencyFilter: LabelRecencyFilter,
+  now = new Date(),
+) {
+  if (recencyFilter === "all") {
+    return 1;
+  }
+
+  const addedOnly = recencyFilter.startsWith("added-");
+  const increaseOnly = recencyFilter.startsWith("quantity-increased-");
+  const days = recencyFilter.includes("today") ? 1 : recencyFilter.includes("last-3") ? 3 : 7;
+  const bounds = labelRecencyBounds(days, now);
+  const transaction = activity
+    .filter((entry) => {
+      const audit = entry.audit;
+      if (!audit || (audit.itemId ?? entry.entityId) !== part.id) return false;
+      const quantityAdded = audit.quantityAdded ?? Math.max(audit.delta ?? 0, 0);
+      if (quantityAdded <= 0 || !withinWindow(entry.occurredAt, bounds)) return false;
+
+      const auditType = normalizeAuditType(entry);
+      const isAdded = auditType === "added";
+      const isIncrease =
+        auditType === "quantity_increased" || (auditType === "quantity_changed" && (audit.delta ?? 0) > 0);
+
+      if (addedOnly) return isAdded;
+      if (increaseOnly) return isIncrease;
+      return isAdded || isIncrease;
+    })
+    .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())[0];
+
+  return Math.max(1, transaction?.audit?.quantityAdded ?? transaction?.audit?.delta ?? 1);
+}
+
+export function getLatestLabelAddition(
+  part: Part,
+  activity: ActivityEntry[],
+  recencyFilter: LabelRecencyFilter,
+  now = new Date(),
+) {
+  if (recencyFilter === "all") return null;
+
+  const addedOnly = recencyFilter.startsWith("added-");
+  const increaseOnly = recencyFilter.startsWith("quantity-increased-");
+  const days = recencyFilter.includes("today") ? 1 : recencyFilter.includes("last-3") ? 3 : 7;
+  const bounds = labelRecencyBounds(days, now);
+
+  return activity
+    .filter((entry) => {
+      const audit = entry.audit;
+      if (!audit || (audit.itemId ?? entry.entityId) !== part.id) return false;
+      const quantityAdded = audit.quantityAdded ?? Math.max(audit.delta ?? 0, 0);
+      if (quantityAdded <= 0 || !withinWindow(entry.occurredAt, bounds)) return false;
+
+      const auditType = normalizeAuditType(entry);
+      const isAdded = auditType === "added";
+      const isIncrease =
+        auditType === "quantity_increased" || (auditType === "quantity_changed" && (audit.delta ?? 0) > 0);
+      if (addedOnly) return isAdded;
+      if (increaseOnly) return isIncrease;
+      return isAdded || isIncrease;
+    })
+    .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())[0] ?? null;
+}
+
 export function sortParts(parts: Part[], sortKey: InventorySortKey) {
   return [...parts].sort((left, right) => {
     switch (sortKey) {

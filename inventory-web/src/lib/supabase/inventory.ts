@@ -36,6 +36,9 @@ function mapLocationRow(location: LocationRow): Bin {
     manufacturer: null,
     status: location.status,
     notes: location.notes ?? undefined,
+    archivedAt: location.archived_at ?? null,
+    deletedAt: location.deleted_at ?? null,
+    purgeAfter: location.purge_after ?? null,
   };
 }
 
@@ -47,6 +50,9 @@ function mapModelRow(model: ModelRow): DeviceModel {
     series: model.series,
     status: model.status,
     notes: model.notes ?? undefined,
+    archivedAt: model.archived_at ?? null,
+    deletedAt: model.deleted_at ?? null,
+    purgeAfter: model.purge_after ?? null,
   };
 }
 
@@ -68,6 +74,9 @@ function mapPartRow(part: SnapshotPartRow, links: PartModelLinkRow[]): Part {
     receivedAt: part.created_at,
     updatedAt: part.updated_at,
     lastCountedAt: part.updated_at,
+    archivedAt: part.archived_at ?? null,
+    deletedAt: part.deleted_at ?? null,
+    purgeAfter: part.purge_after ?? null,
   };
 }
 
@@ -144,7 +153,6 @@ function mapActivityRows(
 ): ActivityEntry[] {
   return [...transactions]
     .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
-    .slice(0, 25)
     .map((transaction) => {
       const part = partLookup.get(transaction.part_id);
       const partLabel = part
@@ -202,6 +210,11 @@ function mapActivityRows(
           labelCopies: transaction.label_copies,
           labelMode: transaction.label_mode,
           metadata: transaction.item_snapshot,
+          quantityAdded: transaction.quantity_added ?? Math.max(transaction.delta, 0),
+          source: transaction.source,
+          machineId: transaction.machine_id,
+          machineEventId: transaction.machine_event_id,
+          batchId: transaction.batch_id,
           nextIsNpn: transaction.next_is_npn,
           nextLocationId: transaction.next_location_id,
           nextPartNumber: transaction.next_part_number,

@@ -25,6 +25,11 @@ export interface PartRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  purge_after?: string | null;
 }
 
 export interface LocationRow {
@@ -39,6 +44,11 @@ export interface LocationRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  purge_after?: string | null;
 }
 
 export interface ModelRow {
@@ -50,6 +60,11 @@ export interface ModelRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  purge_after?: string | null;
 }
 
 export interface PartModelLinkRow {
@@ -62,7 +77,7 @@ export interface InventoryTransactionRow {
   id: string;
   part_id: string;
   delta: number;
-  transaction_type: "adjustment" | "import" | "reset" | "transfer";
+  transaction_type: string;
   audit_type: string | null;
   previous_quantity: number | null;
   next_quantity: number | null;
@@ -81,5 +96,10 @@ export interface InventoryTransactionRow {
   note: string | null;
   created_by: string | null;
   actor_label: string | null;
+  quantity_added: number;
+  source: string | null;
+  machine_id: string | null;
+  machine_event_id: string | null;
+  batch_id: string | null;
   created_at: string;
 }
