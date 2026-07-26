@@ -17,6 +17,13 @@ export interface ModelCsvPreview {
   rows: ModelCsvRow[];
 }
 
+export interface ModelCsvExportRow {
+  manufacturer: string;
+  model_name: string;
+  series_family: string;
+  notes: string;
+}
+
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
 }
@@ -82,3 +89,10 @@ export function parseModelCsv(text: string): ModelCsvPreview {
   };
 }
 
+export function serializeModelCsv(rows: ModelCsvExportRow[]) {
+  return Papa.unparse(rows, {
+    columns: ["manufacturer", "model_name", "series_family", "notes"],
+    header: true,
+    newline: "\r\n",
+  });
+}

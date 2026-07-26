@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Archive, Boxes, Layers3, PackageSearch, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Archive, Boxes, Download, Layers3, PackageSearch, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -30,6 +30,7 @@ export function ModelsPage() {
   const [modelImportPreview, setModelImportPreview] = useState<ModelCsvPreview | null>(null);
   const [modelImportText, setModelImportText] = useState("");
   const [modelImportBusy, setModelImportBusy] = useState(false);
+  const [modelExportBusy, setModelExportBusy] = useState(false);
 
   const groupedModels = useMemo(() => groupModelsForSearch(models, query), [models, query]);
 
@@ -56,6 +57,40 @@ export function ModelsPage() {
   };
 
   const canImportModels = effectiveRole === "admin";
+  const canExportModels = effectiveRole === "admin";
+
+  const handleModelExport = async () => {
+    if (!canExportModels || modelExportBusy) return;
+
+    setModelExportBusy(true);
+    try {
+      const response = await fetch("/api/models/export", { cache: "no-store" });
+      const contentType = response.headers.get("content-type") ?? "";
+
+      if (!response.ok || !contentType.includes("text/csv")) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Could not export models right now.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = response.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1]
+        ?? "models-export.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+
+      const modelCount = response.headers.get("x-model-count");
+      toast.success(`Exported ${modelCount ?? "active"} models to CSV.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not export models right now.");
+    } finally {
+      setModelExportBusy(false);
+    }
+  };
 
   const handleModelImportFile = async (file: File | undefined) => {
     if (!file) return;
@@ -146,6 +181,17 @@ export function ModelsPage() {
                   onChange={(event) => void handleModelImportFile(event.target.files?.[0])}
                 />
               </label>
+            )}
+            {canExportModels && (
+              <Button
+                variant="outline"
+                className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                onClick={() => void handleModelExport()}
+                disabled={modelExportBusy}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {modelExportBusy ? "Exporting..." : "Export Models CSV"}
+              </Button>
             )}
           </div>
         }
