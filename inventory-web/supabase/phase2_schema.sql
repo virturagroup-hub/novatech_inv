@@ -1,3 +1,7 @@
+-- Historical starter schema, not a production upgrade script. Current production
+-- profiles.role uses inventory_role; preserve that type. Apply subsequent files
+-- in migrations/, including 20260907161719_inventory_reservations_salvage.sql for
+-- reservations, configurable salvage, durable lineage, and scoped RPC/RLS.
 begin;
 
 create extension if not exists pgcrypto;

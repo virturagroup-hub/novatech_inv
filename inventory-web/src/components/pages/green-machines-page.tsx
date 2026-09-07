@@ -46,6 +46,8 @@ function statusTone(status: string) {
 
 function statusLabel(status: GreenMachineDraft["status"]) {
   switch (status) {
+    case "ready_for_disposal":
+      return "Ready for Disposal";
     case "active":
       return "Active";
     case "partially_stripped":
@@ -295,7 +297,7 @@ export function GreenMachinesPage() {
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge className={cn("border", statusTone(machine.status))}>
-                              {statusLabel(machine.status)}
+                              {machine.archivedStatus === "ready_for_disposal" ? "Ready for Disposal · Archived" : statusLabel(machine.status)}
                             </Badge>
                             {machine.serialNumber && (
                               <Badge className="border-white/10 bg-white/5 text-slate-200">
@@ -346,9 +348,8 @@ export function GreenMachinesPage() {
                             <Button
                               variant="outline"
                               className="border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20 hover:text-white"
-                              onClick={() => {
-                                restoreGreenMachine(machine.id);
-                                toast.success("Machine restored");
+                              onClick={async () => {
+                                if (await restoreGreenMachine(machine.id)) toast.success("Machine restored");
                               }}
                             >
                               <RotateCcw className="mr-2 h-4 w-4" />

@@ -1,4 +1,5 @@
 "use client";
+import { StockAvailability } from "@/components/stock-availability";
 
 import Link from "next/link";
 import { ArrowLeft, Boxes, Edit3, PackageSearch, ScanSearch } from "lucide-react";
@@ -243,7 +244,7 @@ export function ModelDetailPage({ modelId }: Readonly<{ modelId: string }>) {
                                 : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
                           }
                         >
-                          {part.quantityOnHand}
+                          <StockAvailability part={part} />
                         </Badge>
                       </div>
                     </Link>

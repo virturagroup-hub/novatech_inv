@@ -30,6 +30,8 @@ export const activityActions = [
 export type ActivityAction = (typeof activityActions)[number];
 
 export const auditActions = [
+  "reservation_created",
+  "reservation_cancelled",
   "added",
   "removed",
   "quantity_increased",
@@ -89,6 +91,7 @@ export interface DeviceModel {
 }
 
 export interface Part {
+  reservedQuantity?: number;
   id: string;
   partNumber: string;
   isNpn?: boolean;
@@ -166,6 +169,8 @@ export interface InventoryState {
 
 export interface PartDraft {
   id?: string;
+  expectedUpdatedAt?: string;
+  stockDelta?: number;
   partNumber: string;
   isNpn?: boolean;
   partName: string;

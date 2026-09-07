@@ -306,3 +306,90 @@ The app includes:
 ## Resetting Demo Data
 
 If you need a clean reset in explicit local demo mode, use the `Reset demo data` action in the desktop shell or mobile menu.
+# September 2026 inventory iteration
+
+The application remains in `inventory-web`, backed by the existing Supabase project.
+See [IMPLEMENTATION_REPORT.md](./IMPLEMENTATION_REPORT.md) for the audit, permission
+changes, validation, and deployment boundaries.
+The subsequent [PREPRODUCTION_AUDIT.md](./PREPRODUCTION_AUDIT.md) supersedes its
+validation snapshot and provides the required preflight, deployment and recovery sequence.
+
+- Parts now show On Hand, Reserved, and Available. Reserve from a part's detail
+  page; the database confirms the hold online. Cancel releases it; Fulfill / Take
+  deducts physical stock once. Hold history remains available.
+- Green Machines receive a configurable salvage checklist. Pull for Use records
+  removal without inventory. Put in Inventory opens the existing Add Part sheet.
+  Save / Inventory Later uses that sheet to identify PN/NPN and compatible models,
+  then records the component in the single shared Service Bin.
+- Admin/Manager can finish Service Bin intake at `/pending-inventory`. Known
+  fields are prefilled and the historical pending record remains after intake.
+- Resolving every required component automatically records Ready for Disposal,
+  notifies Admin/Manager, and archives the machine with its existing 30-day
+  retention deadline. Pending inventory does not block this transition.
+
+## Deployment prerequisites
+
+1. Review and apply only the new migration
+   `supabase/migrations/20260907161719_inventory_reservations_salvage.sql` after the
+   existing migrations. Do not rerun `phase2_schema.sql` against production.
+2. Configure server-only `CRON_SECRET` in Vercel with a strong random value. Keep
+   the existing server-only `SUPABASE_SERVICE_ROLE_KEY` and public Supabase URL/key.
+   Neither secret may use a `NEXT_PUBLIC_` prefix.
+3. After authorization to deploy, deploy the app with `inventory-web` as its
+   Vercel root directory. Migration must precede the new application snapshot query.
+4. Verify Vercel Cron: `/api/cron/supabase-keepalive` at `0 6 * * *` and
+   `/api/cron/pending-inventory` at `15 6 * * *` (UTC). The keepalive does a
+   read-only `parts.id` query; the notice job inserts at most one consolidated
+   notification per target role per UTC day. It emits nothing for an empty queue.
+5. Confirm the existing database retention job invokes
+   `public.purge_expired_retained_records()`. The previous migration schedules it
+   only when `pg_cron` is installed. This iteration establishes 30-day eligibility
+   and preserves that existing scheduler; it does not add deletion to keepalive.
+
+Legacy machines without a linked model are matched only against one exact model
+name (including existing manufacturer/bizhub display forms). If ambiguous or
+unmatched, technicians can still save PN/NPN and the original source snapshot to
+the shared Service Bin. Its persistent model-review state lets a Manager/Admin
+confirm the correct model before inventory intake, even after source-machine purge.
+No OEM part numbers or inventory records are guessed. Existing active machines
+receive unresolved checklist entries; old free-form events are not assumed to
+prove a particular component was removed.
+Active legacy Ready for Disposal machines are reopened for checklist review with
+a history entry. Previously archived machines retain their archive; restoring a
+legacy machine without a checklist reopens it as Active and seeds its checklist.
+Tracked completed checklists remain intact on restore.
+
+Normal Add/Edit Part now saves stock and compatibility links in one transaction;
+stale edits require reloading. Quantity adjustments apply database-side deltas.
+Technician part/stock permissions match the existing application role rules;
+models, locations, reports and administration retain their existing permissions.
+
+Salvage profiles and component templates can be configured through reviewed SQL
+using `salvage_profiles` and `salvage_profile_components`. Model-specific profiles
+take priority over series-specific profiles, then the default. Profiles are
+snapshotted into checklists at creation; changing a template does not rewrite
+historical or already-started machine work.
+
+## Validation commands
+
+Run from `inventory-web`:
+
+```powershell
+npm ci
+npx playwright install chromium
+npm run test:db
+npm run test:browser
+npm run lint
+npm run typecheck
+npm run build
+npm run test:security
+```
+
+Database tests start disposable PostgreSQL on port 55439, reconstruct the checked-in
+schema using `inventory_role`, and use separate real connections for concurrency.
+They never read production credentials. Browser tests run this same Next.js app
+on port 3105 with a test-only API transport on 55440 and dummy credentials. They
+do not contact production and do not add an application demo mode. Screenshots
+and failure traces are ignored under `output/playwright`. PostgreSQL test data is
+left in a uniquely named OS temporary directory for diagnostics; the server stops
+at the end of each run.

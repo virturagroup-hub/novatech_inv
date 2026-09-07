@@ -158,16 +158,21 @@ export function PartEditorPage({
   const attentionPreview = requiresAttention(previewPart);
   const locationLabel = getPartLocationLabel(previewPart, bins);
   const displayPartNumber = getDisplayPartNumber(previewPart);
-  const canSave = permissions.canManageParts;
+  const [saving, setSaving] = useState(false);
+  const canSave = permissions.canManageParts && !saving;
 
-  const savePart = () => {
+  const savePart = async () => {
+    if (saving) return;
     if (!form.partName.trim() || (!form.isNpn && !form.partNumber.trim())) {
       toast.error(form.isNpn ? "Part name is required." : "Part number and part name are required.");
       return;
     }
 
-    addPart({
+    setSaving(true);
+    try {
+    await addPart({
       id: part?.id,
+      expectedUpdatedAt: part?.updatedAt,
       partNumber: form.isNpn ? "" : form.partNumber.trim(),
       isNpn: form.isNpn,
       partName: form.partName.trim(),
@@ -184,15 +189,20 @@ export function PartEditorPage({
 
     toast.success(part ? "Part updated" : "Part added");
     router.push(part ? `/inventory/${part.id}` : "/inventory");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Part was not saved.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deleteCurrentPart = () => {
+  const deleteCurrentPart = async () => {
     if (!part) return;
     if (!window.confirm(`Delete ${getDisplayPartNumber(part)}? This removes the part from the inventory.`)) {
       return;
     }
 
-    deletePart(part.id);
+    if (!(await deletePart(part.id))) return;
     toast.success("Part removed");
     router.push("/inventory");
   };
@@ -316,6 +326,7 @@ export function PartEditorPage({
                 <div className="space-y-2">
                   <Label className="text-slate-200">Part number</Label>
                   <Input
+                    aria-label="Part number"
                     value={form.partNumber}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, partNumber: event.target.value }))
@@ -325,6 +336,7 @@ export function PartEditorPage({
                   />
                   <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3">
                     <Checkbox
+                      aria-label="Mark as NPN"
                       checked={form.isNpn}
                       onCheckedChange={(next) =>
                         setForm((current) => ({
@@ -346,6 +358,7 @@ export function PartEditorPage({
                 <div className="space-y-2">
                   <Label className="text-slate-200">Part name</Label>
                   <Input
+                    aria-label="Part name"
                     value={form.partName}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, partName: event.target.value }))

@@ -1,4 +1,4 @@
-import type { GreenMachine, GreenMachineEvent, WorkspaceContentState } from "@/lib/workspace-content-types";
+import type { GreenMachine, WorkspaceContentState } from "@/lib/workspace-content-types";
 
 export const GREEN_MACHINE_ARCHIVE_RETENTION_DAYS = 30;
 export const GREEN_MACHINE_ARCHIVE_RETENTION_MS =
@@ -105,8 +105,6 @@ export function purgeExpiredGreenMachines(state: WorkspaceContentState, now = Da
   return {
     ...state,
     greenMachines: normalizedMachines.filter((machine) => !expiredMachineIds.has(machine.id)),
-    greenMachineEvents: state.greenMachineEvents.filter(
-      (event: GreenMachineEvent) => !expiredMachineIds.has(event.machineId),
-    ),
+    greenMachineEvents: state.greenMachineEvents,
   };
 }

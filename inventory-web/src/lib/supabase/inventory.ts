@@ -154,10 +154,10 @@ function mapActivityRows(
   return [...transactions]
     .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
     .map((transaction) => {
-      const part = partLookup.get(transaction.part_id);
+      const part = transaction.part_id ? partLookup.get(transaction.part_id) : undefined;
       const partLabel = part
         ? `${part.is_npn ? "NPN" : part.part_number ?? "Unknown part"} · ${part.part_name}`
-        : transaction.part_id;
+        : `${transaction.previous_part_number ?? transaction.next_part_number ?? "NPN"} · ${transaction.item_part_name ?? "Deleted part"}`;
       const auditType = normalizeTransactionAuditType(transaction);
       const actorLabel = transaction.created_by
         ? profileDisplayName(profilesById.get(transaction.created_by) ?? { full_name: null }, "")
@@ -169,7 +169,7 @@ function mapActivityRows(
         action: mapTransactionAction(transaction),
         tone: mapTransactionTone(transaction),
         entityType: "part",
-        entityId: transaction.part_id,
+        entityId: transaction.part_id ?? transaction.id,
         title:
           auditType === "added"
             ? `Added ${partLabel}`
@@ -229,13 +229,14 @@ function mapActivityRows(
 }
 
 export async function fetchInventorySnapshot(supabase: SupabaseClient): Promise<InventoryState> {
-  const [partsResult, locationsResult, modelsResult, linksResult, transactionsResult] =
+  const [partsResult, locationsResult, modelsResult, linksResult, transactionsResult, reservationsResult] =
     await Promise.all([
       supabase.from("parts").select("*"),
       supabase.from("locations").select("*"),
       supabase.from("models").select("*"),
       supabase.from("part_model_links").select("*"),
       supabase.from("inventory_transactions").select("*"),
+      supabase.from("inventory_availability").select("part_id, on_hand, reserved"),
     ]);
 
   if (partsResult.error) throw partsResult.error;
@@ -243,6 +244,7 @@ export async function fetchInventorySnapshot(supabase: SupabaseClient): Promise<
   if (modelsResult.error) throw modelsResult.error;
   if (linksResult.error) throw linksResult.error;
   if (transactionsResult.error) throw transactionsResult.error;
+  if (reservationsResult.error) throw reservationsResult.error;
 
   const locations = ((locationsResult.data ?? []) as LocationRow[]).map(mapLocationRow);
   const models = ((modelsResult.data ?? []) as ModelRow[]).map(mapModelRow);
@@ -267,9 +269,14 @@ export async function fetchInventorySnapshot(supabase: SupabaseClient): Promise<
   }, new Map<string, PartModelLinkRow[]>());
 
   const partLookup = new Map<string, PartRow>();
+  const availabilityByPart = new Map((reservationsResult.data ?? []).map(row => [row.part_id, row]));
   const parts = partRows.map((part) => {
     partLookup.set(part.id, part);
-    return mapPartRow(part, linksByPart.get(part.id) ?? []);
+    const availability = availabilityByPart.get(part.id);
+    return { ...mapPartRow(part, linksByPart.get(part.id) ?? []),
+      quantityOnHand: availability ? Number(availability.on_hand) : part.quantity_on_hand,
+      reservedQuantity: availability ? Number(availability.reserved) : undefined,
+    };
   });
   const profilesById = new Map(
     ((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]),
@@ -461,7 +468,9 @@ export async function importInventoryCsvToSupabase(
   );
 
   const preparedPartRows = rows.map((row) => {
-    const id = crypto.randomUUID();
+    // Preserve identity on PN upserts: reservations, audits and compatibility
+    // reference this key. A stock import must not replace it with a new UUID.
+    const id = (!row.isNpn ? partsByNumber.get(normalizeLookup(row.partNumber))?.id : null) ?? crypto.randomUUID();
     return {
       sourceRow: row,
       tempId: id,

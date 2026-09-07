@@ -91,3 +91,49 @@ The initial implementation now includes:
 ## Guiding Principle
 
 Phase 2 should finish the Supabase data layer without rewriting the UI or the workflows that are already working well in the current build.
+# September 2026: reservations and salvage
+
+Implemented in `20260907161719_inventory_reservations_salvage.sql`; this is an
+additive, one-time migration on the existing Supabase architecture. Apply after
+the prior three migrations, before deploying the matching application. No
+production migration was applied during implementation.
+
+The live REST schema audit confirmed `profiles.role` is `public.inventory_role`,
+while the older starter SQL declares text. New authorization helpers use the
+actual profile column cast to text without changing the column or enum.
+
+New tables: `inventory_reservations`, `salvage_profiles`,
+`salvage_profile_components`, and `machine_salvage_items`. The RLS-aware
+`inventory_availability` view returns a consistent On Hand/Reserved/Available
+snapshot. Mutation RPCs call private, tightly scoped functions with explicit
+active-profile checks. Client direct writes to these tables are revoked.
+
+Existing `workspace_records` remains the machine, timeline, and notification
+store. Existing `inventory_transactions` triggers still generate stock audit
+entries. Foreign keys use SET NULL plus snapshots to preserve source information
+through permanent machine/part deletion. The part audit deletion trigger moves
+before deletion so the preserved audit foreign key can be cleared safely.
+
+Admin/Manager can read archived machine records. Completed disposal machines
+remain visible to active users so a technician receives a stable completion view.
+Clients cannot invoke the existing privileged purge function. Its database cron
+schedule remains authoritative. Verify pg_cron configuration separately.
+
+Reservation expiration and full offline synchronization are intentionally outside
+this iteration. The online database is authoritative for every reservation and
+salvage action. Refer to README and IMPLEMENTATION_REPORT for deployment steps.
+
+## Pre-production audit follow-up
+
+See PREPRODUCTION_AUDIT.md for the authoritative deployment/recovery checklist.
+The still-unapplied September migration now requires PostgreSQL 15+, validates
+nonnegative physical stock, removes all unintended client table privileges,
+captures exact audit rows, and advances part/machine row versions for concurrency.
+Ordinary part saves and adjustments use invoker RPCs with existing RLS; narrow
+Technician part/compatibility policies align the historical SQL with AGENTS.md.
+No model/location/admin privileges were broadened. Unmapped source models use a
+durable Service Bin review state with management-only resolution. Legacy active
+disposal readiness is reopened with history for checklist review; archived legacy
+machines receive a checklist when restored. CSV PN upserts preserve existing IDs.
+These are edits to the pending migration, not a second migration to apply afterward.
+Never replay phase2_schema.sql or reverse populated tables as an app rollback.

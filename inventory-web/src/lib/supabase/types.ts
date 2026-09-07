@@ -75,7 +75,7 @@ export interface PartModelLinkRow {
 
 export interface InventoryTransactionRow {
   id: string;
-  part_id: string;
+  part_id: string | null;
   delta: number;
   transaction_type: string;
   audit_type: string | null;

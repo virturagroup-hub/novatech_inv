@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Part } from "@/lib/inventory-types";
+import type { Part, PartDraft } from "@/lib/inventory-types";
 import { categories, defaultCategory, manufacturers } from "@/lib/inventory-types";
 import { requiresAttention } from "@/lib/inventory-utils";
 import { useInventory } from "@/components/inventory-provider";
@@ -25,6 +25,11 @@ type PartEditorSheetProps = {
   part?: Part | null;
   defaultBinId?: string | null;
   defaultFocus?: "create" | "edit";
+  initialDraft?: PartDraft;
+  onSave?: (draft: PartDraft) => Promise<void>;
+  saveLabel?: string;
+  sourceLabel?: string;
+  requiredModelIds?: string[];
 };
 
 type PartFormState = {
@@ -86,9 +91,24 @@ export function PartEditorSheet({
   onOpenChange,
   part,
   defaultBinId,
+  initialDraft,
+  onSave,
+  saveLabel,
+  sourceLabel,
+  requiredModelIds = [],
 }: PartEditorSheetProps) {
   const { bins, models, addPart, getCompatibleModels } = useInventory();
-  const [form, setForm] = useState<PartFormState>(() => formFromPart(part, defaultBinId));
+  const [form, setForm] = useState<PartFormState>(() => initialDraft ? {
+    ...formFromPart(part, defaultBinId),
+    ...initialDraft,
+    isNpn: Boolean(initialDraft.isNpn),
+    binId: initialDraft.binId ?? "",
+    quantityOnHand: String(initialDraft.quantityOnHand),
+    reorderPoint: String(initialDraft.reorderPoint),
+    reorderTarget: String(initialDraft.reorderTarget),
+  } : formFromPart(part, defaultBinId));
+  const [saving, setSaving] = useState(false);
+  const [expectedUpdatedAt] = useState(part?.updatedAt);
 
   const attentionPreview = requiresAttention({
     id: part?.id ?? "",
@@ -109,28 +129,42 @@ export function PartEditorSheet({
     lastCountedAt: part?.lastCountedAt ?? new Date().toISOString(),
   });
 
-  const savePart = () => {
+  const savePart = async () => {
+    if (saving) return;
     if (!form.partName.trim() || (!form.isNpn && !form.partNumber.trim())) {
       toast.error(form.isNpn ? "Part name is required." : "Part number and part name are required.");
       return;
     }
 
-    addPart({
-      id: part?.id,
-      partNumber: form.isNpn ? "" : form.partNumber.trim(),
-      isNpn: form.isNpn,
-      partName: form.partName.trim(),
-      manufacturer: form.manufacturer.trim(),
-      category: form.category,
-      binId: form.binId || null,
-      quantityOnHand: Math.max(0, Number(form.quantityOnHand) || 0),
-      reorderPoint: Math.max(0, Number(form.reorderPoint) || 0),
-      reorderTarget: Math.max(0, Number(form.reorderTarget) || 0),
-      compatibleModelIds: form.compatibleModelIds,
-      universal: form.universal,
-      notes: form.notes.trim(),
-    });
-    onOpenChange(false);
+    const quantity = Number(form.quantityOnHand);
+    if (!Number.isSafeInteger(quantity) || quantity < (onSave ? 1 : 0)) {
+      toast.error("Enter a valid whole quantity.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await (onSave ?? addPart)({
+        id: part?.id,
+        expectedUpdatedAt,
+        partNumber: form.isNpn ? "" : form.partNumber.trim(),
+        isNpn: form.isNpn,
+        partName: form.partName.trim(),
+        manufacturer: form.manufacturer.trim(),
+        category: form.category,
+        binId: form.binId || null,
+        quantityOnHand: Math.max(0, Number(form.quantityOnHand) || 0),
+        reorderPoint: Math.max(0, Number(form.reorderPoint) || 0),
+        reorderTarget: Math.max(0, Number(form.reorderTarget) || 0),
+        compatibleModelIds: [...new Set([...requiredModelIds, ...form.compatibleModelIds])],
+        universal: form.universal,
+        notes: form.notes.trim(),
+      });
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Save failed. Please retry.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const previewPart = {
@@ -155,25 +189,26 @@ export function PartEditorSheet({
   const selectedCompatibleModels = getCompatibleModels(previewPart);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full border-white/10 bg-slate-950 text-slate-50 sm:max-w-3xl">
-        <SheetHeader className="border-b border-white/10 px-6 py-5">
+    <Sheet open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next); }}>
+      <SheetContent side="right" className="flex flex-col overflow-hidden border-white/10 bg-slate-950 text-slate-50 data-[side=right]:h-dvh data-[side=right]:w-full data-[side=right]:sm:max-w-3xl">
+        <SheetHeader className="shrink-0 border-b border-white/10 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-400/15 text-amber-300">
               <PackagePlus className="h-5 w-5" />
             </div>
             <div>
               <SheetTitle className="text-white">
-                {part ? "Edit part" : "Add part"}
+                {saveLabel ?? (part ? "Edit part" : "Add part")}
               </SheetTitle>
               <SheetDescription className="text-slate-400">
+                {sourceLabel && <span className="block text-emerald-300">{sourceLabel}</span>}
                 Keep the part number, category, location, and compatibility in one place.
               </SheetDescription>
             </div>
           </div>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-8rem)]">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 px-6 py-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -191,6 +226,7 @@ export function PartEditorSheet({
                 />
                 <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
                   <Checkbox
+                    aria-label="Mark as NPN"
                     checked={form.isNpn}
                     onCheckedChange={(next) =>
                       setForm((current) => ({
@@ -299,6 +335,7 @@ export function PartEditorSheet({
               <div className="space-y-2">
                 <Label className="text-slate-200">Universal part</Label>
                 <button
+                  disabled={Boolean(onSave)}
                   type="button"
                   onClick={() =>
                     setForm((current) => ({
@@ -322,7 +359,7 @@ export function PartEditorSheet({
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <div className="space-y-2">
                 <Label htmlFor="quantity" className="text-slate-200">
-                  Quantity on hand
+                  {onSave ? "Quantity removed from machine" : "Quantity on hand"}
                 </Label>
                 <Input
                   id="quantity"
@@ -377,7 +414,7 @@ export function PartEditorSheet({
                   onSelectionChange={(nextIds) =>
                     setForm((current) => ({
                       ...current,
-                      compatibleModelIds: nextIds,
+                      compatibleModelIds: [...new Set([...requiredModelIds, ...nextIds])],
                       universal: false,
                     }))
                   }
@@ -412,7 +449,7 @@ export function PartEditorSheet({
           </div>
         </ScrollArea>
 
-        <SheetFooter className="border-t border-white/10 px-6 py-4">
+        <SheetFooter className="shrink-0 border-t border-white/10 px-6 py-4">
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-slate-400">
               {attentionPreview
@@ -424,14 +461,16 @@ export function PartEditorSheet({
                 variant="outline"
                 className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 onClick={() => onOpenChange(false)}
+                disabled={saving}
               >
                 Cancel
               </Button>
               <Button
                 className="bg-amber-400 text-slate-950 hover:bg-amber-300"
                 onClick={savePart}
+                disabled={saving}
               >
-                {part ? "Save changes" : "Add part"}
+                {saving ? "Saving…" : saveLabel ?? (part ? "Save changes" : "Add part")}
               </Button>
             </div>
           </div>

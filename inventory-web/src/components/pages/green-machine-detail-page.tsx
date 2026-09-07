@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
+import { SalvageWorkflow } from "@/components/salvage-workflow";
 import { MachinePartPicker } from "@/components/machine-part-picker";
 import { MachineModelPicker } from "@/components/machine-model-picker";
 import { useInventory } from "@/components/inventory-provider";
@@ -59,6 +60,8 @@ function statusTone(status: string) {
 
 function statusLabel(status: GreenMachineDraft["status"]) {
   switch (status) {
+    case "ready_for_disposal":
+      return "Ready for Disposal";
     case "active":
       return "Active";
     case "partially_stripped":
@@ -301,11 +304,11 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
       draftToCommit.selectedPartId
         ? parts.find((part) => part.id === draftToCommit.selectedPartId) ?? matchedPartByNumber
         : matchedPartByNumber;
-    const nextPartId = quantityBasePart?.id ?? crypto.randomUUID();
     const nextQuantity = (quantityBasePart?.quantityOnHand ?? 0) + transferQuantity;
 
-    await addPart({
-      id: quantityBasePart ? quantityBasePart.id : nextPartId,
+    const nextPartId = await addPart({
+      id: quantityBasePart?.id,
+      stockDelta: transferQuantity,
       partNumber: normalizedPartNumber,
       isNpn: draftToCommit.isNpn,
       partName: normalizedPartName,
@@ -544,6 +547,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
         />
       </div>
 
+      <SalvageWorkflow machine={machine} />
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         {canManageGreenMachines ? (
           <Card className="border-white/10 bg-white/5">
@@ -649,6 +653,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
                           <SelectItem value="partially_stripped">Partially stripped</SelectItem>
                           <SelectItem value="depleted">Depleted</SelectItem>
                           <SelectItem value="scrapped">Scrapped</SelectItem>
+                          <SelectItem value="ready_for_disposal" disabled>Ready for Disposal</SelectItem>
                           <SelectItem value="archived">Archived</SelectItem>
                         </SelectContent>
                       </Select>

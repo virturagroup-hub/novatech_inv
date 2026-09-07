@@ -351,7 +351,8 @@ export async function buildAdminHealthReport(supabase: SupabaseClient): Promise<
   ];
 
   const logs: AdminHealthLog[] = transactions.map((transaction) => {
-    const partLabel = recentPartLookup.get(transaction.part_id) ?? transaction.part_id;
+    const partLabel = (transaction.part_id ? recentPartLookup.get(transaction.part_id) : undefined)
+      ?? transaction.item_part_name ?? transaction.part_id ?? "Deleted part";
 
     return {
       id: transaction.id,

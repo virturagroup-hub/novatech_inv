@@ -16,6 +16,7 @@ export type ForumThreadStatus =
   | "deleted";
 
 export type GreenMachineStatus =
+  | "ready_for_disposal"
   | "active"
   | "partially_stripped"
   | "depleted"
@@ -154,6 +155,7 @@ export interface Notification {
 }
 
 export interface GreenMachine {
+  readyForDisposalAt?: string | null;
   id: string;
   modelId: string | null;
   modelName: string;

@@ -18,6 +18,7 @@ function notificationLink(
   notification: { entityType: string; entityId: string },
   getThreadById: (threadId: string) => { type: string } | null,
 ) {
+  if (notification.entityType === "pending_inventory") return "/pending-inventory";
   if (notification.entityType === "forum_thread") {
     const thread = getThreadById(notification.entityId);
 

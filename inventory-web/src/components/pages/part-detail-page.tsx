@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { ReservationsPanel } from "@/components/reservations-panel";
+import { StockAvailability } from "@/components/stock-availability";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
@@ -94,6 +96,12 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
     (entry) => entry.entityId === part.id || entry.title.includes(activityPartLabel),
   );
   const universalOrCompatible = part.universal || compatibleModels.length > 0;
+  const sourceMachines = relatedActivity.flatMap(entry => {
+    const source = entry.audit?.metadata?.source_machine;
+    if (!source || typeof source !== "object") return [];
+    const snapshot = source as Record<string, unknown>;
+    return [{ eventId: entry.id, model: String(snapshot.modelName ?? "Unknown model"), serial: String(snapshot.serialNumber ?? "Unknown serial"), machineId: String(snapshot.id ?? entry.audit?.machineId ?? "") }];
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
@@ -174,6 +182,12 @@ export function PartDetailPage({ partId }: Readonly<{ partId: string }>) {
         />
       </div>
 
+      <StockAvailability part={part} />
+      <ReservationsPanel partId={part.id} />
+      {sourceMachines.length > 0 && <Card className="border-white/10 bg-white/5">
+        <CardHeader><CardTitle>Source Green Machines</CardTitle></CardHeader>
+        <CardContent className="space-y-2">{sourceMachines.map(source => <p key={source.eventId} className="break-words text-sm text-slate-300">{source.model} · Serial {source.serial} · Machine {source.machineId}</p>)}</CardContent>
+      </Card>}
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="xl:col-span-2 border-white/10 bg-white/5">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">

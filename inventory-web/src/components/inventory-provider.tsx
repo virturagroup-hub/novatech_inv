@@ -12,6 +12,7 @@ import {
 
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/components/auth-provider";
+import { toast } from "sonner";
 import { normalizeCategory } from "@/lib/category-normalization";
 import { createEmptyState, createSeedState, inventoryStorageKey } from "@/lib/inventory-seed";
 import { inventoryReducer, type PartImportRow } from "@/lib/inventory-reducer";
@@ -51,8 +52,8 @@ type InventoryContextValue = InventoryState & {
   getCompatibleModels: (part: Part) => DeviceModel[];
   getPartStockStatus: (part: Part) => ReturnType<typeof getPartStockStatus>;
   requiresAttention: (part: Part) => boolean;
-  addPart: (draft: PartDraft) => Promise<void>;
-  deletePart: (partId: string) => void;
+  addPart: (draft: PartDraft) => Promise<string>;
+  deletePart: (partId: string) => Promise<boolean>;
   adjustPart: (partId: string, delta: number) => void;
   recordLabelPrint: (
     partIds: string[],
@@ -225,6 +226,7 @@ export function InventoryProvider({
           console.error(
             error instanceof Error ? error.message : "Failed to sync inventory change to Supabase.",
           );
+          toast.error(error instanceof Error ? error.message : (error as { message?: string })?.message ?? "Inventory change was not saved.");
         } finally {
           await refreshInventory();
         }
@@ -251,7 +253,16 @@ export function InventoryProvider({
       getCompatibleModels: (part: Part) => getCompatibleModels(part, state.models),
       getPartStockStatus: (part: Part) => getPartStockStatus(part),
       requiresAttention: (part: Part) => requiresAttention(part),
-      addPart: (draft: PartDraft) => {
+      addPart: async (draft: PartDraft) => {
+        if (browserSupabase) {
+          const { data, error } = await browserSupabase.rpc("save_inventory_part", {
+            p_draft: { ...draft, category: normalizeCategory(draft.category) },
+            p_expected_updated_at: draft.expectedUpdatedAt ?? null,
+          });
+          if (error) throw new Error(error.message);
+          await refreshInventory();
+          return data as string;
+        }
         const isNpn = Boolean(draft.isNpn);
         const normalizedPartNumber = normalizeText(draft.partNumber).toUpperCase();
         const existingById = draft.id ? state.parts.find((part) => part.id === draft.id) : null;
@@ -283,56 +294,14 @@ export function InventoryProvider({
 
         dispatch({ type: "upsertPart", part: partDraft });
 
-        if (!browserSupabase) return Promise.resolve();
-
-        return syncRemote(async () => {
-          const { error: partError } = await browserSupabase.from("parts").upsert(
-            [
-              {
-                id: partDraft.id,
-                part_number: partDraft.isNpn ? null : partDraft.partNumber || null,
-                is_npn: partDraft.isNpn,
-                part_name: partDraft.partName,
-                manufacturer: partDraft.manufacturer,
-                category: normalizeCategory(partDraft.category),
-                location_id: partDraft.binId,
-                quantity_on_hand: Math.max(0, Number(partDraft.quantityOnHand) || 0),
-                reorder_point: Math.max(0, Number(partDraft.reorderPoint) || 0),
-                reorder_target: Math.max(0, Number(partDraft.reorderTarget) || 0),
-                universal: partDraft.universal,
-                notes: partDraft.notes,
-              },
-            ],
-            { onConflict: "id" },
-          );
-
-          if (partError) throw partError;
-
-          const { error: deleteLinksError } = await browserSupabase
-            .from("part_model_links")
-            .delete()
-            .eq("part_id", partDraft.id);
-
-          if (deleteLinksError) throw deleteLinksError;
-
-          if (partDraft.compatibleModelIds.length > 0) {
-            const { error: linkError } = await browserSupabase.from("part_model_links").insert(
-              partDraft.compatibleModelIds.map((modelId) => ({
-                part_id: partDraft.id!,
-                model_id: modelId,
-              })),
-            );
-
-            if (linkError) throw linkError;
-          }
-        });
+        return partDraft.id!;
       },
-      deletePart: (partId: string) => {
-        dispatch({ type: "deletePart", partId });
-
-        if (!browserSupabase) return Promise.resolve();
-
-        return syncRemote(async () => {
+      deletePart: async (partId: string) => {
+        if (!browserSupabase) {
+          dispatch({ type: "deletePart", partId });
+          return true;
+        }
+        try {
           const deletedAt = new Date().toISOString();
           const { error } = await browserSupabase
             .from("parts")
@@ -345,23 +314,25 @@ export function InventoryProvider({
             })
             .eq("id", partId);
           if (error) throw error;
-        });
+          await refreshInventory();
+          return true;
+        } catch (error) {
+          toast.error((error as { message?: string }).message ?? "Part was not removed.");
+          return false;
+        }
       },
       adjustPart: (partId: string, delta: number) => {
         const part = state.parts.find((item) => item.id === partId);
         if (!part) return;
 
-        dispatch({ type: "adjustPart", partId, delta });
-        if (!browserSupabase) return;
-
-        const nextQuantity = Math.max(0, part.quantityOnHand + delta);
+        if (!browserSupabase) {
+          dispatch({ type: "adjustPart", partId, delta });
+          return;
+        }
         syncRemote(async () => {
-          const { error: updateError } = await browserSupabase
-            .from("parts")
-            .update({
-              quantity_on_hand: nextQuantity,
-            })
-            .eq("id", partId);
+          const { error: updateError } = await browserSupabase.rpc("adjust_inventory_part", {
+            p_id: partId, p_delta: delta,
+          });
 
           if (updateError) throw updateError;
         });
@@ -600,7 +571,7 @@ export function InventoryProvider({
       },
       refreshInventory,
     };
-  }, [browserSupabase, dataSource, hydrated, isSupabaseMode, refreshInventory, session?.id, state, syncRemote]);
+  }, [browserSupabase, dataSource, hydrated, isSupabaseMode, refreshInventory, session, state, syncRemote]);
 
   return (
     <InventoryContext.Provider value={value}>

@@ -22,6 +22,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useInventory } from "@/components/inventory-provider";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
+import { StockAvailability } from "@/components/stock-availability";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -431,8 +432,7 @@ export function InventoryPage() {
                             `Delete ${getDisplayPartNumber(part)}? This will remove the part from the inventory.`,
                           )
                         ) {
-                          deletePart(part.id);
-                          toast.success("Part removed");
+                          void deletePart(part.id).then((removed) => { if (removed) toast.success("Part removed"); });
                         }
                       }}
                       onAdjust={(delta) => adjustPart(part.id, delta)}
@@ -459,8 +459,7 @@ export function InventoryPage() {
                         `Delete ${getDisplayPartNumber(part)}? This will remove the part from the inventory.`,
                       )
                     ) {
-                      deletePart(part.id);
-                      toast.success("Part removed");
+                      void deletePart(part.id).then((removed) => { if (removed) toast.success("Part removed"); });
                     }
                   }}
                   onAdjust={(delta) => adjustPart(part.id, delta)}
@@ -582,7 +581,7 @@ function InventoryTableRow({
                   : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
             )}
           >
-            {part.quantityOnHand}
+            <StockAvailability part={part} />
           </Badge>
           {canAdjustStock && (
             <div className="flex gap-1">
@@ -688,7 +687,7 @@ function InventoryMobileCard({
                   : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
             )}
           >
-            {part.quantityOnHand}
+            <StockAvailability part={part} />
           </Badge>
         </div>
 

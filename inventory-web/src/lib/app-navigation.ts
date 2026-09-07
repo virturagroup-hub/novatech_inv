@@ -85,6 +85,7 @@ export function buildAppNavigation({
   ].filter(Boolean) as AppNavItem[];
 
   const desktopSecondaryNav = [
+    navItem({ href: "/pending-inventory", label: "Service Bin", icon: Boxes }, permissions.canManageGreenMachines),
     navItem({ href: appRoutes.support, label: "Support", icon: MessagesSquare, badge: supportBadge }, permissions.canAccessSupport),
     navItem({ href: appRoutes.forum, label: "Forum", icon: MessageSquareMore }, true),
     navItem(

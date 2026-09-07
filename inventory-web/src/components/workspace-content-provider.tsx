@@ -10,13 +10,13 @@ import {
 } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { toast } from "sonner";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
   archiveWorkspaceRecord,
   fetchWorkspaceContentState,
   markWorkspaceNotificationRead,
   setWorkspaceNotificationLifecycle,
-  restoreWorkspaceRecord,
   upsertWorkspaceRecord,
   type WorkspaceContentPayload,
 } from "@/lib/supabase/workspace-content";
@@ -53,6 +53,7 @@ import type {
 } from "@/lib/workspace-content-types";
 
 type WorkspaceContentContextValue = WorkspaceContentState & {
+  refreshWorkspace: () => Promise<void>;
   hydrated: boolean;
   visibleNotifications: Notification[];
   unreadNotificationCount: number;
@@ -89,7 +90,7 @@ type WorkspaceContentContextValue = WorkspaceContentState & {
   saveGreenMachine: (draft: GreenMachineDraft) => string;
   archiveGreenMachine: (machineId: string) => void;
   deleteGreenMachine: (machineId: string) => void;
-  restoreGreenMachine: (machineId: string) => void;
+  restoreGreenMachine: (machineId: string) => Promise<boolean>;
   addGreenMachineEvent: (machineId: string, draft: GreenMachineEventDraft) => Promise<void>;
 };
 
@@ -197,6 +198,9 @@ export function WorkspaceContentProvider({
   const [browserSupabase] = useState(() =>
     demoModeEnabled ? null : createBrowserSupabaseClient(),
   );
+  const refreshWorkspace = useCallback(async () => {
+    if (browserSupabase && !demoModeEnabled) setState(await fetchWorkspaceContentState(browserSupabase, session?.id));
+  }, [browserSupabase, demoModeEnabled, session?.id]);
 
   useEffect(() => {
     let active = true;
@@ -282,10 +286,10 @@ export function WorkspaceContentProvider({
   const updateGreenMachineState = useCallback(
     (updater: (current: WorkspaceContentState) => WorkspaceContentState) => {
       setState((current: WorkspaceContentState) =>
-        purgeExpiredForumThreads(purgeExpiredGreenMachines(updater(current))),
+        demoModeEnabled ? purgeExpiredForumThreads(purgeExpiredGreenMachines(updater(current))) : updater(current),
       );
     },
-    [],
+    [demoModeEnabled],
   );
 
   const syncWorkspaceRecord = useCallback(
@@ -316,23 +320,6 @@ export function WorkspaceContentProvider({
           error instanceof Error
             ? error.message
             : "Failed to retain shared workspace content in Supabase.",
-        );
-      });
-    },
-    [browserSupabase, currentUserId, demoModeEnabled],
-  );
-
-  const restoreWorkspace = useCallback(
-    (recordId: string) => {
-      if (!browserSupabase || demoModeEnabled) {
-        return Promise.resolve();
-      }
-
-      return restoreWorkspaceRecord(browserSupabase, recordId, currentUserId).catch((error) => {
-        console.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to restore shared workspace content in Supabase.",
         );
       });
     },
@@ -866,6 +853,7 @@ export function WorkspaceContentProvider({
     const existingRestorableStatus =
       existing?.status === "archived" ? existing.archivedStatus ?? "active" : existing?.status ?? "active";
     const machine: GreenMachine = {
+      readyForDisposalAt: existing?.readyForDisposalAt ?? null,
       id: machineId,
       modelId: draft.modelId || null,
       modelName: normalizeText(draft.modelName),
@@ -949,17 +937,32 @@ export function WorkspaceContentProvider({
           ? { ...item, status: "archived", archivedAt: null, deletedAt, purgeAfter }
           : item,
       ),
-      greenMachineEvents: current.greenMachineEvents.filter((event) => event.machineId !== machineId),
+      greenMachineEvents: current.greenMachineEvents,
     }));
     archiveWorkspace(machineId, "deleted");
   };
 
-  const restoreGreenMachine = (machineId: string) => {
+  const restoreGreenMachine = async (machineId: string) => {
     if (!canManageGreenMachines) {
-      return;
+      return false;
     }
 
     const now = timestamp();
+    const machine = state.greenMachines.find((item) => item.id === machineId);
+    if (!machine) return false;
+    if (browserSupabase && !demoModeEnabled) {
+      try {
+        await upsertWorkspaceRecord(browserSupabase, {
+          ...machine, status: getGreenMachineRestoreStatus(machine), archivedAt: null,
+          deletedAt: null, purgeAfter: null, archivedStatus: null, updatedAt: now, updatedBy: currentUserId,
+        }, currentUserId);
+        await refreshWorkspace();
+        return true;
+      } catch (error) {
+        toast.error((error as {message?: string}).message ?? "Machine was not restored.");
+        return false;
+      }
+    }
     updateGreenMachineState((current) => ({
       ...current,
       greenMachines: current.greenMachines.map((item) =>
@@ -975,20 +978,7 @@ export function WorkspaceContentProvider({
           : item,
       ),
     }));
-    const machine = state.greenMachines.find((item) => item.id === machineId);
-    if (machine) {
-      syncWorkspaceRecord({
-        ...machine,
-        status: getGreenMachineRestoreStatus(machine),
-        archivedAt: null,
-        deletedAt: null,
-        purgeAfter: null,
-        archivedStatus: null,
-        updatedAt: now,
-        updatedBy: currentUserId,
-      });
-      restoreWorkspace(machineId);
-    }
+    return true;
   };
 
   const addGreenMachineEvent = (machineId: string, draft: GreenMachineEventDraft) => {
@@ -1151,6 +1141,7 @@ export function WorkspaceContentProvider({
     supportThreads,
     featureRequests,
     greenMachineEventsFor,
+    refreshWorkspace,
     getThreadById,
     getGreenMachineById,
     getThreadPosts,

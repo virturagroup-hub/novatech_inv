@@ -1,4 +1,5 @@
 "use client";
+import { StockAvailability } from "@/components/stock-availability";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -204,7 +205,7 @@ export function LookupPage() {
                                 <div className="grid min-w-[170px] grid-cols-2 gap-2 text-right">
                                   <div>
                                     <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Qty</p>
-                                    <p className="mt-1 text-xl font-semibold text-white">{part.quantityOnHand}</p>
+                                    <div className="mt-1 font-semibold text-white"><StockAvailability part={part} /></div>
                                   </div>
                                   <div>
                                     <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Models</p>

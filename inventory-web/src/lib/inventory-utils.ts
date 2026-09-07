@@ -73,6 +73,8 @@ export function getDisplayPartNumber(part: Part, models: DeviceModel[]) {
 }
 
 const auditActionLabels: Record<AuditAction, string> = {
+  reservation_created: "Reservation created",
+  reservation_cancelled: "Reservation cancelled",
   added: "Added",
   removed: "Removed",
   quantity_increased: "Quantity increased",
@@ -86,6 +88,8 @@ const auditActionLabels: Record<AuditAction, string> = {
 };
 
 const auditActionTones: Record<AuditAction, ActivityEntry["tone"]> = {
+  reservation_created: "info",
+  reservation_cancelled: "info",
   added: "success",
   removed: "danger",
   quantity_increased: "success",
