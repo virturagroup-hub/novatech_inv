@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:persistence": "node tests/workspace-persistence.mjs",
     "test:db": "node tests/database-workflows.mjs",
     "test:browser": "playwright test",
     "test:security": "node tests/security-checks.mjs",

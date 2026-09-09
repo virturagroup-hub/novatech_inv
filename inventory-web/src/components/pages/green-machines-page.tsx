@@ -79,6 +79,7 @@ export function GreenMachinesPage() {
   const { permissions } = useAuth();
   const { bins, models } = useInventory();
   const {
+    hydrated,
     greenMachines,
     greenMachineEventsFor,
     saveGreenMachine,
@@ -88,8 +89,10 @@ export function GreenMachinesPage() {
   } =
     useWorkspaceContent();
   const [draft, setDraft] = useState<GreenMachineDraft>(() => createEmptyMachineDraft());
+  const [machineView, setMachineView] = useState("active");
   const [createMachineOpen, setCreateMachineOpen] = useState(false);
   const canManageGreenMachines = permissions.canManageGreenMachines;
+  const machinesInView = greenMachines.filter((machine) => machineView === "archived" ? machine.status === "archived" : machine.status !== "archived");
 
   const activeMachines = greenMachines.filter((machine) => machine.status !== "archived").length;
   const archivedMachines = greenMachines.filter((machine) => machine.status === "archived").length;
@@ -122,7 +125,7 @@ export function GreenMachinesPage() {
     });
   };
 
-  const saveMachine = () => {
+  const saveMachine = async () => {
     if (!canManageGreenMachines) {
       return;
     }
@@ -132,13 +135,14 @@ export function GreenMachinesPage() {
       return;
     }
 
-    const machineId = saveGreenMachine({
+    const machineId = await saveGreenMachine({
       ...draft,
       modelName: draft.modelName.trim(),
       seriesFamily: draft.seriesFamily.trim(),
       serialNumber: draft.serialNumber.trim(),
       notes: draft.notes.trim(),
     });
+    if (!machineId) return;
 
     toast.success("Machine saved");
     setDraft(createEmptyMachineDraft());
@@ -272,6 +276,12 @@ export function GreenMachinesPage() {
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
             <CardTitle className="text-white">Machine index</CardTitle>
+            <label className="text-sm text-slate-300">Machine view
+              <select aria-label="Machine view" value={machineView} onChange={(event) => setMachineView(event.target.value)} className="ml-3 rounded bg-slate-900 p-2">
+                <option value="active">Active</option>
+                <option value="archived">Archived / Ready for Disposal</option>
+              </select>
+            </label>
             <CardDescription className="text-slate-400">
               Open a detail page for QR scanning, timeline review, and event logging.
             </CardDescription>
@@ -279,7 +289,7 @@ export function GreenMachinesPage() {
           <CardContent>
             <ScrollArea className="h-[36rem] rounded-3xl border border-white/10 bg-slate-950/50 p-3">
               <div className="space-y-3">
-                {greenMachines.map((machine) => {
+                {machinesInView.map((machine) => {
                   const latestEvent = greenMachineEventsFor(machine.id)[0];
                   const location = machine.locationId
                     ? bins.find((bin) => bin.id === machine.locationId) ?? null
@@ -359,7 +369,7 @@ export function GreenMachinesPage() {
                             <Button
                               variant="outline"
                               className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (
                                   !window.confirm(
                                     `Archive ${machineLabel}? It will be hidden for 30 days.`,
@@ -368,7 +378,7 @@ export function GreenMachinesPage() {
                                   return;
                                 }
 
-                                archiveGreenMachine(machine.id);
+                                if (!await archiveGreenMachine(machine.id)) return;
                                 toast.success("Machine archived for 30 days");
                               }}
                             >
@@ -380,16 +390,16 @@ export function GreenMachinesPage() {
                             <Button
                               variant="destructive"
                               className="bg-rose-500 text-white hover:bg-rose-400"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (
                                   !window.confirm(
-                                    `Delete ${machineLabel} permanently? This removes the machine and its timeline.`,
+                                    `Delete ${machineLabel}? It will leave the roster and be retained for 30 days. Historical lineage is preserved.`,
                                   )
                                 ) {
                                   return;
                                 }
 
-                                deleteGreenMachine(machine.id);
+                                if (!await deleteGreenMachine(machine.id)) return;
                                 toast.success("Machine deleted");
                               }}
                             >
@@ -402,9 +412,10 @@ export function GreenMachinesPage() {
                     </div>
                   );
                 })}
-                {greenMachines.length === 0 && (
+                {!hydrated && <p role="status">Loading machines…</p>}
+                {hydrated && machinesInView.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
-                    No machines yet.
+                    No machines in this view.
                   </div>
                 )}
               </div>

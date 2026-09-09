@@ -378,6 +378,7 @@ Run from `inventory-web`:
 npm ci
 npx playwright install chromium
 npm run test:db
+npm run test:persistence
 npm run test:browser
 npm run lint
 npm run typecheck
@@ -385,7 +386,7 @@ npm run build
 npm run test:security
 ```
 
-Database tests start disposable PostgreSQL on port 55439, reconstruct the checked-in
+Database tests start disposable PostgreSQL on an available local port, reconstruct the checked-in
 schema using `inventory_role`, and use separate real connections for concurrency.
 They never read production credentials. Browser tests run this same Next.js app
 on port 3105 with a test-only API transport on 55440 and dummy credentials. They
@@ -393,3 +394,25 @@ do not contact production and do not add an application demo mode. Screenshots
 and failure traces are ignored under `output/playwright`. PostgreSQL test data is
 left in a uniquely named OS temporary directory for diagnostics; the server stops
 at the end of each run.
+
+## Workspace persistence regression fix
+
+In live mode, workspace saves and lifecycle actions await a confirmed affected-row
+count and reload Supabase state before reporting completion. Existing edits and
+restores use UPDATE rather than UPSERT; a stale edit cannot recreate a purged row
+or clear another session's archive/deletion flags. SQL lifecycle columns override
+stale JSON status during hydration. Deleted machines leave the roster; archived
+and disposal machines are available through the Machine view selector.
+
+The content-management lists also exclude retained FAQ, SOP, changelog and
+coming-soon records. Thread history and source-machine lineage remain retained.
+Notification lifecycle actions persist per-user receipts. Failed writes show an
+error and reload authoritative state; failed loads show a retry message instead
+of loading seed data. Empty server collections remain empty. Local workspace
+storage is used only in development demo mode.
+
+`npm run test:persistence` exercises the real Supabase JavaScript adapter against
+an isolated HTTP transport on port 55441. The browser suite includes create/delete,
+reload, clean-session, archive/restore, empty-store and failure regressions on
+desktop and phone. See PERSISTENCE_REGRESSION_REPORT.md for the investigation.
+This fix adds no migration, environment variable, or cron configuration change.

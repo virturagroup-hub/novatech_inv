@@ -115,14 +115,14 @@ export function UpdatesPage() {
     setComingSoonDraft(comingSoonDraftFromItem(item));
   };
 
-  const saveCurrentUpdateLog = () => {
+  const saveCurrentUpdateLog = async () => {
     if (!updateDraft.title.trim() || !updateDraft.body.trim()) {
       toast.error("Add a title and body before saving the update log.");
       return;
     }
 
     const id = selectedUpdateLogId ?? crypto.randomUUID();
-    saveUpdateLog({
+    if (!await saveUpdateLog({
       ...updateDraft,
       id,
       title: updateDraft.title.trim(),
@@ -130,19 +130,19 @@ export function UpdatesPage() {
       version: updateDraft.version.trim(),
       publishedAt: updateDraft.publishedAt,
       isPublished: updateDraft.isPublished,
-    });
+    }, selectedUpdateLogId ? "update" : "create")) return;
     setSelectedUpdateLogId(id);
     toast.success("Update log saved");
   };
 
-  const saveCurrentComingSoon = () => {
+  const saveCurrentComingSoon = async () => {
     if (!comingSoonDraft.title.trim() || !comingSoonDraft.description.trim()) {
       toast.error("Add a title and description before saving the coming-soon item.");
       return;
     }
 
     const id = selectedComingSoonId ?? crypto.randomUUID();
-    saveComingSoonItem({
+    if (!await saveComingSoonItem({
       ...comingSoonDraft,
       id,
       title: comingSoonDraft.title.trim(),
@@ -150,12 +150,12 @@ export function UpdatesPage() {
       targetDate: comingSoonDraft.targetDate,
       sortOrder: Number(comingSoonDraft.sortOrder) || 0,
       isPublished: comingSoonDraft.isPublished,
-    });
+    }, selectedComingSoonId ? "update" : "create")) return;
     setSelectedComingSoonId(id);
     toast.success("Coming-soon item saved");
   };
 
-  const removeUpdateLog = () => {
+  const removeUpdateLog = async () => {
     if (!selectedUpdateLogId) {
       return;
     }
@@ -164,12 +164,12 @@ export function UpdatesPage() {
       return;
     }
 
-    deleteUpdateLog(selectedUpdateLogId);
+    if (!await deleteUpdateLog(selectedUpdateLogId)) return;
     setSelectedUpdateLogId(null);
     toast.success("Update log deleted");
   };
 
-  const removeComingSoonItem = () => {
+  const removeComingSoonItem = async () => {
     if (!selectedComingSoonId) {
       return;
     }
@@ -178,7 +178,7 @@ export function UpdatesPage() {
       return;
     }
 
-    deleteComingSoonItem(selectedComingSoonId);
+    if (!await deleteComingSoonItem(selectedComingSoonId)) return;
     setSelectedComingSoonId(null);
     toast.success("Coming-soon item deleted");
   };

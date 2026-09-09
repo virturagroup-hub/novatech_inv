@@ -103,6 +103,13 @@ function payloadWithLifecycle(
 ): WorkspaceContentPayload {
   return {
     ...row.payload,
+    id: row.id,
+    ...(row.record_type === "green_machine" && (row.archived_at || row.deleted_at || row.purge_after)
+      ? { status: "archived", archivedStatus: (row.payload as GreenMachine).archivedStatus ?? ((row.payload as GreenMachine).status === "archived" ? "active" : (row.payload as GreenMachine).status) }
+      : {}),
+    ...(row.record_type === "forum_thread" && (row.archived_at || row.deleted_at || row.purge_after)
+      ? { status: row.deleted_at ? "deleted" : "archived" }
+      : {}),
     archivedAt: row.archived_at,
     deletedAt: row.deleted_at,
     purgeAfter: row.purge_after,
@@ -146,6 +153,10 @@ export async function fetchWorkspaceContentState(
   };
 
   for (const row of rows) {
+    // These entities have no retained-history editor. Hidden rows must not return
+    // as editable/published content merely because Admin RLS can still read them.
+    if ((row.archived_at || row.deleted_at || row.purge_after) &&
+      ["faq", "sop", "update_log", "coming_soon", "forum_post", "feature_request_vote"].includes(row.record_type)) continue;
     const payload = payloadWithLifecycle(row);
     switch (row.record_type) {
       case "faq":
@@ -182,7 +193,7 @@ export async function fetchWorkspaceContentState(
         }
         break;
       case "green_machine":
-        state.greenMachines.push(payload as GreenMachine);
+        if (!row.deleted_at) state.greenMachines.push(payload as GreenMachine);
         break;
       case "green_machine_event":
         state.greenMachineEvents.push(payload as GreenMachineEvent);
@@ -198,15 +209,16 @@ export async function markWorkspaceNotificationRead(
   notificationId: string,
   currentUserId: string,
 ) {
-  const { error } = await supabase.from("workspace_notification_receipts").upsert(
+  const { error, count } = await supabase.from("workspace_notification_receipts").upsert(
     {
       notification_id: notificationId,
       user_id: currentUserId,
       read_at: new Date().toISOString(),
     },
-    { onConflict: "notification_id,user_id" },
+    { onConflict: "notification_id,user_id", count: "exact" },
   );
   if (error) throw error;
+  if (count !== 1) throw new Error("Notification was not saved. Reload and try again.");
 }
 
 export async function setWorkspaceNotificationLifecycle(
@@ -217,7 +229,7 @@ export async function setWorkspaceNotificationLifecycle(
 ) {
   const now = new Date().toISOString();
   const retention = new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase.from("workspace_notification_receipts").upsert(
+  const { error, count } = await supabase.from("workspace_notification_receipts").upsert(
     {
       notification_id: notificationId,
       user_id: currentUserId,
@@ -225,15 +237,17 @@ export async function setWorkspaceNotificationLifecycle(
       deleted_at: mode === "deleted" ? now : null,
       purge_after: mode === "restored" ? null : retention,
     },
-    { onConflict: "notification_id,user_id" },
+    { onConflict: "notification_id,user_id", count: "exact" },
   );
   if (error) throw error;
+  if (count !== 1) throw new Error("Notification was not saved. Reload and try again.");
 }
 
 export async function upsertWorkspaceRecord(
   supabase: SupabaseClient,
   payload: WorkspaceContentPayload,
   currentUserId: string,
+  mode: "create" | "update" | "restore" = "create",
 ) {
   const now = new Date().toISOString();
   const recordType = recordTypeFor(payload);
@@ -260,8 +274,14 @@ export async function upsertWorkspaceRecord(
     updated_at: itemUpdatedAt(payload, now),
   };
 
-  const { error } = await supabase.from("workspace_records").upsert(row, { onConflict: "id" });
+  // Existing records must never be recreated by a stale edit or restore.
+  let request = mode === "create"
+    ? supabase.from("workspace_records").insert(row, { count: "exact" })
+    : supabase.from("workspace_records").update(row, { count: "exact" }).eq("id", payload.id);
+  if (mode === "update") request = request.is("deleted_at", null).is("archived_at", null).is("purge_after", null);
+  const { error, count } = await request;
   if (error) throw error;
+  if (count !== 1) throw new Error("Record was not saved. It may have been removed or your permissions changed. Reload and try again.");
 }
 
 export async function archiveWorkspaceRecord(
@@ -271,7 +291,7 @@ export async function archiveWorkspaceRecord(
   mode: "archived" | "deleted",
 ) {
   const now = new Date().toISOString();
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from("workspace_records")
     .update({
       archived_at: mode === "archived" ? now : null,
@@ -280,10 +300,11 @@ export async function archiveWorkspaceRecord(
       deleted_by: mode === "deleted" && isUuid(currentUserId) ? currentUserId : null,
       purge_after: new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
       updated_by: isUuid(currentUserId) ? currentUserId : null,
-    })
+    }, { count: "exact" })
     .eq("id", recordId);
 
   if (error) throw error;
+  if (count !== 1) throw new Error("Record was not removed. It may no longer exist or you may not have permission.");
 }
 
 export async function restoreWorkspaceRecord(
@@ -291,7 +312,7 @@ export async function restoreWorkspaceRecord(
   recordId: string,
   currentUserId: string,
 ) {
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from("workspace_records")
     .update({
       archived_at: null,
@@ -300,8 +321,9 @@ export async function restoreWorkspaceRecord(
       deleted_by: null,
       purge_after: null,
       updated_by: isUuid(currentUserId) ? currentUserId : null,
-    })
+    }, { count: "exact" })
     .eq("id", recordId);
 
   if (error) throw error;
+  if (count !== 1) throw new Error("Record was not restored. Reload and try again.");
 }

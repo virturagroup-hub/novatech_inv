@@ -200,9 +200,9 @@ export function NotificationsPage() {
                         <Button
                           variant="outline"
                           className="w-full border-amber-400/20 bg-amber-400/10 text-amber-100 hover:bg-amber-400/20 hover:text-white sm:w-auto"
-                          onClick={() => {
+                          onClick={async () => {
                             if (window.confirm("Archive this notification? You can restore it from notification history.")) {
-                              archiveNotification(notification.id);
+                              if (!await archiveNotification(notification.id)) return;
                             }
                           }}
                         >
@@ -212,9 +212,9 @@ export function NotificationsPage() {
                         <Button
                           variant="destructive"
                           className="w-full sm:w-auto"
-                          onClick={() => {
+                          onClick={async () => {
                             if (window.confirm("Delete this notification? It will be retained for 30 days.")) {
-                              deleteNotification(notification.id);
+                              if (!await deleteNotification(notification.id)) return;
                             }
                           }}
                         >

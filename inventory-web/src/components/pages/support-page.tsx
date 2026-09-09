@@ -112,18 +112,19 @@ export function SupportPage({
     setFaqDraft(faqDraftFromFaq(faq));
   };
 
-  const submitSupportRequest = () => {
+  const submitSupportRequest = async () => {
     if (!supportTitle.trim() || !supportBody.trim()) {
       toast.error("Add a title and details before submitting a support request.");
       return;
     }
 
-    const threadId = saveForumThread({
+    const threadId = await saveForumThread({
       title: supportTitle.trim(),
       body: supportBody.trim(),
       type: "support",
       status: "open",
     });
+    if (!threadId) return;
 
     setSupportTitle("");
     setSupportBody("");
@@ -131,20 +132,20 @@ export function SupportPage({
     toast.success("Support request submitted");
   };
 
-  const submitReply = () => {
+  const submitReply = async () => {
     if (!selectedThread || !replyBody.trim() || !selectedThreadEditable) {
       toast.error("Write a reply before sending it.");
       return;
     }
 
-    addForumPost(selectedThread.id, {
+    if (!await addForumPost(selectedThread.id, {
       body: replyBody.trim(),
-    });
+    })) return;
     setReplyBody("");
     toast.success("Reply posted");
   };
 
-  const submitStatus = (nextStatus: ForumThreadStatus) => {
+  const submitStatus = async (nextStatus: ForumThreadStatus) => {
     if (!selectedThread || !permissions.canModerateSupport) {
       return;
     }
@@ -165,30 +166,30 @@ export function SupportPage({
       }
     }
 
-    setForumThreadStatus(selectedThread.id, nextStatus);
+    if (!await setForumThreadStatus(selectedThread.id, nextStatus)) return;
     toast.success("Thread status updated");
   };
 
-  const saveCurrentFaq = () => {
+  const saveCurrentFaq = async () => {
     if (!faqDraft.question.trim() || !faqDraft.answer.trim()) {
       toast.error("Add a question and answer before saving the FAQ.");
       return;
     }
 
     const faqId = selectedFaqId ?? crypto.randomUUID();
-    saveFaq({
+    if (!await saveFaq({
       ...faqDraft,
       id: faqId,
       question: faqDraft.question.trim(),
       answer: faqDraft.answer.trim(),
       category: faqDraft.category.trim() || "General",
       sortOrder: Number(faqDraft.sortOrder) || 0,
-    });
+    }, selectedFaqId ? "update" : "create")) return;
     setSelectedFaqId(faqId);
     toast.success("FAQ saved");
   };
 
-  const removeFaq = () => {
+  const removeFaq = async () => {
     if (!selectedFaqId) {
       return;
     }
@@ -197,7 +198,7 @@ export function SupportPage({
       return;
     }
 
-    deleteFaq(selectedFaqId);
+    if (!await deleteFaq(selectedFaqId)) return;
     setSelectedFaqId(null);
     toast.success("FAQ deleted");
   };

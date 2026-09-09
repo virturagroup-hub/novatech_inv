@@ -3,13 +3,21 @@ import { readFile, readdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:net";
 import EmbeddedPostgres from "embedded-postgres";
 
 // Real isolated PostgreSQL connections; no Supabase credentials are loaded.
 const dir = await mkdtemp(path.join(tmpdir(), "novatech-db-test-"));
+// Avoid stale Windows test listeners or another concurrent local test run.
+const portProbe = createServer();
+await new Promise((resolve, reject) => { portProbe.once("error", reject); portProbe.listen(0, "127.0.0.1", resolve); });
+const testPort = portProbe.address().port;
+await new Promise((resolve) => portProbe.close(resolve));
+let suiteCompleted = false;
+process.on("beforeExit", () => { if (!suiteCompleted) process.exitCode = 1; });
 const database = new EmbeddedPostgres({
   databaseDir: dir,
-  port: 55439,
+  port: testPort,
   user: "postgres",
   password: "local-test-only",
   persistent: true,
@@ -541,7 +549,39 @@ try {
   await manager.query("release savepoint intake_subtransaction");
   await manager.query("commit");
   for(const item of txItems.slice(0,2)) check("same-transaction salvage audits retain individual source item",(await db.query("select count(*)::int n from inventory_transactions where source='machine_transfer' and item_snapshot->>'salvage_item_id'=$1",[item.id])).rows[0].n===1);
+  // Persistence regression: retained SQL flags deliberately disagree with old JSON.
+  for (const [roleName, client] of [["admin", admin], ["manager", manager], ["technician", tech1], ["viewer", viewer]]) {
+    const id=randomUUID();
+    await db.query("insert into workspace_records(id,record_type,payload) values($1,'green_machine',$2)",[id,{...payload,id,status:"active"}]);
+    const result=await client.query("update workspace_records set deleted_at=now(),purge_after=now()+interval '30 days' where id=$1",[id]);
+    const permitted=roleName==="admin" || roleName==="manager";
+    check(`${roleName} machine soft delete affected-row count`,result.rowCount===(permitted?1:0));
+    const row=(await db.query("select * from workspace_records where id=$1",[id])).rows[0];
+    check(`${roleName} machine lifecycle persisted independently of JSON`,Boolean(row.deleted_at)===permitted && row.payload.status==="active");
+    if(permitted) {
+      check(`${roleName} can read retained machine; hydration must exclude deleted`,(await client.query("select id from workspace_records where id=$1",[id])).rowCount===1);
+      check(`${roleName} stale active edit cannot resurrect deleted row`,(await client.query("update workspace_records set deleted_at=null,purge_after=null where id=$1 and deleted_at is null and archived_at is null and purge_after is null",[id])).rowCount===0);
+    }
+  }
+  for(const type of ["faq","sop","update_log","coming_soon","forum_thread"]) {
+    for(const [roleName,client] of [["admin",admin],["manager",manager]]) {
+      const id=randomUUID();
+      await db.query("insert into workspace_records(id,record_type,payload) values($1,$2,$3)",[id,type,{id,status:"open",isPublished:true,title:"Persistence fixture"}]);
+      if(roleName==="manager") {
+        // Content delete and thread archive/delete controls are Admin-only. Preserve that scope.
+        await assert.rejects(client.query("update workspace_records set deleted_at=now(),purge_after=now()+interval '30 days' where id=$1",[id]),/row-level security/);
+        check(`${type} Manager non-UI destructive path remains rejected`,true);
+        continue;
+      }
+      check(`${roleName} ${type} delete count survives SELECT visibility change`,(await client.query("update workspace_records set deleted_at=now(),purge_after=now()+interval '30 days' where id=$1",[id])).rowCount===1);
+      check(`${type} stale update is zero rows`,(await admin.query("update workspace_records set deleted_at=null where id=$1 and deleted_at is null and archived_at is null and purge_after is null",[id])).rowCount===0);
+      check(`${type} admin restores existing row explicitly`,(await admin.query("update workspace_records set deleted_at=null,archived_at=null,purge_after=null where id=$1",[id])).rowCount===1);
+      await db.query("delete from workspace_records where id=$1",[id]);
+      check(`${type} restore after permanent deletion cannot create a row`,(await admin.query("update workspace_records set deleted_at=null,archived_at=null,purge_after=null where id=$1",[id])).rowCount===0);
+    }
+  }
   console.log(`Database checks passed: ${checks}`);
+  suiteCompleted = true;
 } finally {
   await Promise.allSettled(clients.map((c) => c.end()));
   await database.stop();

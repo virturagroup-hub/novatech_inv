@@ -137,3 +137,20 @@ disposal readiness is reopened with history for checklist review; archived legac
 machines receive a checklist when restored. CSV PN upserts preserve existing IDs.
 These are edits to the pending migration, not a second migration to apply afterward.
 Never replay phase2_schema.sql or reverse populated tables as an app rollback.
+
+## Workspace persistence regression follow-up — September 8, 2026
+
+Read-only inspection confirmed a retained Green Machine with deleted_at and
+purge_after set but payload.status still active. The client loaded that JSON
+status into its roster after reload. SQL lifecycle columns now govern hydration,
+and all shared-content writes await confirmation and reload the server state.
+Retained management content is filtered; history is not converted into entities.
+Stale edits/restores use guarded UPDATE and cannot insert missing records.
+
+No schema or RLS changes are required. Admin/Manager Green Machine mutations
+succeed under existing policies; Technician/Viewer attempts affect zero rows and
+must be reported as failures. FAQ/update/SOP management and thread archive/delete
+controls remain Admin-only. Existing Manager read access to retained machines
+is preserved. No remote SQL was applied during this follow-up.
+
+PERSISTENCE_REGRESSION_REPORT.md documents reproduction, tests and limitations.

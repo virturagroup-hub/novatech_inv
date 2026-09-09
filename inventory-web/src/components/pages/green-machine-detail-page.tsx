@@ -237,7 +237,7 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
   const pulledCount = events.filter((event) => event.eventType === "taken" || event.eventType === "transferred_to_inventory").length;
   const machineLabel = `${machine.modelName}${machine.serialNumber ? ` · SN ${machine.serialNumber}` : ""}`;
 
-  const saveMachine = () => {
+  const saveMachine = async () => {
     if (!canManageGreenMachines || !draft) {
       return;
     }
@@ -247,13 +247,13 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
       return;
     }
 
-    saveGreenMachine({
+    if (!await saveGreenMachine({
       ...draft,
       modelName: draft.modelName.trim(),
       seriesFamily: draft.seriesFamily.trim(),
       serialNumber: draft.serialNumber?.trim() ?? "",
       notes: draft.notes.trim(),
-    });
+    })) return;
     toast.success("Machine updated");
   };
 
@@ -424,25 +424,25 @@ export function GreenMachineDetailPage({ machineId }: Readonly<{ machineId: stri
     setPendingTransfers((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const confirmArchiveMachine = () => {
+  const confirmArchiveMachine = async () => {
     if (!window.confirm(`Archive ${machineLabel}? It will be hidden for 30 days.`)) {
       return;
     }
 
-    archiveGreenMachine(machine.id);
+    if (!await archiveGreenMachine(machine.id)) return;
     toast.success("Machine archived for 30 days");
   };
 
-  const confirmDeleteMachine = () => {
+  const confirmDeleteMachine = async () => {
     if (
       !window.confirm(
-        `Delete ${machineLabel} permanently? This removes the machine and its timeline.`,
+        `Delete ${machineLabel}? It will leave the roster and be retained for 30 days. Historical lineage is preserved.`,
       )
     ) {
       return;
     }
 
-    deleteGreenMachine(machine.id);
+    if (!await deleteGreenMachine(machine.id)) return;
     toast.success("Machine deleted");
     router.replace("/green-machines");
   };

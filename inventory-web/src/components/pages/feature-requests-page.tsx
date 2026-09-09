@@ -89,18 +89,19 @@ export function FeatureRequestsPage({
   );
   const selectedThreadEditable = Boolean(selectedThread && !isArchivedOrDeletedThreadStatus(selectedThread.status));
 
-  const submitRequest = () => {
+  const submitRequest = async () => {
     if (!requestTitle.trim() || !requestBody.trim()) {
       toast.error("Add a title and details before submitting a feature request.");
       return;
     }
 
-    const threadId = saveForumThread({
+    const threadId = await saveForumThread({
       title: requestTitle.trim(),
       body: requestBody.trim(),
       type: "feature_request",
       status: "open",
     });
+    if (!threadId) return;
 
     setRequestTitle("");
     setRequestBody("");
@@ -108,20 +109,20 @@ export function FeatureRequestsPage({
     toast.success("Feature request submitted");
   };
 
-  const submitReply = () => {
+  const submitReply = async () => {
     if (!selectedThread || !replyBody.trim() || !selectedThreadEditable) {
       toast.error("Write a reply before sending it.");
       return;
     }
 
-    addForumPost(selectedThread.id, {
+    if (!await addForumPost(selectedThread.id, {
       body: replyBody.trim(),
-    });
+    })) return;
     setReplyBody("");
     toast.success("Reply posted");
   };
 
-  const submitStatus = (nextStatus: ForumThreadStatus) => {
+  const submitStatus = async (nextStatus: ForumThreadStatus) => {
     if (!selectedThread || !permissions.canModerateSupport) {
       return;
     }
@@ -142,7 +143,7 @@ export function FeatureRequestsPage({
       }
     }
 
-    setForumThreadStatus(selectedThread.id, nextStatus);
+    if (!await setForumThreadStatus(selectedThread.id, nextStatus)) return;
     toast.success("Feature request status updated");
   };
 

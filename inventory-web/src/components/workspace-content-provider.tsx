@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -68,28 +69,28 @@ type WorkspaceContentContextValue = WorkspaceContentState & {
   getGreenMachineById: (machineId: string) => GreenMachine | null;
   getThreadPosts: (threadId: string) => ForumPost[];
   getFeatureRequestScore: (threadId: string) => number;
-  saveFaq: (draft: FaqDraft) => void;
-  deleteFaq: (faqId: string) => void;
-  saveUpdateLog: (draft: UpdateLogDraft) => void;
-  deleteUpdateLog: (updateLogId: string) => void;
-  saveComingSoonItem: (draft: ComingSoonItemDraft) => void;
-  deleteComingSoonItem: (itemId: string) => void;
-  saveSop: (draft: SopDraft) => void;
-  deleteSop: (sopId: string) => void;
-  saveForumThread: (draft: ForumThreadDraft) => string;
-  addForumPost: (threadId: string, draft: ForumPostDraft) => void;
-  setForumThreadStatus: (threadId: string, status: ForumThread["status"]) => void;
-  setForumThreadPinned: (threadId: string, pinned: boolean) => void;
-  setForumThreadLocked: (threadId: string, locked: boolean) => void;
-  voteFeatureRequest: (threadId: string, vote: 1 | -1) => void;
-  markNotificationRead: (notificationId: string) => void;
-  markAllNotificationsRead: () => void;
-  archiveNotification: (notificationId: string) => void;
-  deleteNotification: (notificationId: string) => void;
-  restoreNotification: (notificationId: string) => void;
-  saveGreenMachine: (draft: GreenMachineDraft) => string;
-  archiveGreenMachine: (machineId: string) => void;
-  deleteGreenMachine: (machineId: string) => void;
+  saveFaq: (draft: FaqDraft, mode?: "create" | "update") => Promise<boolean | undefined>;
+  deleteFaq: (faqId: string) => Promise<boolean | undefined>;
+  saveUpdateLog: (draft: UpdateLogDraft, mode?: "create" | "update") => Promise<boolean | undefined>;
+  deleteUpdateLog: (updateLogId: string) => Promise<boolean | undefined>;
+  saveComingSoonItem: (draft: ComingSoonItemDraft, mode?: "create" | "update") => Promise<boolean | undefined>;
+  deleteComingSoonItem: (itemId: string) => Promise<boolean | undefined>;
+  saveSop: (draft: SopDraft) => Promise<boolean | undefined>;
+  deleteSop: (sopId: string) => Promise<boolean | undefined>;
+  saveForumThread: (draft: ForumThreadDraft) => Promise<string | null>;
+  addForumPost: (threadId: string, draft: ForumPostDraft) => Promise<boolean | undefined>;
+  setForumThreadStatus: (threadId: string, status: ForumThread["status"]) => Promise<boolean | undefined>;
+  setForumThreadPinned: (threadId: string, pinned: boolean) => Promise<boolean | undefined>;
+  setForumThreadLocked: (threadId: string, locked: boolean) => Promise<boolean | undefined>;
+  voteFeatureRequest: (threadId: string, vote: 1 | -1) => Promise<boolean | undefined>;
+  markNotificationRead: (notificationId: string) => Promise<boolean | undefined>;
+  markAllNotificationsRead: () => Promise<boolean | undefined>;
+  archiveNotification: (notificationId: string) => Promise<boolean | undefined>;
+  deleteNotification: (notificationId: string) => Promise<boolean | undefined>;
+  restoreNotification: (notificationId: string) => Promise<boolean | undefined>;
+  saveGreenMachine: (draft: GreenMachineDraft) => Promise<string | null>;
+  archiveGreenMachine: (machineId: string) => Promise<boolean | undefined>;
+  deleteGreenMachine: (machineId: string) => Promise<boolean | undefined>;
   restoreGreenMachine: (machineId: string) => Promise<boolean>;
   addGreenMachineEvent: (machineId: string, draft: GreenMachineEventDraft) => Promise<void>;
 };
@@ -198,12 +199,23 @@ export function WorkspaceContentProvider({
   const [browserSupabase] = useState(() =>
     demoModeEnabled ? null : createBrowserSupabaseClient(),
   );
+  const loadVersion = useRef(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const refreshWorkspace = useCallback(async () => {
-    if (browserSupabase && !demoModeEnabled) setState(await fetchWorkspaceContentState(browserSupabase, session?.id));
+    const version = ++loadVersion.current;
+    if (browserSupabase && !demoModeEnabled) {
+      const remote = await fetchWorkspaceContentState(browserSupabase, session?.id);
+      if (version === loadVersion.current) {
+        setState(remote);
+        setLoadError(null);
+        setHydrated(true);
+      }
+    }
   }, [browserSupabase, demoModeEnabled, session?.id]);
 
   useEffect(() => {
     let active = true;
+    const version = ++loadVersion.current;
 
     queueMicrotask(() => {
       if (!active) {
@@ -223,9 +235,17 @@ export function WorkspaceContentProvider({
           return;
         }
 
+        setHydrated(false);
+        setLoadError(null);
+        if (!session?.id) {
+          setState(createDefaultWorkspaceContentState());
+          return;
+        }
+
         try {
           const remoteState = await fetchWorkspaceContentState(browserSupabase!, session?.id);
-          if (active) {
+          if (active && version === loadVersion.current) {
+            setLoadError(null);
             setState(remoteState);
           }
         } catch (error) {
@@ -234,7 +254,8 @@ export function WorkspaceContentProvider({
               ? error.message
               : "Failed to load shared workspace content from Supabase.",
           );
-          if (active) {
+          if (active && version === loadVersion.current) {
+            setLoadError("Shared workspace data could not be loaded. Retry before making changes.");
             setState(createDefaultWorkspaceContentState());
           }
         } finally {
@@ -285,6 +306,7 @@ export function WorkspaceContentProvider({
   const canRecordGreenMachineEvents = canManageGreenMachines || effectiveRole === "technician";
   const updateGreenMachineState = useCallback(
     (updater: (current: WorkspaceContentState) => WorkspaceContentState) => {
+      if (!demoModeEnabled) return;
       setState((current: WorkspaceContentState) =>
         demoModeEnabled ? purgeExpiredForumThreads(purgeExpiredGreenMachines(updater(current))) : updater(current),
       );
@@ -292,41 +314,34 @@ export function WorkspaceContentProvider({
     [demoModeEnabled],
   );
 
-  const syncWorkspaceRecord = useCallback(
-    (payload: WorkspaceContentPayload) => {
-      if (!browserSupabase || demoModeEnabled) {
-        return Promise.resolve();
+  const persist = async (write: () => Promise<unknown>) => {
+    ++loadVersion.current; // An older hydration must not overwrite this mutation.
+    if (demoModeEnabled) return true;
+    try {
+      if (!browserSupabase || !session?.id || !hydrated || loadError) throw new Error("Shared workspace is unavailable. Reload before making changes.");
+      await write();
+      try {
+        await refreshWorkspace();
+      } catch {
+        setLoadError("Change saved, but shared workspace data could not be reloaded. Retry before making further changes.");
+        toast.error("Change saved. Workspace reload failed; retry to see current data.");
       }
+      return true;
+    } catch (error) {
+      toast.error((error as { message?: string }).message ?? "Workspace change was not saved.");
+      try { await refreshWorkspace(); } catch { setLoadError("Shared workspace data could not be loaded. Retry before making changes."); }
+      return false;
+    }
+  };
 
-      return upsertWorkspaceRecord(browserSupabase, payload, currentUserId).catch((error) => {
-        console.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to save shared workspace content to Supabase.",
-        );
-      });
-    },
-    [browserSupabase, currentUserId, demoModeEnabled],
-  );
+  const syncWorkspaceRecord = (payload: WorkspaceContentPayload, mode?: "create" | "update" | "restore") =>
+    persist(() => upsertWorkspaceRecord(browserSupabase!, payload, currentUserId,
+      mode ?? (Object.values(state).some((items) => items.some((item: { id: string }) => item.id === payload.id)) ? "update" : "create")));
 
-  const archiveWorkspace = useCallback(
-    (recordId: string, mode: "archived" | "deleted") => {
-      if (!browserSupabase || demoModeEnabled) {
-        return Promise.resolve();
-      }
+  const archiveWorkspace = (recordId: string, mode: "archived" | "deleted") =>
+    persist(() => archiveWorkspaceRecord(browserSupabase!, recordId, currentUserId, mode));
 
-      return archiveWorkspaceRecord(browserSupabase, recordId, currentUserId, mode).catch((error) => {
-        console.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to retain shared workspace content in Supabase.",
-        );
-      });
-    },
-    [browserSupabase, currentUserId, demoModeEnabled],
-  );
-
-  const pushNotification = (notification: Omit<Notification, "id" | "createdAt" | "isRead"> & { isRead?: boolean }) => {
+  const pushNotification = async (notification: Omit<Notification, "id" | "createdAt" | "isRead"> & { isRead?: boolean }) => {
     const now = timestamp();
     const nextNotification: Notification = {
       id: crypto.randomUUID(),
@@ -334,14 +349,16 @@ export function WorkspaceContentProvider({
       isRead: notification.isRead ?? false,
       ...notification,
     };
-    setState((current) => ({
+    if (!await syncWorkspaceRecord(nextNotification, "create")) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       notifications: [nextNotification, ...current.notifications],
     }));
-    syncWorkspaceRecord(nextNotification);
+
+    return true;
   };
 
-  const saveFaq = (draft: FaqDraft) => {
+  const saveFaq = async (draft: FaqDraft, mode?: "create" | "update") => {
     const now = timestamp();
     const existingFaq = draft.id ? state.faqs.find((item) => item.id === draft.id) : null;
     const faq: Faq = {
@@ -360,7 +377,8 @@ export function WorkspaceContentProvider({
       ? { ...faq, createdAt: existingFaq.createdAt, createdBy: existingFaq.createdBy }
       : faq;
 
-    setState((current) => {
+    if (!await syncWorkspaceRecord(persistedFaq, mode ?? (draft.id ? "update" : "create"))) return false;
+    if (demoModeEnabled) setState((current) => {
       const existing = current.faqs.some((item) => item.id === faq.id);
       const nextFaqs = existing
         ? current.faqs.map((item) => (item.id === faq.id ? { ...item, ...faq, createdAt: item.createdAt, createdBy: item.createdBy } : item))
@@ -368,21 +386,24 @@ export function WorkspaceContentProvider({
 
       return { ...current, faqs: nextFaqs };
     });
-    syncWorkspaceRecord(persistedFaq);
+
+    return true;
   };
 
-  const deleteFaq = (faqId: string) => {
+  const deleteFaq = async (faqId: string) => {
     const now = timestamp();
-    setState((current) => ({
+    if (!await archiveWorkspace(faqId, "deleted")) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       faqs: current.faqs.map((faq) =>
         faq.id === faqId ? { ...faq, isPublished: false, deletedAt: now, archivedAt: null } : faq,
       ),
     }));
-    archiveWorkspace(faqId, "deleted");
+
+    return true;
   };
 
-  const saveUpdateLog = (draft: UpdateLogDraft) => {
+  const saveUpdateLog = async (draft: UpdateLogDraft, mode?: "create" | "update") => {
     const now = timestamp();
     const existingLog = draft.id ? state.updateLogs.find((item) => item.id === draft.id) : null;
     const log: UpdateLog = {
@@ -399,7 +420,8 @@ export function WorkspaceContentProvider({
       ? { ...log, createdBy: existingLog.createdBy, createdAt: existingLog.createdAt }
       : log;
 
-    setState((current) => {
+    if (!await syncWorkspaceRecord(persistedLog, mode ?? (draft.id ? "update" : "create"))) return false;
+    if (demoModeEnabled) setState((current) => {
       const existing = current.updateLogs.some((item) => item.id === log.id);
       const nextLogs = existing
         ? current.updateLogs.map((item) => (item.id === log.id ? { ...item, ...log } : item))
@@ -407,7 +429,7 @@ export function WorkspaceContentProvider({
 
       return { ...current, updateLogs: nextLogs };
     });
-    syncWorkspaceRecord(persistedLog);
+
 
     if (log.isPublished) {
       pushNotification({
@@ -420,20 +442,23 @@ export function WorkspaceContentProvider({
         entityId: log.id,
       });
     }
+    return true;
   };
 
-  const deleteUpdateLog = (updateLogId: string) => {
+  const deleteUpdateLog = async (updateLogId: string) => {
     const now = timestamp();
-    setState((current) => ({
+    if (!await archiveWorkspace(updateLogId, "deleted")) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       updateLogs: current.updateLogs.map((item) =>
         item.id === updateLogId ? { ...item, isPublished: false, deletedAt: now, archivedAt: null } : item,
       ),
     }));
-    archiveWorkspace(updateLogId, "deleted");
+
+    return true;
   };
 
-  const saveComingSoonItem = (draft: ComingSoonItemDraft) => {
+  const saveComingSoonItem = async (draft: ComingSoonItemDraft, mode?: "create" | "update") => {
     const now = timestamp();
     const existingItem = draft.id ? state.comingSoonItems.find((item) => item.id === draft.id) : null;
     const item: ComingSoonItem = {
@@ -453,7 +478,8 @@ export function WorkspaceContentProvider({
       ? { ...item, createdAt: existingItem.createdAt, createdBy: existingItem.createdBy }
       : item;
 
-    setState((current) => {
+    if (!await syncWorkspaceRecord(persistedItem, mode ?? (draft.id ? "update" : "create"))) return false;
+    if (demoModeEnabled) setState((current) => {
       const existing = current.comingSoonItems.some((entry) => entry.id === item.id);
       const nextItems = existing
         ? current.comingSoonItems.map((entry) =>
@@ -462,21 +488,24 @@ export function WorkspaceContentProvider({
         : [item, ...current.comingSoonItems];
       return { ...current, comingSoonItems: nextItems };
     });
-    syncWorkspaceRecord(persistedItem);
+
+    return true;
   };
 
-  const deleteComingSoonItem = (itemId: string) => {
+  const deleteComingSoonItem = async (itemId: string) => {
     const now = timestamp();
-    setState((current) => ({
+    if (!await archiveWorkspace(itemId, "deleted")) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       comingSoonItems: current.comingSoonItems.map((item) =>
         item.id === itemId ? { ...item, isPublished: false, deletedAt: now, archivedAt: null } : item,
       ),
     }));
-    archiveWorkspace(itemId, "deleted");
+
+    return true;
   };
 
-  const saveSop = (draft: SopDraft) => {
+  const saveSop = async (draft: SopDraft) => {
     const now = timestamp();
     const existingSop = draft.id ? state.sops.find((item) => item.id === draft.id) : null;
     const sop: Sop = {
@@ -495,28 +524,32 @@ export function WorkspaceContentProvider({
       ? { ...sop, createdAt: existingSop.createdAt, createdBy: existingSop.createdBy }
       : sop;
 
-    setState((current) => {
+    if (!await syncWorkspaceRecord(persistedSop, draft.id ? "update" : "create")) return false;
+    if (demoModeEnabled) setState((current) => {
       const existing = current.sops.some((item) => item.id === sop.id);
       const nextSops = existing
         ? current.sops.map((item) => (item.id === sop.id ? { ...item, ...sop, createdAt: item.createdAt, createdBy: item.createdBy } : item))
         : [sop, ...current.sops];
       return { ...current, sops: nextSops };
     });
-    syncWorkspaceRecord(persistedSop);
+
+    return true;
   };
 
-  const deleteSop = (sopId: string) => {
+  const deleteSop = async (sopId: string) => {
     const now = timestamp();
-    setState((current) => ({
+    if (!await archiveWorkspace(sopId, "deleted")) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       sops: current.sops.map((item) =>
         item.id === sopId ? { ...item, isPublished: false, deletedAt: now, archivedAt: null } : item,
       ),
     }));
-    archiveWorkspace(sopId, "deleted");
+
+    return true;
   };
 
-  const saveForumThread = (draft: ForumThreadDraft) => {
+  const saveForumThread = async (draft: ForumThreadDraft) => {
     const now = timestamp();
     const threadId = draft.id ?? crypto.randomUUID();
     const existingThread = draft.id ? state.forumThreads.find((item) => item.id === draft.id) : null;
@@ -547,7 +580,8 @@ export function WorkspaceContentProvider({
         }
       : thread;
 
-    setState((current) => {
+    if (!await syncWorkspaceRecord(persistedThread, draft.id ? "update" : "create")) return null;
+    if (demoModeEnabled) setState((current) => {
       const existing = current.forumThreads.find((item) => item.id === thread.id);
       const nextThreads = existing
         ? current.forumThreads.map((item) =>
@@ -576,7 +610,7 @@ export function WorkspaceContentProvider({
 
       return { ...current, forumThreads: nextThreads };
     });
-    syncWorkspaceRecord(persistedThread);
+
 
     if (!draft.id && (thread.type === "support" || thread.type === "feature_request")) {
       pushNotification({
@@ -603,7 +637,7 @@ export function WorkspaceContentProvider({
     return threadId;
   };
 
-  const addForumPost = (threadId: string, draft: ForumPostDraft) => {
+  const addForumPost = async (threadId: string, draft: ForumPostDraft) => {
     const now = timestamp();
     const post: ForumPost = {
       id: crypto.randomUUID(),
@@ -616,7 +650,14 @@ export function WorkspaceContentProvider({
       taggedTarget: draft.taggedTarget ?? null,
     };
 
-    setState((current) => {
+    const thread = state.forumThreads.find((item) => item.id === threadId);
+    if (!thread || thread.status === "archived" || thread.status === "deleted") {
+      return false;
+    }
+
+    if (!await syncWorkspaceRecord(post, "create")) return false;
+
+    if (demoModeEnabled) setState((current) => {
       const thread = current.forumThreads.find((item) => item.id === threadId);
       if (!thread) {
         return current;
@@ -636,13 +677,6 @@ export function WorkspaceContentProvider({
         forumPosts: [post, ...current.forumPosts],
       };
     });
-    const thread = state.forumThreads.find((item) => item.id === threadId);
-    if (!thread || thread.status === "archived" || thread.status === "deleted") {
-      return;
-    }
-
-    syncWorkspaceRecord(post);
-
     const target = getNotificationTarget(draft.taggedTarget, thread.createdBy);
 
     if (target === "admin" || target === "manager" || target === "technician" || target === "viewer" || target === "all") {
@@ -666,21 +700,25 @@ export function WorkspaceContentProvider({
         entityId: thread.id,
       });
     }
+    return true;
   };
 
-  const setForumThreadStatus = (threadId: string, status: ForumThread["status"]) => {
+  const setForumThreadStatus = async (threadId: string, status: ForumThread["status"]) => {
     const now = timestamp();
     const existingThread = state.forumThreads.find((item) => item.id === threadId);
     const nextThread = existingThread
       ? {
           ...existingThread,
           status,
+          purgeAfter: null,
           updatedAt: now,
           archivedAt: status === "archived" ? existingThread.archivedAt ?? now : null,
           deletedAt: status === "deleted" ? existingThread.deletedAt ?? now : null,
         }
       : null;
-    setState((current) => {
+    if (!nextThread || !await syncWorkspaceRecord(nextThread,
+      existingThread?.archivedAt || existingThread?.deletedAt || existingThread?.purgeAfter ? "restore" : "update")) return false;
+    if (demoModeEnabled) setState((current) => {
       const thread = current.forumThreads.find((item) => item.id === threadId);
       if (!thread) {
         return current;
@@ -703,9 +741,7 @@ export function WorkspaceContentProvider({
         ),
       };
     });
-    if (nextThread) {
-      syncWorkspaceRecord(nextThread);
-    }
+
 
     const thread = state.forumThreads.find((item) => item.id === threadId);
     if (thread) {
@@ -719,37 +755,38 @@ export function WorkspaceContentProvider({
         entityId: threadId,
       });
     }
+    return true;
   };
 
-  const setForumThreadPinned = (threadId: string, pinned: boolean) => {
+  const setForumThreadPinned = async (threadId: string, pinned: boolean) => {
     const now = timestamp();
     const thread = state.forumThreads.find((item) => item.id === threadId);
-    setState((current) => ({
+    if (!thread || !await syncWorkspaceRecord({ ...thread, isPinned: pinned, updatedAt: now })) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       forumThreads: current.forumThreads.map((item) =>
         item.id === threadId ? { ...item, isPinned: pinned, updatedAt: now } : item,
       ),
     }));
-    if (thread) {
-      syncWorkspaceRecord({ ...thread, isPinned: pinned, updatedAt: now });
-    }
+
+    return true;
   };
 
-  const setForumThreadLocked = (threadId: string, locked: boolean) => {
+  const setForumThreadLocked = async (threadId: string, locked: boolean) => {
     const now = timestamp();
     const thread = state.forumThreads.find((item) => item.id === threadId);
-    setState((current) => ({
+    if (!thread || !await syncWorkspaceRecord({ ...thread, isLocked: locked, updatedAt: now })) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       forumThreads: current.forumThreads.map((item) =>
         item.id === threadId ? { ...item, isLocked: locked, updatedAt: now } : item,
       ),
     }));
-    if (thread) {
-      syncWorkspaceRecord({ ...thread, isLocked: locked, updatedAt: now });
-    }
+
+    return true;
   };
 
-  const voteFeatureRequest = (threadId: string, vote: 1 | -1) => {
+  const voteFeatureRequest = async (threadId: string, vote: 1 | -1) => {
     const now = timestamp();
     const existingVote = state.featureRequestVotes.find(
       (item) => item.featureRequestId === threadId && item.userId === currentUserId,
@@ -763,7 +800,8 @@ export function WorkspaceContentProvider({
           vote,
           createdAt: now,
         };
-    setState((current) => {
+    if (!await syncWorkspaceRecord(nextVote)) return false;
+    if (demoModeEnabled) setState((current) => {
       const nextVotes = [...current.featureRequestVotes];
       const existingIndex = nextVotes.findIndex(
         (item) => item.featureRequestId === threadId && item.userId === currentUserId,
@@ -777,48 +815,28 @@ export function WorkspaceContentProvider({
 
       return { ...current, featureRequestVotes: nextVotes };
     });
-    syncWorkspaceRecord(nextVote);
+
+    return true;
   };
 
-  const markNotificationRead = (notificationId: string) => {
-    const notification = state.notifications.find((item) => item.id === notificationId);
-    setState((current) => ({
-      ...current,
-      notifications: current.notifications.map((item) =>
-        item.id === notificationId ? { ...item, isRead: true } : item,
-      ),
-    }));
-    if (notification) {
-      if (browserSupabase && !demoModeEnabled && session?.id) {
-        void markWorkspaceNotificationRead(browserSupabase, notification.id, session.id).catch((error) => {
-          console.error(
-            error instanceof Error ? error.message : "Failed to mark notification read in Supabase.",
-          );
-        });
-      }
+  const markNotificationRead = async (notificationId: string) => {
+    if (!await persist(() => markWorkspaceNotificationRead(browserSupabase!, notificationId, currentUserId))) return false;
+    if (demoModeEnabled) setState((current) => ({ ...current, notifications: current.notifications.map((item) =>
+      item.id === notificationId ? { ...item, isRead: true } : item) }));
+    return true;
+  };
+  const markAllNotificationsRead = async () => {
+    const inbox = state.notifications.filter((item) => !item.archivedAt && !item.deletedAt &&
+      (item.userId ? item.userId === currentUserId : item.roleTarget === "all" || item.roleTarget === effectiveRole));
+    for (const notification of inbox) {
+      if (!notification.isRead && !await markNotificationRead(notification.id)) return false;
     }
+    return true;
   };
-
-  const markAllNotificationsRead = () => {
-    const notifications = state.notifications.map((item) => ({ ...item, isRead: true }));
-    setState((current) => ({
-      ...current,
-      notifications: current.notifications.map((item) => ({ ...item, isRead: true })),
-    }));
-    if (browserSupabase && !demoModeEnabled && session?.id) {
-      notifications.forEach((notification) => {
-        void markWorkspaceNotificationRead(browserSupabase, notification.id, session.id).catch((error) => {
-          console.error(
-            error instanceof Error ? error.message : "Failed to mark notification read in Supabase.",
-          );
-        });
-      });
-    }
-  };
-
-  const setNotificationLifecycle = (notificationId: string, mode: "archived" | "deleted" | "restored") => {
+  const setNotificationLifecycle = async (notificationId: string, mode: "archived" | "deleted" | "restored") => {
     const now = timestamp();
-    setState((current) => ({
+    if (!await persist(() => setWorkspaceNotificationLifecycle(browserSupabase!, notificationId, currentUserId, mode))) return false;
+    if (demoModeEnabled) setState((current) => ({
       ...current,
       notifications: current.notifications.map((notification) =>
         notification.id === notificationId
@@ -832,18 +850,11 @@ export function WorkspaceContentProvider({
       ),
     }));
 
-    if (browserSupabase && !demoModeEnabled && session?.id) {
-      void setWorkspaceNotificationLifecycle(browserSupabase, notificationId, session.id, mode).catch((error) => {
-        console.error(
-          error instanceof Error ? error.message : "Failed to update notification retention in Supabase.",
-        );
-      });
-    }
+    return true;
   };
-
-  const saveGreenMachine = (draft: GreenMachineDraft) => {
+  const saveGreenMachine = async (draft: GreenMachineDraft) => {
     if (!canManageGreenMachines) {
-      return draft.id ?? "";
+      return null;
     }
 
     const now = timestamp();
@@ -876,6 +887,7 @@ export function WorkspaceContentProvider({
       archivedStatus: nextStatus === "archived" ? existingRestorableStatus : null,
     };
 
+    if (!await syncWorkspaceRecord(machine, draft.id ? "update" : "create")) return null;
     updateGreenMachineState((current) => {
       const nextMachines = existing
         ? current.greenMachines.map((item) => (item.id === machineId ? machine : item))
@@ -883,17 +895,29 @@ export function WorkspaceContentProvider({
 
       return { ...current, greenMachines: nextMachines };
     });
-    syncWorkspaceRecord(machine);
+
 
     return machineId;
   };
 
-  const archiveGreenMachine = (machineId: string) => {
+  const archiveGreenMachine = async (machineId: string) => {
     if (!canManageGreenMachines) {
       return;
     }
 
     const now = timestamp();
+    const machine = state.greenMachines.find((item) => item.id === machineId);
+    if (!machine) return false;
+    if (machine) {
+      if (!await syncWorkspaceRecord({
+        ...machine,
+        status: "archived",
+        archivedAt: machine.archivedAt ?? now,
+        archivedStatus: machine.status === "archived" ? machine.archivedStatus ?? "active" : machine.status,
+        updatedAt: now,
+        updatedBy: currentUserId,
+      })) return false;
+    }
     updateGreenMachineState((current) => ({
       ...current,
       greenMachines: current.greenMachines.map((item) =>
@@ -910,26 +934,16 @@ export function WorkspaceContentProvider({
           : item,
       ),
     }));
-    const machine = state.greenMachines.find((item) => item.id === machineId);
-    if (machine) {
-      syncWorkspaceRecord({
-        ...machine,
-        status: "archived",
-        archivedAt: machine.archivedAt ?? now,
-        archivedStatus: machine.status === "archived" ? machine.archivedStatus ?? "active" : machine.status,
-        updatedAt: now,
-        updatedBy: currentUserId,
-      });
-    }
+    return true;
   };
-
-  const deleteGreenMachine = (machineId: string) => {
+  const deleteGreenMachine = async (machineId: string) => {
     if (!canManageGreenMachines) {
       return;
     }
 
     const deletedAt = timestamp();
     const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    if (!await archiveWorkspace(machineId, "deleted")) return false;
     updateGreenMachineState((current) => ({
       ...current,
       greenMachines: current.greenMachines.map((item) =>
@@ -939,7 +953,8 @@ export function WorkspaceContentProvider({
       ),
       greenMachineEvents: current.greenMachineEvents,
     }));
-    archiveWorkspace(machineId, "deleted");
+
+    return true;
   };
 
   const restoreGreenMachine = async (machineId: string) => {
@@ -950,19 +965,10 @@ export function WorkspaceContentProvider({
     const now = timestamp();
     const machine = state.greenMachines.find((item) => item.id === machineId);
     if (!machine) return false;
-    if (browserSupabase && !demoModeEnabled) {
-      try {
-        await upsertWorkspaceRecord(browserSupabase, {
-          ...machine, status: getGreenMachineRestoreStatus(machine), archivedAt: null,
-          deletedAt: null, purgeAfter: null, archivedStatus: null, updatedAt: now, updatedBy: currentUserId,
-        }, currentUserId);
-        await refreshWorkspace();
-        return true;
-      } catch (error) {
-        toast.error((error as {message?: string}).message ?? "Machine was not restored.");
-        return false;
-      }
-    }
+    if (!await syncWorkspaceRecord({
+      ...machine, status: getGreenMachineRestoreStatus(machine), archivedAt: null,
+      deletedAt: null, purgeAfter: null, archivedStatus: null, updatedAt: now, updatedBy: currentUserId,
+    }, "restore")) return false;
     updateGreenMachineState((current) => ({
       ...current,
       greenMachines: current.greenMachines.map((item) =>
@@ -981,7 +987,7 @@ export function WorkspaceContentProvider({
     return true;
   };
 
-  const addGreenMachineEvent = (machineId: string, draft: GreenMachineEventDraft) => {
+  const addGreenMachineEvent = async (machineId: string, draft: GreenMachineEventDraft) => {
     if (!canRecordGreenMachineEvents) {
       return Promise.resolve();
     }
@@ -1002,6 +1008,7 @@ export function WorkspaceContentProvider({
       batchId: draft.batchId ?? null,
     };
 
+    if (!await syncWorkspaceRecord(event, "create")) throw new Error("Machine event was not saved.");
     updateGreenMachineState((current) => ({
       ...current,
       greenMachineEvents: [event, ...current.greenMachineEvents],
@@ -1019,7 +1026,7 @@ export function WorkspaceContentProvider({
           : machine,
       ),
     }));
-    return syncWorkspaceRecord(event);
+
   };
 
   const publishedFaqs = useMemo(
@@ -1090,9 +1097,7 @@ export function WorkspaceContentProvider({
           return false;
         }
 
-        if (notification.userId && notification.userId === currentUserId) {
-          return true;
-        }
+        if (notification.userId) return notification.userId === currentUserId;
 
         if (notification.roleTarget === "all") {
           return true;
@@ -1112,7 +1117,7 @@ export function WorkspaceContentProvider({
     state.forumThreads.find((thread) => thread.id === threadId) ?? null;
 
   const getGreenMachineById = (machineId: string) =>
-    state.greenMachines.find((machine) => machine.id === machineId) ?? null;
+    state.greenMachines.find((machine) => machine.id === machineId && !machine.deletedAt) ?? null;
 
   const getThreadPosts = (threadId: string) =>
     [...state.forumPosts]
@@ -1131,6 +1136,11 @@ export function WorkspaceContentProvider({
 
   const value: WorkspaceContentContextValue = {
     ...state,
+    faqs: state.faqs.filter((item) => !item.archivedAt && !item.deletedAt && !item.purgeAfter),
+    sops: state.sops.filter((item) => !item.archivedAt && !item.deletedAt && !item.purgeAfter),
+    updateLogs: state.updateLogs.filter((item) => !item.archivedAt && !item.deletedAt && !item.purgeAfter),
+    comingSoonItems: state.comingSoonItems.filter((item) => !item.archivedAt && !item.deletedAt && !item.purgeAfter),
+    greenMachines: state.greenMachines.filter((machine) => !machine.deletedAt),
     hydrated,
     visibleNotifications,
     unreadNotificationCount,
@@ -1172,7 +1182,10 @@ export function WorkspaceContentProvider({
     addGreenMachineEvent,
   };
 
-  return <WorkspaceContentContext.Provider value={value}>{children}</WorkspaceContentContext.Provider>;
+  return <WorkspaceContentContext.Provider value={value}>
+    {loadError && <div role="alert" className="p-4 text-red-400">{loadError} <button type="button" onClick={() => void refreshWorkspace().catch(() => toast.error("Workspace reload failed."))}>Retry</button></div>}
+    {children}
+  </WorkspaceContentContext.Provider>;
 }
 
 export function useWorkspaceContent() {

@@ -26,7 +26,7 @@ const machine = {
   archivedAt: null,
   archivedStatus: null,
 };
-let parts, items, reservations, calls;
+let parts, items, reservations, calls, workspaceRows, receipts, workspaceFailure;
 function reset() {
   machine.modelId=modelId;
   machine.modelName="bizhub C450i";
@@ -64,6 +64,9 @@ function reset() {
   }));
   reservations = [];
   calls = [];
+  workspaceFailure = null;
+  receipts = [];
+  workspaceRows = [{id:machine.id,record_type:"green_machine",payload:machine,created_at:now,updated_at:now,archived_at:null,deleted_at:null,purge_after:null}];
 }
 reset();
 const userFor = (role) => ({
@@ -78,6 +81,7 @@ const userFor = (role) => ({
 createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:3105");
   res.setHeader("Access-Control-Allow-Headers", "*");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Range");
   res.setHeader(
     "Access-Control-Allow-Methods",
     "GET,POST,PATCH,DELETE,OPTIONS",
@@ -126,6 +130,12 @@ createServer(async (req, res) => {
     return send({ ok: true });
   }
   if (url.pathname === "/__calls") return send(calls);
+  if (url.pathname === "/__workspace") {
+    if (req.method === "POST") workspaceRows=body.rows;
+    return send({rows:workspaceRows,receipts});
+  }
+  if (url.pathname === "/__workspace-empty") { workspaceRows=[]; items=[]; return send({ok:true}); }
+  if (url.pathname === "/__workspace-fail") { workspaceFailure=url.searchParams.get("mode") ?? "error"; return send({ok:true}); }
   if (url.pathname === "/__unmapped") {
     machine.modelId=null;
     machine.modelName="Unmapped legacy copier";
@@ -159,6 +169,28 @@ createServer(async (req, res) => {
   if (url.pathname === "/auth/v1/user") return send(userFor(role));
   if (url.pathname.startsWith("/auth/")) return send({});
   const table = url.pathname.replace("/rest/v1/", "");
+  if ((table === "workspace_records" || table === "workspace_notification_receipts") && req.method !== "GET") {
+    calls.push({name:table,method:req.method,body,role});
+    if (workspaceFailure) {
+      const failure=workspaceFailure; workspaceFailure=null;
+      res.setHeader("Content-Range", "*/0");
+      return failure==="zero" ? send([]) : send({message:"Workspace write denied by test policy"},403);
+    }
+    const records=table==="workspace_records" ? workspaceRows : receipts;
+    let changed=[];
+    if(req.method==="POST") {
+      for(const row of Array.isArray(body)?body:[body]) {
+        const existing=records.find(r=>table==="workspace_records"?r.id===row.id:r.notification_id===row.notification_id&&r.user_id===row.user_id);
+        if(existing) {Object.assign(existing,row);changed.push(existing);}
+        else {const next={archived_at:null,deleted_at:null,purge_after:null,...row};records.push(next);changed.push(next);}
+      }
+    } else if(req.method==="PATCH") {
+      changed=records.filter(r=>[...url.searchParams].every(([k,v])=>v.startsWith("eq.")?String(r[k])===v.slice(3):v==="is.null"?r[k]==null:true));
+      changed.forEach(r=>Object.assign(r,body));
+    }
+    res.setHeader("Content-Range", `*/${changed.length}`);
+    return send(req.headers.accept?.includes("application/vnd.pgrst.object+json") ? changed[0]??null : changed);
+  }
   if (table.startsWith("rpc/")) {
     calls.push({ name: table, body, role });
     if (table === "rpc/save_inventory_part") {
@@ -251,25 +283,14 @@ createServer(async (req, res) => {
         .reduce((sum, r) => sum + r.quantity, 0),
     }));
   if (table === "machine_salvage_items") data = items;
-  if (table === "workspace_records")
-    data = [
-      {
-        id: machine.id,
-        record_type: "green_machine",
-        payload: machine,
-        created_at: now,
-        updated_at: now,
-        archived_at: null,
-        deleted_at: null,
-        purge_after: null,
-      },
-    ];
+  if (table === "workspace_records") data=workspaceRows;
+  if (table === "workspace_notification_receipts") data=receipts;
   for (const [key, value] of url.searchParams)
     if (value.startsWith("eq."))
       data = data.filter((r) => String(r[key]) === value.slice(3));
   if (req.headers.accept?.includes("application/vnd.pgrst.object+json"))
     return send(data[0] ?? null);
   send(data);
-}).listen(55440, "127.0.0.1", () =>
-  console.log("Browser fixture transport listening on 55440"),
+}).listen(Number(process.env.TEST_SUPABASE_PORT ?? 55440), "127.0.0.1", () =>
+  console.log("Browser fixture transport ready"),
 );
